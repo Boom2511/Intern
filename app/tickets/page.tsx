@@ -9,13 +9,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import TicketList from '@/components/tickets/TicketList';
 import { Plus, AlertCircle } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { TicketWithCustomer } from '@/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function TicketsPage() {
-  let tickets = [];
-  let error = null;
+  let tickets: TicketWithCustomer[] = [];
+  let error: string | null = null;
 
   try {
     // Fetch real tickets from database

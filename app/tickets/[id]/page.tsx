@@ -42,7 +42,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
     error = 'ไม่สามารถโหลดข้อมูล Ticket ได้ กรุณาตรวจสอบการเชื่อมต่อฐานข้อมูล';
   }
 
-  if (error) {
+  if (error || !ticket) {
     return (
       <div className="space-y-6">
         <Card className="border-red-200 bg-red-50">
@@ -51,7 +51,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
               <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <p className="text-sm text-red-700 mt-1">{error || 'ไม่พบ Ticket นี้'}</p>
               </div>
             </div>
           </CardContent>
