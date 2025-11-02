@@ -1,0 +1,74 @@
+// Prisma Schema for Thailand Post Help Desk System
+// This schema defines the database structure for managing customer tickets
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Customer model - stores customer information
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique  // Unique phone number for searching existing customers
+  email     String?
+  tickets   Ticket[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+}
+
+// Ticket model - main help desk ticket entity
+model Ticket {
+  id          String       @id @default(cuid())
+  ticketNo    String       @unique  // Auto-generated format: TH-YYYYMMDD-XXXX
+  customerId  String
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  subject     String
+  description String       @db.Text
+  status      TicketStatus @default(NEW)
+  priority    Priority     @default(MEDIUM)
+  assignedTo  String?      // Staff member assigned to this ticket
+  notes       Note[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([ticketNo])
+  @@index([status])
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// Note model - for adding comments/updates to tickets
+model Note {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdBy String   // Name or ID of person who created the note
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// Ticket status enum
+enum TicketStatus {
+  NEW          // Newly created ticket
+  IN_PROGRESS  // Being worked on
+  PENDING      // Waiting for customer response or external action
+  RESOLVED     // Issue resolved, waiting for confirmation
+  CLOSED       // Ticket closed
+}
+
+// Priority levels enum
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}

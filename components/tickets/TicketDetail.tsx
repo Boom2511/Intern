@@ -1,0 +1,307 @@
+/**
+ * TicketDetail Component
+ * Detailed view of a single ticket
+ * Features:
+ * - Timeline of ticket history
+ * - Add notes/comments
+ * - Update status
+ * - Show customer info and their other tickets
+ */
+
+'use client';
+
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import StatusBadge from './StatusBadge';
+import { TicketWithRelations, TicketStatus, Priority } from '@/types';
+import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel } from '@/lib/utils';
+import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
+import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog } from 'lucide-react';
+
+interface TicketDetailProps {
+  ticket: TicketWithRelations;
+}
+
+export default function TicketDetail({ ticket }: TicketDetailProps) {
+  const [status, setStatus] = useState<TicketStatus>(ticket.status);
+  const [assignedTo, setAssignedTo] = useState<string>(ticket.assignedTo || '');
+  const [newNote, setNewNote] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleStatusUpdate = async (newStatus: TicketStatus) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setStatus(newStatus);
+        // Refresh page to show updated data
+        window.location.reload();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAssigneeUpdate = async (newAssignee: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedTo: newAssignee === 'none' ? null : newAssignee }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setAssignedTo(newAssignee === 'none' ? '' : newAssignee);
+        // Refresh page to show updated data
+        window.location.reload();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการมอบหมายงาน');
+      }
+    } catch (error) {
+      console.error('Error updating assignee:', error);
+      alert('เกิดข้อผิดพลาดในการมอบหมายงาน กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return;
+
+    setLoading(true);
+    try {
+      // Create note through ticket update
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addNote: {
+            content: newNote,
+            createdBy: 'พนักงาน', // TODO: Get from auth session
+          }
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setNewNote('');
+        // Refresh page to show new note
+        window.location.reload();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการเพิ่มบันทึก');
+      }
+    } catch (error) {
+      console.error('Error adding note:', error);
+      alert('เกิดข้อผิดพลาดในการเพิ่มบันทึก กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold">{ticket.ticketNo}</h1>
+            <StatusBadge status={status} />
+            <Badge className={getPriorityColor(ticket.priority)}>
+              {getPriorityLabel(ticket.priority)}
+            </Badge>
+          </div>
+          <h2 className="text-xl text-gray-700">{ticket.subject}</h2>
+        </div>
+        <Button variant="outline">
+          <Edit className="h-4 w-4 mr-2" />
+          แก้ไข
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Description */}
+          <Card>
+            <CardHeader>
+              <CardTitle>รายละเอียด</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap">{ticket.description}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                <Clock className="h-4 w-4" />
+                <span>สร้างเมื่อ {formatThaiDate(ticket.createdAt)}</span>
+              </div>
+              {ticket.updatedAt !== ticket.createdAt && (
+                <div className="mt-1 text-sm text-gray-500">
+                  อัปเดตล่าสุด {formatRelativeTime(ticket.updatedAt)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Notes/Comments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                บันทึกและความคิดเห็น ({ticket.notes.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Note */}
+              <div className="space-y-2">
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
+                  rows={3}
+                  className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Button onClick={handleAddNote} disabled={loading || !newNote.trim()}>
+                  เพิ่มบันทึก
+                </Button>
+              </div>
+
+              {/* Notes Timeline */}
+              <div className="space-y-4 mt-6">
+                {ticket.notes.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">
+                    ยังไม่มีบันทึก
+                  </p>
+                ) : (
+                  ticket.notes.map(note => (
+                    <div key={note.id} className="border-l-2 border-blue-500 pl-4 py-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-sm">{note.createdBy}</span>
+                        <span className="text-xs text-gray-500">
+                          {formatRelativeTime(note.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {note.content}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Status Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">จัดการสถานะ</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  เปลี่ยนสถานะ
+                </label>
+                <Select
+                  value={status}
+                  onValueChange={(value) => handleStatusUpdate(value as TicketStatus)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TICKET_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <UserCog className="h-4 w-4 text-gray-600" />
+                  <label className="block text-sm font-medium text-gray-700">
+                    มอบหมายให้
+                  </label>
+                </div>
+                <Select
+                  value={assignedTo || 'none'}
+                  onValueChange={handleAssigneeUpdate}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="เลือกผู้รับผิดชอบ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">ยังไม่มอบหมาย</SelectItem>
+                    {STAFF_MEMBERS.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.name}>
+                        {staff.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignedTo && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                    <p className="text-xs text-blue-700">
+                      กำลังรับผิดชอบโดย: <strong>{assignedTo}</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Customer Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">ข้อมูลลูกค้า</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-gray-400" />
+                <span className="font-medium">{ticket.customer.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-gray-400" />
+                <span className="text-sm">{ticket.customer.phone}</span>
+              </div>
+              {ticket.customer.email && (
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm">{ticket.customer.email}</span>
+                </div>
+              )}
+              <div className="pt-2">
+                <Button variant="outline" size="sm" className="w-full">
+                  ดู Tickets อื่นของลูกค้า
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
