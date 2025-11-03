@@ -4,6 +4,8 @@
  * POST /api/tickets - Create a new ticket
  */
 
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateCreateTicket, sanitizePhone } from '@/lib/validations';
