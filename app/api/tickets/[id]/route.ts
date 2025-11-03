@@ -5,6 +5,8 @@
  * DELETE /api/tickets/[id] - Delete ticket (soft delete recommended)
  */
 
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateUpdateTicket } from '@/lib/validations';
