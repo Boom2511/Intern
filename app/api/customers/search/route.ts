@@ -3,6 +3,7 @@
  * GET /api/customers/search?phone=xxx - Search customer by phone number
  * Returns customer with their open tickets
  */
+export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
