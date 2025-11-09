@@ -20,6 +20,7 @@ import { TicketWithRelations, TicketStatus, Priority } from '@/types';
 import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel } from '@/lib/utils';
 import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
+import { getIssueTypeLabel } from '@/config/issue-types';
 import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2 } from 'lucide-react';
 
 interface TicketDetailProps {
@@ -165,33 +166,46 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold">{ticket.ticketNo}</h1>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <h1 className="text-xl md:text-3xl font-bold break-all">{ticket.ticketNo}</h1>
             <StatusBadge status={status} />
             <Badge className={getPriorityColor(ticket.priority)}>
               {getPriorityLabel(ticket.priority)}
             </Badge>
           </div>
         </div>
-        <Button variant="outline">
-          <Edit className="h-4 w-4 mr-2" />
-          แก้ไข
-        </Button>
+        {!isClientMode && (
+          <Button variant="outline" className="w-full md:w-auto">
+            <Edit className="h-4 w-4 mr-2" />
+            แก้ไข
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isClientMode ? 'max-w-2xl mx-auto' : 'lg:grid-cols-3'} gap-4 md:gap-6`}>
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={`${!isClientMode && 'lg:col-span-2'} space-y-4 md:space-y-6`}>
           {/* Description */}
           <Card>
             <CardHeader>
               <CardTitle>รายละเอียด</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Issue Type Badge */}
+              <div className="flex items-center gap-2 pb-3 border-b">
+                <span className="text-sm font-medium text-gray-600">ประเภทปัญหา:</span>
+                <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+                  {getIssueTypeLabel(ticket.issueType)}
+                </Badge>
+                {ticket.issueTypeOther && (
+                  <span className="text-sm text-gray-600">({ticket.issueTypeOther})</span>
+                )}
+              </div>
+
               <p className="whitespace-pre-wrap">{ticket.description}</p>
               <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
                 <Clock className="h-4 w-4" />
@@ -205,53 +219,55 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
             </CardContent>
           </Card>
 
-          {/* Notes/Comments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
-                บันทึกและความคิดเห็น ({ticket.notes.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Add Note */}
-              <div className="space-y-2">
-                <textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
-                  rows={3}
-                  className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <Button onClick={handleAddNote} disabled={loading || !newNote.trim()}>
-                  เพิ่มบันทึก
-                </Button>
-              </div>
+          {/* Notes/Comments - Only show in staff mode */}
+          {!isClientMode && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
+                  บันทึกและความคิดเห็น ({ticket.notes.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Add Note */}
+                <div className="space-y-2">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
+                    rows={3}
+                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <Button onClick={handleAddNote} disabled={loading || !newNote.trim()}>
+                    เพิ่มบันทึก
+                  </Button>
+                </div>
 
-              {/* Notes Timeline */}
-              <div className="space-y-4 mt-6">
-                {ticket.notes.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-4">
-                    ยังไม่มีบันทึก
-                  </p>
-                ) : (
-                  ticket.notes.map(note => (
-                    <div key={note.id} className="border-l-2 border-blue-500 pl-4 py-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{note.createdBy}</span>
-                        <span className="text-xs text-gray-500">
-                          {formatRelativeTime(note.createdAt)}
-                        </span>
+                {/* Notes Timeline */}
+                <div className="space-y-4 mt-6">
+                  {ticket.notes.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">
+                      ยังไม่มีบันทึก
+                    </p>
+                  ) : (
+                    ticket.notes.map(note => (
+                      <div key={note.id} className="border-l-2 border-blue-500 pl-4 py-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">{note.createdBy}</span>
+                          <span className="text-xs text-gray-500">
+                            {formatRelativeTime(note.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {note.content}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                        {note.content}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -298,28 +314,28 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
                   )}
                 </div>
               ) : (
-                /* Staff View - Full Control */
+                /* Staff View - CEC Controls */
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      เปลี่ยนสถานะ
+                      สถานะปัจจุบัน
                     </label>
-                    <Select
-                      value={status}
-                      onValueChange={(value) => handleStatusUpdate(value as TicketStatus)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TICKET_STATUSES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="p-3 bg-gray-50 rounded-lg mb-3">
+                      <StatusBadge status={status} />
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      สถานะจะเปลี่ยนอัตโนมัติตามการดำเนินการ
+                    </p>
+                    {status !== 'CLOSED' && (
+                      <Button
+                        onClick={() => handleStatusUpdate('CLOSED')}
+                        disabled={loading}
+                        variant="outline"
+                        className="w-full border-red-300 text-red-700 hover:bg-red-50"
+                      >
+                        ปิด Ticket
+                      </Button>
+                    )}
                   </div>
 
                   <div className="border-t pt-4">
@@ -362,70 +378,40 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
                     )}
                   </div>
 
-                  <div className="border-t pt-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <UserCog className="h-4 w-4 text-gray-600" />
-                      <label className="block text-sm font-medium text-gray-700">
-                        ---Staff เดี๋ยวจัดการ---
-                      </label>
-                    </div>
-                    <Select
-                      value={assignedTo || 'none'}
-                      onValueChange={handleAssigneeUpdate}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="เลือกผู้รับผิดชอบ" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">ยังไม่มอบหมาย</SelectItem>
-                        {STAFF_MEMBERS.map((staff) => (
-                          <SelectItem key={staff.id} value={staff.name}>
-                            {staff.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {assignedTo && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                        <p className="text-xs text-blue-700">
-                          กำลังรับผิดชอบโดย: <strong>{assignedTo}</strong>
-                        </p>
-                      </div>
-                    )}
-                  </div>
                 </>
               )}
             </CardContent>
           </Card>
 
-          {/* Customer Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">ข้อมูลลูกค้า</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-gray-400" />
-                <span className="font-medium">{ticket.customer.name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-gray-400" />
-                <span className="text-sm">{ticket.customer.phone}</span>
-              </div>
-              {ticket.customer.email && (
+          {/* Customer Info - Only show in staff mode */}
+          {!isClientMode && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base md:text-lg">ข้อมูลลูกค้า</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm">{ticket.customer.email}</span>
+                  <User className="h-4 w-4 text-gray-400" />
+                  <span className="font-medium text-sm md:text-base break-all">{ticket.customer.name}</span>
                 </div>
-              )}
-              <div className="pt-2">
-                <Button variant="outline" size="sm" className="w-full">
-                  ดู Tickets อื่นของลูกค้า
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm break-all">{ticket.customer.phone}</span>
+                </div>
+                {ticket.customer.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm break-all">{ticket.customer.email}</span>
+                  </div>
+                )}
+                <div className="pt-2">
+                  <Button variant="outline" size="sm" className="w-full">
+                    ดู Tickets อื่นของลูกค้า
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
