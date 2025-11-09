@@ -72,25 +72,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const issueTypeOptions = getIssueTypeOptions();
   const departmentOptions = getDepartmentOptions();
 
-  // Auto-sync customer data from recipient data
-  useEffect(() => {
-    // Only sync if recipient data is not empty
-    if (formData.recipientName && formData.recipientPhone) {
-      setFormData(prev => {
-        // Prevent unnecessary updates if already synced
-        if (prev.customerName === prev.recipientName &&
-            prev.customerPhone === prev.recipientPhone) {
-          return prev; // Return unchanged to prevent re-render
-        }
-        return {
-          ...prev,
-          customerName: prev.recipientName,
-          customerPhone: prev.recipientPhone,
-        };
-      });
-    }
-  }, [formData.recipientName, formData.recipientPhone]);
-
   // Check for existing tickets when phone number is entered
   useEffect(() => {
     const checkExistingTickets = async () => {
@@ -152,10 +133,17 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     setLoading(true);
 
     try {
+      // Sync customer data from recipient data before submitting
+      const submitData = {
+        ...formData,
+        customerName: formData.recipientName,
+        customerPhone: formData.recipientPhone,
+      };
+
       const response = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       });
 
       const data = await response.json();
