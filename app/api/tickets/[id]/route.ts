@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateUpdateTicket } from '@/lib/validations';
+import { lineService } from '@/lib/line';
+import { createTicketAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
+import { getDepartmentLineGroup } from '@/config/departments';
 
 /**
  * GET /api/tickets/[id]
@@ -135,6 +138,19 @@ export async function PATCH(
     if (body.status !== undefined) updateData.status = body.status;
     if (body.priority !== undefined) updateData.priority = body.priority;
     if (body.assignedTo !== undefined) updateData.assignedTo = body.assignedTo;
+    if (body.department !== undefined) updateData.department = body.department;
+
+    // Handle RESOLVED status - set resolvedBy and resolvedAt
+    if (body.status === 'RESOLVED' && existingTicket.status !== 'RESOLVED') {
+      updateData.resolvedBy = body.resolvedBy || 'End User';
+      updateData.resolvedAt = new Date();
+    }
+
+    // Handle CLOSED status - set closedBy and closedAt
+    if (body.status === 'CLOSED' && existingTicket.status !== 'CLOSED') {
+      updateData.closedBy = body.closedBy || 'CEC';
+      updateData.closedAt = new Date();
+    }
 
     // Update ticket
     const ticket = await prisma.ticket.update({
@@ -145,18 +161,129 @@ export async function PATCH(
         notes: {
           orderBy: { createdAt: 'desc' },
         },
+        statusHistory: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
-    // If status changed, create a note
+    // If status changed, create a note and status history
     if (body.status && body.status !== existingTicket.status) {
       await prisma.note.create({
         data: {
           ticketId: params.id,
           content: `สถานะเปลี่ยนจาก ${existingTicket.status} เป็น ${body.status}`,
-          createdBy: 'System',
+          createdBy: body.closedBy || body.resolvedBy || 'System',
         },
       });
+
+      // Create status history entry
+      await prisma.statusHistory.create({
+        data: {
+          ticketId: params.id,
+          fromStatus: existingTicket.status,
+          toStatus: body.status,
+          changedBy: body.closedBy || body.resolvedBy || 'System',
+          note: body.statusNote || null,
+        },
+      });
+    }
+
+    // Send LINE notifications to department-specific group
+    if (lineService.isConfigured() && ticket.department) {
+      // Get LINE group ID for the ticket's department
+      const groupId = getDepartmentLineGroup(ticket.department);
+
+      if (groupId) {
+        const ticketUrl = `${process.env.NEXTAUTH_URL}/tickets/${ticket.id}`;
+
+        // 1. If department was just assigned (changed from null to a department)
+        if (body.department && !existingTicket.department) {
+          const message = `🔔 Ticket ใหม่ถูกมอบหมายให้แผนก\n\n` +
+            `📋 เลขที่: ${ticket.ticketNo}\n` +
+            `📍 แผนก: ${body.department}\n` +
+            `👤 ลูกค้า: ${ticket.customer.name}\n` +
+            `📞 เบอร์: ${ticket.customer.phone}\n` +
+            `📝 ปัญหา: ${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}\n\n` +
+            `🔗 ดูรายละเอียด: ${ticketUrl}`;
+
+          lineService.sendTextMessage(groupId, message).catch(error => {
+            console.error('Failed to send LINE department assignment notification:', error);
+          });
+        }
+
+        // 2. If ticket was assigned to someone (and was not assigned before)
+        if (body.assignedTo && !existingTicket.assignedTo) {
+          const flexMessage = createTicketAssignedFlexMessage(ticket, body.assignedTo, ticketUrl);
+
+          // Add Quick Reply buttons
+          const quickReply = {
+            items: [
+              {
+                type: 'action',
+                action: {
+                  type: 'uri',
+                  label: '📋 ดู Ticket',
+                  uri: ticketUrl,
+                },
+              },
+              {
+                type: 'action',
+                action: {
+                  type: 'uri',
+                  label: '📊 Dashboard',
+                  uri: `${process.env.NEXTAUTH_URL}/dashboard`,
+                },
+              },
+            ],
+          };
+
+          lineService.sendFlexMessage(
+            groupId,
+            `👨‍💼 มอบหมาย Ticket: ${ticket.ticketNo}`,
+            flexMessage,
+            quickReply
+          ).catch(error => {
+            console.error('Failed to send LINE assignment notification:', error);
+          });
+        }
+
+        // 2. If ticket was resolved
+        if (body.status === 'RESOLVED' && existingTicket.status !== 'RESOLVED') {
+          const flexMessage = createTicketResolvedFlexMessage(ticket, ticketUrl);
+
+          // Add Quick Reply buttons
+          const quickReply = {
+            items: [
+              {
+                type: 'action',
+                action: {
+                  type: 'uri',
+                  label: '✅ ยืนยันและปิด',
+                  uri: ticketUrl,
+                },
+              },
+              {
+                type: 'action',
+                action: {
+                  type: 'uri',
+                  label: '📋 ดู Tickets ทั้งหมด',
+                  uri: `${process.env.NEXTAUTH_URL}/tickets`,
+                },
+              },
+            ],
+          };
+
+          lineService.sendFlexMessage(
+            groupId,
+            `✅ Ticket แก้ไขสำเร็จ: ${ticket.ticketNo}`,
+            flexMessage,
+            quickReply
+          ).catch(error => {
+            console.error('Failed to send LINE resolved notification:', error);
+          });
+        }
+      }
     }
 
     return NextResponse.json({

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithCustomer } from '@/types';
 import { formatThaiDate, getPriorityColor, getPriorityLabel } from '@/lib/utils';
-import { Clock, User, Phone } from 'lucide-react';
+import { Clock, User, Phone, CircleAlert } from 'lucide-react';
 
 interface TicketCardProps {
   ticket: TicketWithCustomer;
@@ -28,9 +28,14 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                 <Badge className={getPriorityColor(ticket.priority)}>
                   {getPriorityLabel(ticket.priority)}
                 </Badge>
+                {!ticket.department && (
+                  <div className="flex items-center gap-1 text-amber-600" title="ยังไม่ได้เลือกแผนกรับผิดชอบ">
+                    <CircleAlert className="h-4 w-4" />
+                    <span className="text-xs">ยังไม่ได้เลือกแผนก</span>
+                  </div>
+                )}
               </div>
-              <h3 className="font-semibold text-lg mb-2">{ticket.subject}</h3>
-              <p className="text-sm text-gray-600 line-clamp-2">
+              <p className="text-sm text-gray-600 line-clamp-3">
                 {ticket.description}
               </p>
             </div>

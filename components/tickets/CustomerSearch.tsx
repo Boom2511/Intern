@@ -110,7 +110,7 @@ export default function CustomerSearch({ onCustomerSelect }: CustomerSearchProps
                       <ul className="mt-2 space-y-1 text-yellow-700">
                         {openTickets.map(ticket => (
                           <li key={ticket.id}>
-                            • {ticket.ticketNo}: {ticket.subject}
+                            • {ticket.ticketNo}: {ticket.description.substring(0, 50)}...
                           </li>
                         ))}
                       </ul>

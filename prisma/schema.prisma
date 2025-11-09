@@ -25,23 +25,62 @@ model Customer {
 
 // Ticket model - main help desk ticket entity
 model Ticket {
-  id          String       @id @default(cuid())
-  ticketNo    String       @unique  // Auto-generated format: TH-YYYYMMDD-XXXX
-  customerId  String
-  customer    Customer     @relation(fields: [customerId], references: [id])
-  subject     String
-  description String       @db.Text
-  status      TicketStatus @default(NEW)
-  priority    Priority     @default(MEDIUM)
-  assignedTo  String?      // Staff member assigned to this ticket
-  notes       Note[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  ticketNo     String       @unique  // Auto-generated format: TH-YYYYMMDD-XXXX
+
+  // Channel & Classification
+  channel      Channel      @default(CEC)
+  issueType    IssueType    @default(OTHER)
+  issueTypeOther String?    // For OTHER issue type
+  department   Department?  // Optional - if not specified, needs assignment
+
+  // Tracking Information
+  trackingNo   String?
+  zoneId       String?
+
+  // Customer & Recipient
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  recipientName   String    @default("")
+  recipientPhone  String    @default("")
+  recipientAddress String   @default("") @db.Text
+  description     String    @db.Text
+
+  // Salesforce Integration
+  salesforceId String?
+
+  // Status & Priority
+  status       TicketStatus @default(NEW)
+  priority     Priority     @default(MEDIUM)
+
+  // SLA Tracking
+  slaHours     Int          @default(24) // Stored SLA hours from config
+  slaDeadline  DateTime     @default(now()) // Calculated SLA deadline
+  slaStatus    SLAStatus    @default(ON_TRACK)
+
+  // Assignment & Resolution
+  assignedTo   String?      // Staff member assigned to this ticket
+  resolvedBy   String?      // Staff member who resolved this ticket
+  resolvedAt   DateTime?    // Timestamp when ticket was resolved
+  closedBy     String?      // CEC staff who closed the ticket
+  closedAt     DateTime?    // Timestamp when ticket was closed
+
+  notes          Note[]
+  statusHistory  StatusHistory[]
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([ticketNo])
   @@index([status])
+  @@index([channel])
+  @@index([issueType])
+  @@index([department])
   @@index([customerId])
   @@index([createdAt])
+  @@index([slaDeadline])
+  @@index([slaStatus])
+  @@index([trackingNo])
 }
 
 // Note model - for adding comments/updates to tickets
@@ -56,13 +95,57 @@ model Note {
   @@index([ticketId])
 }
 
+// StatusHistory model - tracks all status changes for audit trail
+model StatusHistory {
+  id        String       @id @default(cuid())
+  ticketId  String
+  ticket    Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromStatus TicketStatus
+  toStatus   TicketStatus
+  changedBy  String       // User who made the change
+  note       String?      @db.Text
+  createdAt  DateTime     @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+// Channel enum - where the ticket came from
+enum Channel {
+  CEC         // CEC Call Center
+  SALESFORCE  // Salesforce system
+}
+
+// Issue Type enum - type of problem
+enum IssueType {
+  NEW_DELIVERY        // ส่งใหม่
+  CHECK_DELIVERY      // ตรวจสอบการส่ง
+  RETURN_TO_SENDER    // ส่งคืนผู้ส่ง
+  DAMAGED_PARCEL      // พัสดุเสียหาย
+  LOST_PARCEL         // พัสดุสูญหาย
+  WRONG_ADDRESS       // ที่อยู่ผิด
+  RECIPIENT_NOT_HOME  // ผู้รับไม่อยู่
+  OTHER               // อื่นๆ
+}
+
+// Department enum - which department handles the ticket
+enum Department {
+  DB1   // D1
+  DB2   // D2
+  DB3   // D3
+  DB4   // D4
+  DB5   // นำจ่ายรถยนต์
+  DB6   // บป (บริการประชาชน)
+  TEST  // ทดสอบ
+}
+
 // Ticket status enum
 enum TicketStatus {
-  NEW          // Newly created ticket
-  IN_PROGRESS  // Being worked on
+  NEW          // Newly created by CEC
+  IN_PROGRESS  // Assigned to department, being worked on
   PENDING      // Waiting for customer response or external action
-  RESOLVED     // Issue resolved, waiting for confirmation
-  CLOSED       // Ticket closed
+  RESOLVED     // Issue resolved by end user
+  CLOSED       // Confirmed closed by CEC
 }
 
 // Priority levels enum
@@ -71,4 +154,11 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// SLA Status enum
+enum SLAStatus {
+  ON_TRACK     // Within SLA time
+  AT_RISK      // 80%+ of SLA time used
+  BREACHED     // SLA deadline passed
 }

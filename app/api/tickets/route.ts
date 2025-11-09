@@ -8,8 +8,10 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { validateCreateTicket, sanitizePhone } from '@/lib/validations';
+import { sanitizePhone } from '@/lib/validations';
 import { generateTicketNumber } from '@/lib/utils';
+import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
+import { getSLAHours, getSLAPriority } from '@/config/issue-types';
 
 /**
  * GET /api/tickets
@@ -87,17 +89,45 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const {
+      customerName,
+      customerPhone,
+      customerEmail,
+      channel = 'CEC',
+      issueType,
+      issueTypeOther,
+      department,
+      trackingNo,
+      zoneId,
+      recipientName,
+      recipientPhone,
+      recipientAddress,
+      description,
+      salesforceId,
+      customerId,
+    } = body;
 
-    // Validate input
-    const validation = validateCreateTicket(body);
-    if (!validation.valid) {
+    // Basic validation
+    if (!customerName || !customerPhone || !description) {
       return NextResponse.json(
-        { success: false, errors: validation.errors },
+        { success: false, error: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
         { status: 400 }
       );
     }
 
-    const { customerName, customerPhone, customerEmail, subject, description, priority, customerId } = body;
+    if (!issueType) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณาเลือกประเภทปัญหา' },
+        { status: 400 }
+      );
+    }
+
+    if (!recipientName || !recipientPhone || !recipientAddress) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณากรอกข้อมูลผู้รับให้ครบถ้วน' },
+        { status: 400 }
+      );
+    }
 
     // Sanitize phone number
     const cleanPhone = sanitizePhone(customerPhone);
@@ -130,7 +160,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate ticket number
-    // Get today's ticket count for sequence
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayCount = await prisma.ticket.count({
@@ -143,21 +172,56 @@ export async function POST(request: NextRequest) {
 
     const ticketNo = generateTicketNumber(todayCount + 1);
 
+    // Get SLA hours and priority from config based on issue type
+    const slaHours = getSLAHours(issueType);
+    const priority = getSLAPriority(issueType);
+
+    // Calculate SLA deadline
+    const createdAt = new Date();
+    const slaDeadline = calculateSLADeadline(createdAt, issueType);
+    const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
+
     // Create ticket
     const ticket = await prisma.ticket.create({
       data: {
         ticketNo,
         customerId: customer.id,
-        subject,
+        channel,
+        issueType,
+        issueTypeOther: (issueType === 'WRONG_ADDRESS' || issueType === 'OTHER') ? issueTypeOther : null,
+        department: department || null,
+        trackingNo: trackingNo || null,
+        zoneId: zoneId || null,
+        recipientName,
+        recipientPhone,
+        recipientAddress,
         description,
+        salesforceId: salesforceId || null,
         priority,
         status: 'NEW',
+        slaHours,
+        slaDeadline,
+        slaStatus,
       },
       include: {
         customer: true,
         notes: true,
       },
     });
+
+    // If no department specified, add a note
+    if (!department) {
+      await prisma.note.create({
+        data: {
+          ticketId: ticket.id,
+          content: '⚠️ โปรดเลือกแผนกรับผิดชอบ',
+          createdBy: 'System',
+        },
+      });
+    }
+
+    // Note: LINE notification จะถูกส่งเมื่อมีการมอบหมาย Ticket ให้ Staff
+    // ไม่ส่ง notification ทันทีตอนสร้าง Ticket
 
     return NextResponse.json(
       { success: true, data: ticket, message: 'สร้าง Ticket สำเร็จ' },

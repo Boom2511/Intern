@@ -33,14 +33,14 @@ export default function TicketList({ tickets }: TicketListProps) {
       filtered = filtered.filter(ticket => ticket.status === statusFilter);
     }
 
-    // Search by ticket number, customer name, or phone
+    // Search by ticket number, customer name, phone, or description
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(ticket =>
         ticket.ticketNo.toLowerCase().includes(term) ||
         ticket.customer.name.toLowerCase().includes(term) ||
         ticket.customer.phone.includes(term) ||
-        ticket.subject.toLowerCase().includes(term)
+        ticket.description.toLowerCase().includes(term)
       );
     }
 
