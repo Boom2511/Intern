@@ -71,10 +71,13 @@ export async function GET(request: NextRequest) {
     });
 
     if (!customer) {
-      return NextResponse.json(
-        { success: false, error: 'ไม่พบข้อมูลลูกค้า' },
-        { status: 404 }
-      );
+      // Return success but with null data when customer not found
+      return NextResponse.json({
+        success: true,
+        data: null,
+        hasOpenTickets: false,
+        openTicketsCount: 0,
+      });
     }
 
     // Return customer with warning if they have open tickets
