@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { validateUpdateTicket } from '@/lib/validations';
 import { lineService } from '@/lib/line';
 import { createTicketAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
-import { getDepartmentLineGroup } from '@/config/departments';
+import { getDepartmentLineGroup, getDepartmentOptions } from '@/config/departments';
 
 /**
  * GET /api/tickets/[id]
@@ -195,16 +195,23 @@ export async function PATCH(
       const groupId = getDepartmentLineGroup(ticket.department);
 
       if (groupId) {
-        const ticketUrl = `${process.env.NEXTAUTH_URL}/tickets/${ticket.id}`;
+        // Get base URL for ticket link (works on both localhost and production)
+        const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : 'http://localhost:3000';
+        const ticketUrl = `${baseUrl}/tickets/${ticket.id}`;
 
         // 1. If department was just assigned (changed from null to a department)
         if (body.department && !existingTicket.department) {
+          // Get department label for display
+          const deptLabel = getDepartmentOptions().find(d => d.value === body.department)?.label || body.department;
+
           const message = `🔔 Ticket ใหม่ถูกมอบหมายให้แผนก\n\n` +
             `📋 เลขที่: ${ticket.ticketNo}\n` +
-            `📍 แผนก: ${body.department}\n` +
+            `📍 แผนก: ${deptLabel}\n` +
+            `📝 ปัญหา: ${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}\n` +
             `👤 ลูกค้า: ${ticket.customer.name}\n` +
-            `📞 เบอร์: ${ticket.customer.phone}\n` +
-            `📝 ปัญหา: ${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}\n\n` +
+            `📞 เบอร์: ${ticket.customer.phone}\n\n` +
             `🔗 ดูรายละเอียด: ${ticketUrl}`;
 
           lineService.sendTextMessage(groupId, message).catch(error => {
