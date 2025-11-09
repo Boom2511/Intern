@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateUpdateTicket } from '@/lib/validations';
 import { lineService } from '@/lib/line';
-import { createTicketAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentAssignedFlexMessage, createTicketAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentOptions } from '@/config/departments';
 
 /**
@@ -199,22 +199,21 @@ export async function PATCH(
         const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
           : 'http://localhost:3000';
-        const ticketUrl = `${baseUrl}/tickets/${ticket.id}`;
+        const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
 
         // 1. If department was just assigned (changed from null to a department)
         if (body.department && !existingTicket.department) {
           // Get department label for display
           const deptLabel = getDepartmentOptions().find(d => d.value === body.department)?.label || body.department;
 
-          const message = `🔔 Ticket ใหม่ถูกมอบหมายให้แผนก\n\n` +
-            `📋 เลขที่: ${ticket.ticketNo}\n` +
-            `📍 แผนก: ${deptLabel}\n` +
-            `📝 ปัญหา: ${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}\n` +
-            `👤 ลูกค้า: ${ticket.customer.name}\n` +
-            `📞 เบอร์: ${ticket.customer.phone}\n\n` +
-            `🔗 ดูรายละเอียด: ${ticketUrl}`;
+          // Create Flex Message for department assignment
+          const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel, ticketUrl);
 
-          lineService.sendTextMessage(groupId, message).catch(error => {
+          lineService.sendFlexMessage(
+            groupId,
+            `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
+            flexMessage
+          ).catch(error => {
             console.error('Failed to send LINE department assignment notification:', error);
           });
         }

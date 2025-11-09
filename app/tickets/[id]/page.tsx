@@ -16,11 +16,17 @@ interface TicketPageProps {
   params: {
     id: string;
   };
+  searchParams: {
+    mode?: 'client' | 'staff';
+  };
 }
 
-export default async function TicketPage({ params }: TicketPageProps) {
+export default async function TicketPage({ params, searchParams }: TicketPageProps) {
   let ticket = null;
   let error = null;
+
+  // Determine view mode based on query parameter (default is staff)
+  const viewMode = searchParams.mode === 'client' ? 'client' : 'staff';
 
   try {
     // Fetch real ticket from database
@@ -62,7 +68,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
   return (
     <div>
-      <TicketDetail ticket={ticket} />
+      <TicketDetail ticket={ticket} viewMode={viewMode} />
     </div>
   );
 }
