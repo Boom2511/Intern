@@ -74,14 +74,19 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
   // Auto-sync customer data from recipient data
   useEffect(() => {
-    if (formData.recipientName || formData.recipientPhone) {
-      setFormData(prev => ({
-        ...prev,
-        customerName: prev.recipientName,
-        customerPhone: prev.recipientPhone,
-      }));
+    // Only sync if recipient data is not empty
+    if (formData.recipientName && formData.recipientPhone) {
+      // Prevent unnecessary updates if already synced
+      if (formData.customerName !== formData.recipientName ||
+          formData.customerPhone !== formData.recipientPhone) {
+        setFormData(prev => ({
+          ...prev,
+          customerName: prev.recipientName,
+          customerPhone: prev.recipientPhone,
+        }));
+      }
     }
-  }, [formData.recipientName, formData.recipientPhone]);
+  }, [formData.recipientName, formData.recipientPhone, formData.customerName, formData.customerPhone]);
 
   // Check for existing tickets when phone number is entered
   useEffect(() => {
