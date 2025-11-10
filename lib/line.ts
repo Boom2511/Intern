@@ -69,11 +69,14 @@ export class LineMessagingService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('LINE API Error:', errorData);
+        console.error('❌ LINE API Error Response:', JSON.stringify(errorData, null, 2));
+        console.error('❌ LINE API Status:', response.status);
+        console.error('❌ LINE API Request to:', to);
+        console.error('❌ LINE API Message:', JSON.stringify(messages, null, 2));
         return false;
       }
 
-      console.log('✅ LINE message sent successfully');
+      console.log('✅ LINE message sent successfully to:', to);
       return true;
     } catch (error) {
       console.error('Error sending LINE message:', error);
