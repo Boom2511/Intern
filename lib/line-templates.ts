@@ -1,50 +1,50 @@
-/**
- * LINE Flex Message Templates
- * Beautiful notification templates for different ticket events
- */
-
-import { Ticket, Customer, Priority } from '@prisma/client';
+import { Ticket, Customer, Priority, IssueType } from '@prisma/client';
+import { getIssueTypeLabel } from '@/config/issue-types';
 
 type TicketWithCustomer = Ticket & { customer: Customer };
 
 /**
- * Get priority color
+ * Get priority color - ปรับสีให้ modern และสื่อความหมายชัดเจน
  */
 function getPriorityColor(priority: Priority): string {
   switch (priority) {
     case 'URGENT':
-      return '#FF0000'; // Red
+      return '#DC2626'; // Red 600 - เร่งด่วนมาก
     case 'HIGH':
-      return '#FF6B35'; // Orange
+      return '#EA580C'; // Orange 600 - ด่วน
     case 'MEDIUM':
-      return '#FFA500'; // Yellow-Orange
+      return '#CA8A04'; // Yellow 600 - ปานกลาง
     case 'LOW':
-      return '#4CAF50'; // Green
+      return '#16A34A'; // Green 600 - ไม่เร่ง
     default:
-      return '#9E9E9E'; // Gray
+      return '#64748B'; // Slate 500
   }
 }
 
 /**
- * Get priority label in Thai
+ * Get priority label with SLA info
  */
-function getPriorityLabel(priority: Priority): string {
-  switch (priority) {
-    case 'URGENT':
-      return '🔴 เร่งด่วน';
-    case 'HIGH':
-      return '🟠 สูง';
-    case 'MEDIUM':
-      return '🟡 ปานกลาง';
-    case 'LOW':
-      return '🟢 ต่ำ';
-    default:
-      return '⚪ ไม่ระบุ';
-  }
+function getPrioritySLALabel(slaHours: number): string {
+  return `⏰ โปรดแก้ไขภายใน ${slaHours} ชม. ตาม SLA`;
 }
 
 /**
- * Department Assigned - Flex Message (ตอนมอบหมายให้แผนก)
+ * Format short date for LINE display
+ */
+function formatShortDate(date: Date): string {
+  return new Date(date).toLocaleString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) + ' น.';
+}
+
+/**
+ * 🎯 Department Assigned - Flex Message
+ * ========================================================
+ * ใช้เมื่อ: มอบหมาย Ticket ให้แผนก
+ * เน้น: แผนกที่รับผิดชอบ, ความเร่งด่วน, ข้อมูลติดต่อ
  */
 export function createDepartmentAssignedFlexMessage(
   ticket: TicketWithCustomer,
@@ -63,17 +63,10 @@ export function createDepartmentAssignedFlexMessage(
           layout: 'horizontal',
           contents: [
             {
-              type: 'box',
-              layout: 'vertical',
-              contents: [
-                {
-                  type: 'text',
-                  text: '🔔',
-                  size: '3xl',
-                },
-              ],
+              type: 'text',
+              text: '🎯',
+              size: 'xxl',
               flex: 0,
-              paddingEnd: 'md',
             },
             {
               type: 'box',
@@ -81,225 +74,57 @@ export function createDepartmentAssignedFlexMessage(
               contents: [
                 {
                   type: 'text',
-                  text: 'Ticket ใหม่',
+                  text: 'งานใหม่มอบหมายแล้ว',
                   color: '#ffffff',
-                  size: 'xl',
+                  size: 'lg',
                   weight: 'bold',
                 },
                 {
                   type: 'text',
                   text: ticket.ticketNo,
-                  color: '#ffffff',
-                  size: 'md',
+                  color: '#E0F2FE',
+                  size: 'xs',
                   margin: 'xs',
-                  weight: 'bold',
                 },
               ],
+              margin: 'md',
             },
           ],
         },
       ],
-      backgroundColor: '#3B82F6',
-      paddingAll: '20px',
+      backgroundColor: '#0284C7',
+      paddingAll: '16px',
     },
     body: {
       type: 'box',
       layout: 'vertical',
       contents: [
-        // Department Assignment Box (Highlight)
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '📍 มอบหมายให้แผนก',
-              color: '#3B82F6',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: departmentLabel,
-              color: '#111111',
-              size: 'xl',
-              weight: 'bold',
-              margin: 'xs',
-            },
-          ],
-          backgroundColor: '#DBEAFE',
-          paddingAll: '15px',
-          cornerRadius: 'md',
-        },
-        // Separator
-        {
-          type: 'separator',
-          margin: 'lg',
-        },
-        // Priority Badge
+        // 📌 Department & Priority - แสดงข้อมูลสำคัญในแถวเดียว
         {
           type: 'box',
           layout: 'horizontal',
           contents: [
             {
               type: 'box',
-              layout: 'baseline',
+              layout: 'vertical',
               contents: [
                 {
                   type: 'text',
-                  text: getPriorityLabel(ticket.priority),
-                  color: '#ffffff',
-                  size: 'sm',
+                  text: '👥 แผนกรับผิดชอบ',
+                  color: '#64748B',
+                  size: 'xxs',
                   weight: 'bold',
                 },
-              ],
-              backgroundColor: getPriorityColor(ticket.priority),
-              paddingAll: '8px',
-              cornerRadius: 'md',
-              flex: 0,
-            },
-            {
-              type: 'text',
-              text: `สร้างเมื่อ: ${new Date(ticket.createdAt).toLocaleString('th-TH', {
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}`,
-              color: '#999999',
-              size: 'xs',
-              align: 'end',
-              gravity: 'center',
-            },
-          ],
-          margin: 'lg',
-        },
-        // Issue Type
-        {
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            {
-              type: 'text',
-              text: '📋 ประเภทปัญหา:',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-              flex: 0,
-            },
-            {
-              type: 'text',
-              text: ticket.issueType,
-              color: '#111111',
-              size: 'sm',
-              margin: 'xs',
-            },
-          ],
-          margin: 'lg',
-        },
-        // Tracking Number (if exists)
-        ...(ticket.trackingNo ? [{
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            {
-              type: 'text',
-              text: '📦 Tracking:',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-              flex: 0,
-            },
-            {
-              type: 'text',
-              text: ticket.trackingNo,
-              color: '#111111',
-              size: 'sm',
-              margin: 'xs',
-            },
-          ],
-          margin: 'xs',
-        }] : []),
-        // Problem Description
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: 'รายละเอียดปัญหา',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-              color: '#111111',
-              size: 'sm',
-              wrap: true,
-              margin: 'xs',
-            },
-          ],
-          margin: 'md',
-        },
-        // Separator
-        {
-          type: 'separator',
-          margin: 'lg',
-        },
-        // Recipient Info Card
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: 'ข้อมูลผู้รับพัสดุ',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
                 {
                   type: 'text',
-                  text: '👤',
-                  size: 'sm',
-                  flex: 0,
-                },
-                {
-                  type: 'text',
-                  text: ticket.recipientName,
-                  color: '#111111',
-                  size: 'sm',
+                  text: departmentLabel,
+                  color: '#0F172A',
+                  size: 'lg',
                   weight: 'bold',
                   margin: 'xs',
                 },
               ],
-              margin: 'sm',
-            },
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '📞',
-                  size: 'sm',
-                  flex: 0,
-                },
-                {
-                  type: 'text',
-                  text: ticket.recipientPhone,
-                  color: '#374151',
-                  size: 'sm',
-                  margin: 'xs',
-                },
-              ],
-              margin: 'xs',
+              flex: 3,
             },
             {
               type: 'box',
@@ -307,64 +132,207 @@ export function createDepartmentAssignedFlexMessage(
               contents: [
                 {
                   type: 'text',
-                  text: '📍 ' + ticket.recipientAddress,
-                  color: '#374151',
+                  text: getPrioritySLALabel(ticket.slaHours),
+                  color: '#ffffff',
                   size: 'xs',
-                  wrap: true,
+                  weight: 'bold',
+                  align: 'center',
                 },
               ],
-              margin: 'xs',
+              backgroundColor: getPriorityColor(ticket.priority),
+              cornerRadius: 'md',
+              paddingAll: '10px',
+              flex: 1,
+              justifyContent: 'center',
             },
           ],
-          backgroundColor: '#F9FAFB',
-          paddingAll: '12px',
+          spacing: 'md',
+        },
+        {
+          type: 'separator',
+          margin: 'md',
+          color: '#E2E8F0',
+        },
+        // 📋 Issue Summary - กล่องแสดงปัญหาอย่างชัดเจน
+        {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: (ticket.issueType === 'WRONG_ADDRESS' || ticket.issueType === 'OTHER') && ticket.issueTypeOther
+                    ? ticket.issueTypeOther
+                    : getIssueTypeLabel(ticket.issueType),
+                  color: '#0284C7',
+                  size: 'xs',
+                  weight: 'bold',
+                  flex: 2,
+                },
+                ...(ticket.trackingNo ? [{
+                  type: 'text',
+                  text: `📦 ${ticket.trackingNo}`,
+                  color: '#64748B',
+                  size: 'xxs',
+                  align: 'end',
+                  flex: 2,
+                }] : []),
+              ],
+            },
+            {
+              type: 'text',
+              text: ticket.description.substring(0, 120) + (ticket.description.length > 120 ? '...' : ''),
+              color: '#1E293B',
+              size: 'sm',
+              wrap: true,
+              margin: 'md',
+            },
+          ],
+          backgroundColor: '#F8FAFC',
           cornerRadius: 'md',
+          paddingAll: '14px',
           margin: 'md',
         },
-      ],
-      paddingAll: '20px',
-    },
-    footer: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'sm',
-      contents: [
+        // 👤 Contact Card - แสดงข้อมูลติดต่อแบบกระชับ
         {
-          type: 'button',
-          action: {
-            type: 'uri',
-            label: '📋 ดู Ticket',
-            uri: ticketUrl,
-          },
-          style: 'primary',
-          color: '#3B82F6',
-          height: 'sm',
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: '👤',
+                      size: 'xl',
+                    },
+                  ],
+                  backgroundColor: '#DBEAFE',
+                  cornerRadius: 'sm',
+                  width: '40px',
+                  height: '40px',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  flex: 0,
+                },
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: ticket.recipientName,
+                      color: '#0F172A',
+                      size: 'sm',
+                      weight: 'bold',
+                    },
+                    {
+                      type: 'text',
+                      text: `📞 ${ticket.recipientPhone}`,
+                      color: '#475569',
+                      size: 'xs',
+                      margin: 'xs',
+                    },
+                  ],
+                  margin: 'md',
+                },
+              ],
+            },
+            ...(ticket.recipientAddress ? [{
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: '📍',
+                  flex: 0,
+                  size: 'sm',
+                },
+                {
+                  type: 'text',
+                  text: ticket.recipientAddress.substring(0, 80) + (ticket.recipientAddress.length > 80 ? '...' : ''),
+                  color: '#64748B',
+                  size: 'xs',
+                  wrap: true,
+                  margin: 'sm',
+                },
+              ],
+              margin: 'md',
+            }] : []),
+          ],
+          borderWidth: '1px',
+          borderColor: '#E2E8F0',
+          cornerRadius: 'md',
+          paddingAll: '12px',
+          margin: 'md',
         },
+        // ⏰ Timestamp
         {
           type: 'box',
           layout: 'horizontal',
           contents: [
             {
               type: 'text',
-              text: '⏱️ กรุณาดำเนินการให้เสร็จภายในเวลาที่กำหนด',
-              color: '#9CA3AF',
+              text: `สร้างเมื่อ ${formatShortDate(ticket.createdAt)}`,
+              color: '#94A3B8',
               size: 'xxs',
-              align: 'center',
-              wrap: true,
             },
           ],
-          margin: 'sm',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'none',
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'button',
+          action: {
+            type: 'uri',
+            label: 'เริ่มดำเนินการทันที',
+            uri: ticketUrl,
+          },
+          style: 'primary',
+          color: '#0284C7',
+          height: 'sm',
+        },
+        {
+          type: 'text',
+          text: 'กดเพื่อดูรายละเอียดและอัปเดตสถานะ',
+          color: '#94A3B8',
+          size: 'xxs',
+          align: 'center',
+          margin: 'md',
+        },
+      ],
+      paddingAll: '16px',
+      spacing: 'sm',
     },
   };
 }
 
 /**
- * Ticket Assigned - Flex Message (ตอนมอบหมาย Ticket ให้ Staff)
+ * 👨‍💼 Ticket Assigned - Flex Message
+ * ========================================================
+ * ใช้เมื่อ: มอบหมาย Ticket ให้พนักงานคนใดคนหนึ่ง
+ * เน้น: ชื่อผู้รับผิดชอบ, ความเร่งด่วน, สรุปปัญหา
  */
-export function createTicketAssignedFlexMessage(ticket: TicketWithCustomer, assignedTo: string, ticketUrl: string) {
+export function createTicketAssignedFlexMessage(
+  ticket: TicketWithCustomer,
+  assignedTo: string,
+  ticketUrl: string
+) {
   return {
     type: 'bubble',
     size: 'mega',
@@ -377,17 +345,10 @@ export function createTicketAssignedFlexMessage(ticket: TicketWithCustomer, assi
           layout: 'horizontal',
           contents: [
             {
-              type: 'box',
-              layout: 'vertical',
-              contents: [
-                {
-                  type: 'text',
-                  text: '👨‍💼',
-                  size: '3xl',
-                },
-              ],
+              type: 'text',
+              text: '👨‍💼',
+              size: 'xxl',
               flex: 0,
-              paddingEnd: 'md',
             },
             {
               type: 'box',
@@ -395,163 +356,136 @@ export function createTicketAssignedFlexMessage(ticket: TicketWithCustomer, assi
               contents: [
                 {
                   type: 'text',
-                  text: 'มอบหมาย Ticket',
+                  text: 'มอบหมายงานให้คุณ',
                   color: '#ffffff',
-                  size: 'xl',
+                  size: 'lg',
                   weight: 'bold',
                 },
                 {
                   type: 'text',
                   text: ticket.ticketNo,
-                  color: '#ffffff',
-                  size: 'md',
+                  color: '#E0E7FF',
+                  size: 'xs',
                   margin: 'xs',
-                  weight: 'bold',
                 },
               ],
+              margin: 'md',
             },
           ],
         },
       ],
       backgroundColor: '#6366F1',
-      paddingAll: '20px',
+      paddingAll: '16px',
     },
     body: {
       type: 'box',
       layout: 'vertical',
       contents: [
-        // Assigned To Box (Highlight)
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '🎯 มอบหมายให้',
-              color: '#6366F1',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: assignedTo,
-              color: '#111111',
-              size: 'xl',
-              weight: 'bold',
-              margin: 'xs',
-            },
-          ],
-          backgroundColor: '#EEF2FF',
-          paddingAll: '15px',
-          cornerRadius: 'md',
-        },
-        // Separator
-        {
-          type: 'separator',
-          margin: 'lg',
-        },
-        // Priority Badge
+        // 🎯 Assigned Person & Priority
         {
           type: 'box',
           layout: 'horizontal',
           contents: [
             {
               type: 'box',
-              layout: 'baseline',
+              layout: 'vertical',
               contents: [
                 {
                   type: 'text',
-                  text: getPriorityLabel(ticket.priority),
-                  color: '#ffffff',
-                  size: 'sm',
+                  text: '🎯 รับผิดชอบโดย',
+                  color: '#64748B',
+                  size: 'xxs',
                   weight: 'bold',
+                },
+                {
+                  type: 'text',
+                  text: assignedTo,
+                  color: '#0F172A',
+                  size: 'lg',
+                  weight: 'bold',
+                  margin: 'xs',
+                },
+              ],
+              flex: 3,
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'text',
+                  text: getPrioritySLALabel(ticket.slaHours),
+                  color: '#ffffff',
+                  size: 'xs',
+                  weight: 'bold',
+                  align: 'center',
                 },
               ],
               backgroundColor: getPriorityColor(ticket.priority),
-              paddingAll: '8px',
               cornerRadius: 'md',
-              flex: 0,
-            },
-            {
-              type: 'text',
-              text: `สร้างเมื่อ: ${new Date(ticket.createdAt).toLocaleString('th-TH', {
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}`,
-              color: '#999999',
-              size: 'xs',
-              align: 'end',
-              gravity: 'center',
+              paddingAll: '10px',
+              flex: 1,
+              justifyContent: 'center',
             },
           ],
-          margin: 'lg',
+          spacing: 'md',
         },
-        // Subject
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '📋 หัวข้อปัญหา',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-              color: '#111111',
-              size: 'md',
-              weight: 'bold',
-              wrap: true,
-              margin: 'xs',
-            },
-          ],
-          margin: 'lg',
-        },
-        // Description
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '💬 รายละเอียด',
-              color: '#6B7280',
-              size: 'xs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: ticket.description.length > 120
-                ? ticket.description.substring(0, 120) + '...'
-                : ticket.description,
-              color: '#374151',
-              size: 'sm',
-              wrap: true,
-              margin: 'xs',
-            },
-          ],
-          margin: 'md',
-        },
-        // Separator
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'md',
+          color: '#E2E8F0',
         },
-        // Customer Info Card
+        // 📝 Task Summary
+        {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: '📋',
+                  flex: 0,
+                  size: 'md',
+                },
+                {
+                  type: 'text',
+                  text: ticket.issueType,
+                  color: '#6366F1',
+                  size: 'xs',
+                  weight: 'bold',
+                  margin: 'sm',
+                },
+              ],
+            },
+            {
+              type: 'text',
+              text: ticket.description.length > 150
+                ? ticket.description.substring(0, 150) + '...'
+                : ticket.description,
+              color: '#1E293B',
+              size: 'sm',
+              wrap: true,
+              margin: 'md',
+            },
+          ],
+          backgroundColor: '#F8FAFC',
+          cornerRadius: 'md',
+          paddingAll: '14px',
+          margin: 'md',
+        },
+        // 👤 Customer Info - Compact
         {
           type: 'box',
           layout: 'vertical',
           contents: [
             {
               type: 'text',
-              text: '👤 ข้อมูลลูกค้า',
-              color: '#6B7280',
-              size: 'xs',
+              text: '💬 ข้อมูลติดต่อลูกค้า',
+              color: '#64748B',
+              size: 'xxs',
               weight: 'bold',
             },
             {
@@ -561,73 +495,71 @@ export function createTicketAssignedFlexMessage(ticket: TicketWithCustomer, assi
                 {
                   type: 'text',
                   text: ticket.customer.name,
-                  color: '#111111',
+                  color: '#0F172A',
                   size: 'sm',
                   weight: 'bold',
-                  flex: 0,
+                  flex: 2,
+                },
+                {
+                  type: 'text',
+                  text: `📞 ${ticket.customer.phone}`,
+                  color: '#475569',
+                  size: 'xs',
+                  align: 'end',
+                  flex: 2,
                 },
               ],
               margin: 'sm',
             },
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '📞',
-                  size: 'sm',
-                  flex: 0,
-                },
-                {
-                  type: 'text',
-                  text: ticket.customer.phone,
-                  color: '#374151',
-                  size: 'sm',
-                  margin: 'xs',
-                },
-              ],
-              margin: 'xs',
-            },
             ...(ticket.customer.email ? [{
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '📧',
-                  size: 'sm',
-                  flex: 0,
-                },
-                {
-                  type: 'text',
-                  text: ticket.customer.email,
-                  color: '#374151',
-                  size: 'sm',
-                  margin: 'xs',
-                },
-              ],
+              type: 'text',
+              text: `📧 ${ticket.customer.email}`,
+              color: '#64748B',
+              size: 'xs',
               margin: 'xs',
             }] : []),
           ],
-          backgroundColor: '#F9FAFB',
-          paddingAll: '12px',
+          borderWidth: '1px',
+          borderColor: '#E2E8F0',
           cornerRadius: 'md',
+          paddingAll: '12px',
+          margin: 'md',
+        },
+        // ⏰ Timestamp
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'text',
+              text: '⏰',
+              flex: 0,
+              size: 'xs',
+              color: '#94A3B8',
+            },
+            {
+              type: 'text',
+              text: `สร้างเมื่อ ${formatShortDate(ticket.createdAt)}`,
+              color: '#94A3B8',
+              size: 'xxs',
+              margin: 'sm',
+            },
+          ],
           margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'none',
     },
     footer: {
       type: 'box',
       layout: 'vertical',
-      spacing: 'sm',
       contents: [
         {
           type: 'button',
           action: {
             type: 'uri',
-            label: '🚀 เริ่มทำงาน',
+            label: '🚀 เริ่มทำงานเลย',
             uri: ticketUrl,
           },
           style: 'primary',
@@ -635,30 +567,38 @@ export function createTicketAssignedFlexMessage(ticket: TicketWithCustomer, assi
           height: 'sm',
         },
         {
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            {
-              type: 'text',
-              text: '⏱️ กรุณาดำเนินการภายในเวลาที่กำหนด',
-              color: '#9CA3AF',
-              size: 'xxs',
-              align: 'center',
-              wrap: true,
-            },
-          ],
-          margin: 'sm',
+          type: 'text',
+          text: '⚡ กดเพื่อดูรายละเอียดและเริ่มดำเนินการ',
+          color: '#94A3B8',
+          size: 'xxs',
+          align: 'center',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'sm',
     },
   };
 }
 
 /**
- * Ticket Resolved - Flex Message (แก้ไขเสร็จแล้ว)
+ * ✅ Ticket Resolved - Flex Message
+ * ========================================================
+ * ใช้เมื่อ: แก้ไขปัญหาเสร็จสิ้น
+ * เน้น: ความสำเร็จ, ผู้แก้ไข, เวลาที่ใช้
  */
-export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, ticketUrl: string) {
+export function createTicketResolvedFlexMessage(
+  ticket: TicketWithCustomer,
+  ticketUrl: string
+) {
+  // Calculate resolution time
+  const createdTime = new Date(ticket.createdAt).getTime();
+  const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : Date.now();
+  const timeDiff = resolvedTime - createdTime;
+  const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+  const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+  const resolutionTime = hours > 0 ? `${hours} ชม. ${minutes} นาที` : `${minutes} นาที`;
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -673,9 +613,8 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
             {
               type: 'text',
               text: '✅',
-              size: '3xl',
+              size: 'xxl',
               flex: 0,
-              paddingEnd: 'md',
             },
             {
               type: 'box',
@@ -683,7 +622,7 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
               contents: [
                 {
                   type: 'text',
-                  text: 'แก้ไขสำเร็จ',
+                  text: 'แก้ไขสำเร็จ!',
                   color: '#ffffff',
                   size: 'xl',
                   weight: 'bold',
@@ -691,31 +630,31 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
                 {
                   type: 'text',
                   text: ticket.ticketNo,
-                  color: '#ffffff',
-                  size: 'md',
+                  color: '#D1FAE5',
+                  size: 'xs',
                   margin: 'xs',
-                  weight: 'bold',
                 },
               ],
+              margin: 'md',
             },
           ],
         },
       ],
       backgroundColor: '#10B981',
-      paddingAll: '20px',
+      paddingAll: '16px',
     },
     body: {
       type: 'box',
       layout: 'vertical',
       contents: [
-        // Success Message
+        // 🎉 Success Message
         {
           type: 'box',
           layout: 'vertical',
           contents: [
             {
               type: 'text',
-              text: 'ปัญหาได้รับการแก้ไขเรียบร้อยแล้ว',
+              text: '🎉 ปัญหาได้รับการแก้ไขเรียบร้อยแล้ว',
               color: '#10B981',
               size: 'sm',
               weight: 'bold',
@@ -728,37 +667,38 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
         },
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'md',
+          color: '#E2E8F0',
         },
-        // Subject
+        // 📋 Issue Summary
         {
           type: 'box',
           layout: 'vertical',
           contents: [
             {
               type: 'text',
-              text: '📋 หัวข้อ',
-              color: '#6B7280',
-              size: 'xs',
+              text: '📋 สรุปปัญหา',
+              color: '#64748B',
+              size: 'xxs',
               weight: 'bold',
             },
             {
               type: 'text',
               text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-              color: '#111111',
-              size: 'md',
-              weight: 'bold',
+              color: '#1E293B',
+              size: 'sm',
               wrap: true,
-              margin: 'xs',
+              margin: 'sm',
             },
           ],
-          margin: 'lg',
+          margin: 'md',
         },
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'md',
+          color: '#E2E8F0',
         },
-        // Resolution Details
+        // 📊 Resolution Details - แสดงในรูปแบบตาราง
         {
           type: 'box',
           layout: 'vertical',
@@ -770,18 +710,18 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
                 {
                   type: 'text',
                   text: '👨‍🔧 แก้ไขโดย',
-                  color: '#6B7280',
-                  size: 'sm',
+                  color: '#64748B',
+                  size: 'xs',
                   flex: 2,
                 },
                 {
                   type: 'text',
                   text: ticket.resolvedBy || 'ไม่ระบุ',
-                  color: '#111111',
+                  color: '#0F172A',
                   size: 'sm',
                   weight: 'bold',
                   align: 'end',
-                  flex: 3,
+                  flex: 2,
                 },
               ],
             },
@@ -791,64 +731,88 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
               contents: [
                 {
                   type: 'text',
-                  text: '🕐 เวลาแก้ไข',
-                  color: '#6B7280',
+                  text: '⏱️ เวลาที่ใช้',
+                  color: '#64748B',
+                  size: 'xs',
+                  flex: 2,
+                },
+                {
+                  type: 'text',
+                  text: resolutionTime,
+                  color: '#0F172A',
                   size: 'sm',
+                  weight: 'bold',
+                  align: 'end',
+                  flex: 2,
+                },
+              ],
+              margin: 'sm',
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: '📅 เมื่อ',
+                  color: '#64748B',
+                  size: 'xs',
                   flex: 2,
                 },
                 {
                   type: 'text',
                   text: ticket.resolvedAt
-                    ? new Date(ticket.resolvedAt).toLocaleString('th-TH', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
-                    : '-',
-                  color: '#111111',
-                  size: 'sm',
+                    ? formatShortDate(ticket.resolvedAt)
+                    : 'เมื่อสักครู่',
+                  color: '#0F172A',
+                  size: 'xs',
                   align: 'end',
-                  flex: 3,
+                  flex: 2,
                 },
               ],
-              margin: 'md',
+              margin: 'sm',
             },
           ],
-          backgroundColor: '#F9FAFB',
+          backgroundColor: '#F8FAFC',
           paddingAll: '12px',
           cornerRadius: 'md',
-          margin: 'lg',
+          margin: 'md',
         },
-        // Customer Info
+        // 👤 Customer Info - Minimal
         {
           type: 'box',
-          layout: 'vertical',
+          layout: 'horizontal',
           contents: [
             {
               type: 'text',
-              text: '👤 ' + ticket.customer.name,
-              color: '#374151',
+              text: '👤',
+              flex: 0,
               size: 'sm',
             },
             {
               type: 'text',
-              text: '📞 ' + ticket.customer.phone,
-              color: '#6B7280',
+              text: ticket.customer.name,
+              color: '#475569',
+              size: 'sm',
+              margin: 'sm',
+            },
+            {
+              type: 'text',
+              text: `📞 ${ticket.customer.phone}`,
+              color: '#94A3B8',
               size: 'xs',
-              margin: 'xs',
+              align: 'end',
             },
           ],
-          margin: 'lg',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'none',
     },
     footer: {
       type: 'box',
       layout: 'vertical',
-      spacing: 'sm',
       contents: [
         {
           type: 'button',
@@ -864,21 +828,35 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
         {
           type: 'text',
           text: '✨ ขอบคุณที่ใช้บริการ Help Desk',
-          color: '#9CA3AF',
+          color: '#94A3B8',
           size: 'xxs',
           align: 'center',
-          margin: 'sm',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'sm',
     },
   };
 }
 
 /**
- * SLA Warning - Flex Message (เตือน SLA ใกล้หมด)
+ * ⚠️ SLA Warning - Flex Message
+ * ========================================================
+ * ใช้เมื่อ: ใกล้หมดเวลา SLA หรือเกินเวลาแล้ว
+ * เน้น: ความเร่งด่วนสูง, เวลาที่เหลือ, ข้อมูลติดตาม
  */
-export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainingTime: string, ticketUrl: string) {
+export function createSLAWarningFlexMessage(
+  ticket: TicketWithCustomer,
+  remainingTime: string,
+  ticketUrl: string
+) {
+  const isOverdue = remainingTime.includes('เกิน');
+  const urgencyColor = isOverdue ? '#DC2626' : '#F59E0B';
+  const urgencyBg = isOverdue ? '#FEE2E2' : '#FEF3C7';
+  const urgencyIcon = isOverdue ? '🚨' : '⚠️';
+  const urgencyText = isOverdue ? 'เกินกำหนดแล้ว!' : 'ใกล้หมดเวลา!';
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -892,10 +870,9 @@ export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainin
           contents: [
             {
               type: 'text',
-              text: '⚠️',
-              size: '3xl',
+              text: urgencyIcon,
+              size: 'xxl',
               flex: 0,
-              paddingEnd: 'md',
             },
             {
               type: 'box',
@@ -903,39 +880,40 @@ export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainin
               contents: [
                 {
                   type: 'text',
-                  text: 'เตือน SLA',
+                  text: urgencyText,
                   color: '#ffffff',
                   size: 'xl',
                   weight: 'bold',
                 },
                 {
                   type: 'text',
-                  text: 'ใกล้เกินเวลากำหนด!',
-                  color: '#ffffff',
-                  size: 'sm',
+                  text: ticket.ticketNo,
+                  color: urgencyBg,
+                  size: 'xs',
                   margin: 'xs',
                 },
               ],
+              margin: 'md',
             },
           ],
         },
       ],
-      backgroundColor: '#F59E0B',
-      paddingAll: '20px',
+      backgroundColor: urgencyColor,
+      paddingAll: '16px',
     },
     body: {
       type: 'box',
       layout: 'vertical',
       contents: [
-        // Time Warning Box
+        // ⏰ Time Warning - เน้นย้ำเวลา
         {
           type: 'box',
           layout: 'vertical',
           contents: [
             {
               type: 'text',
-              text: '⏰ เวลาคงเหลือ',
-              color: '#F59E0B',
+              text: isOverdue ? 'เกินกำหนดมาแล้ว' : 'เวลาคงเหลือ',
+              color: urgencyColor,
               size: 'xs',
               weight: 'bold',
               align: 'center',
@@ -943,46 +921,23 @@ export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainin
             {
               type: 'text',
               text: remainingTime,
-              color: '#DC2626',
-              size: '3xl',
+              color: isOverdue ? '#DC2626' : '#B45309',
+              size: 'xxl',
               weight: 'bold',
               align: 'center',
               margin: 'sm',
             },
           ],
-          backgroundColor: '#FEF3C7',
-          paddingAll: '15px',
+          backgroundColor: urgencyBg,
+          paddingAll: '16px',
           cornerRadius: 'md',
         },
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'md',
+          color: '#E2E8F0',
         },
-        // Ticket Info
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: ticket.ticketNo,
-              color: '#F59E0B',
-              size: 'sm',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-              color: '#111111',
-              size: 'md',
-              weight: 'bold',
-              wrap: true,
-              margin: 'xs',
-            },
-          ],
-          margin: 'lg',
-        },
-        // Priority & Assigned
+        // 📋 Ticket Info - กระชับ
         {
           type: 'box',
           layout: 'vertical',
@@ -993,18 +948,64 @@ export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainin
               contents: [
                 {
                   type: 'text',
-                  text: 'ความสำคัญ',
-                  color: '#6B7280',
-                  size: 'sm',
+                  text: '📋',
                   flex: 0,
+                  size: 'md',
+                },
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: ticket.issueType,
+                      color: urgencyColor,
+                      size: 'xs',
+                      weight: 'bold',
+                    },
+                    {
+                      type: 'text',
+                      text: ticket.description.substring(0, 80) + (ticket.description.length > 80 ? '...' : ''),
+                      color: '#1E293B',
+                      size: 'sm',
+                      wrap: true,
+                      margin: 'xs',
+                    },
+                  ],
+                  margin: 'sm',
+                },
+              ],
+            },
+          ],
+          backgroundColor: '#F8FAFC',
+          cornerRadius: 'md',
+          paddingAll: '12px',
+          margin: 'md',
+        },
+        // 📊 Details Grid
+        {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: '🎯 ความสำคัญ',
+                  color: '#64748B',
+                  size: 'xs',
+                  flex: 2,
                 },
                 {
                   type: 'text',
-                  text: getPriorityLabel(ticket.priority),
+                  text: getPrioritySLALabel(ticket.slaHours),
                   color: getPriorityColor(ticket.priority),
-                  size: 'sm',
+                  size: 'xs',
                   weight: 'bold',
                   align: 'end',
+                  flex: 2,
                 },
               ],
             },
@@ -1014,76 +1015,90 @@ export function createSLAWarningFlexMessage(ticket: TicketWithCustomer, remainin
               contents: [
                 {
                   type: 'text',
-                  text: 'ผู้รับผิดชอบ',
-                  color: '#6B7280',
-                  size: 'sm',
-                  flex: 0,
+                  text: '👨‍💼 รับผิดชอบ',
+                  color: '#64748B',
+                  size: 'xs',
+                  flex: 2,
                 },
                 {
                   type: 'text',
                   text: ticket.assignedTo,
-                  color: '#111111',
-                  size: 'sm',
+                  color: '#0F172A',
+                  size: 'xs',
                   weight: 'bold',
                   align: 'end',
+                  flex: 2,
                 },
               ],
-              margin: 'md',
+              margin: 'sm',
             }] : []),
+            {
+              type: 'box',
+              layout: 'horizontal',
+              contents: [
+                {
+                  type: 'text',
+                  text: '👤 ลูกค้า',
+                  color: '#64748B',
+                  size: 'xs',
+                  flex: 2,
+                },
+                {
+                  type: 'text',
+                  text: ticket.customer.name,
+                  color: '#0F172A',
+                  size: 'xs',
+                  weight: 'bold',
+                  align: 'end',
+                  flex: 2,
+                },
+              ],
+              margin: 'sm',
+            },
           ],
-          backgroundColor: '#F9FAFB',
-          paddingAll: '12px',
+          borderWidth: '1px',
+          borderColor: '#E2E8F0',
           cornerRadius: 'md',
-          margin: 'lg',
-        },
-        // Customer
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '👤 ' + ticket.customer.name,
-              color: '#374151',
-              size: 'sm',
-            },
-            {
-              type: 'text',
-              text: '📞 ' + ticket.customer.phone,
-              color: '#6B7280',
-              size: 'xs',
-              margin: 'xs',
-            },
-          ],
-          margin: 'lg',
+          paddingAll: '10px',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'none',
     },
     footer: {
       type: 'box',
       layout: 'vertical',
-      spacing: 'sm',
       contents: [
         {
           type: 'button',
           action: {
             type: 'uri',
-            label: '🚨 ดำเนินการทันที',
+            label: isOverdue ? '🚨 แก้ไขด่วน!' : '⚡ ดำเนินการทันที',
             uri: ticketUrl,
           },
           style: 'primary',
-          color: '#DC2626',
+          color: urgencyColor,
           height: 'sm',
         },
+        {
+          type: 'text',
+          text: isOverdue ? '⚠️ SLA เกินกำหนดแล้ว กรุณาดำเนินการโดยด่วน' : '💨 เวลาใกล้หมด กรุณาเร่งดำเนินการ',
+          color: '#94A3B8',
+          size: 'xxs',
+          align: 'center',
+          margin: 'md',
+          wrap: true,
+        },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
+      spacing: 'sm',
     },
   };
 }
 
 /**
- * Simple text message for testing
+ * 🧪 Simple Test Message
  */
 export function createSimpleTestMessage(message: string) {
   return [
@@ -1095,25 +1110,26 @@ export function createSimpleTestMessage(message: string) {
 }
 
 /**
- * Test Flex Message
+ * 🧪 Test Flex Message
  */
 export function createTestFlexMessage() {
   return {
     type: 'bubble',
+    size: 'kilo',
     header: {
       type: 'box',
       layout: 'vertical',
       contents: [
         {
           type: 'text',
-          text: '🧪 ทดสอบระบบ',
+          text: '🎨 ทดสอบระบบ',
           color: '#ffffff',
-          size: 'xl',
+          size: 'lg',
           weight: 'bold',
         },
       ],
-      backgroundColor: '#9C27B0',
-      paddingAll: '20px',
+      backgroundColor: '#6366F1',
+      paddingAll: '16px',
     },
     body: {
       type: 'box',
@@ -1123,22 +1139,23 @@ export function createTestFlexMessage() {
           type: 'text',
           text: 'ระบบ Help Desk เชื่อมต่อ LINE สำเร็จ! 🎉',
           wrap: true,
-          color: '#111111',
-          size: 'md',
+          color: '#1E293B',
+          size: 'sm',
         },
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'md',
+          color: '#E2E8F0',
         },
         {
           type: 'text',
-          text: `เวลาทดสอบ: ${new Date().toLocaleString('th-TH')}`,
-          color: '#999999',
-          size: 'sm',
-          margin: 'lg',
+          text: `⏰ ${new Date().toLocaleString('th-TH')}`,
+          color: '#94A3B8',
+          size: 'xs',
+          margin: 'md',
         },
       ],
-      paddingAll: '20px',
+      paddingAll: '16px',
     },
   };
 }
