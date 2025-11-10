@@ -223,8 +223,13 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Send LINE notification when ticket is created with department
+      console.log('=== NEW TICKET WITH DEPARTMENT - Debug ===');
+      console.log('Department:', department);
+      console.log('LINE configured:', lineService.isConfigured());
+
       if (lineService.isConfigured()) {
         const groupId = getDepartmentLineGroup(department);
+        console.log('Group ID:', groupId);
 
         if (groupId) {
           // Get base URL for ticket link
@@ -232,23 +237,30 @@ export async function POST(request: NextRequest) {
             || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
             || 'http://localhost:3000';
           const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
+          console.log('Ticket URL:', ticketUrl);
 
           // Get department label
           const deptLabel = getDepartmentLabel(department);
+          console.log('Department label:', deptLabel);
 
           // Create and send Flex Message
           const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel, ticketUrl);
+          console.log('✅ Sending LINE notification for new ticket...');
 
           lineService.sendFlexMessage(
             groupId,
             `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
             flexMessage
           ).then(() => {
-            console.log('✅ LINE notification sent for new ticket:', ticket.ticketNo);
+            console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
           }).catch(error => {
             console.error('❌ Failed to send LINE notification:', error);
           });
+        } else {
+          console.log('❌ No group ID found for department:', department);
         }
+      } else {
+        console.log('❌ LINE service not configured');
       }
     }
 

@@ -174,6 +174,52 @@ export function createDepartmentAssignedFlexMessage(
           ],
           margin: 'lg',
         },
+        // Issue Type
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'text',
+              text: '📋 ประเภทปัญหา:',
+              color: '#6B7280',
+              size: 'xs',
+              weight: 'bold',
+              flex: 0,
+            },
+            {
+              type: 'text',
+              text: ticket.issueType,
+              color: '#111111',
+              size: 'sm',
+              margin: 'xs',
+            },
+          ],
+          margin: 'lg',
+        },
+        // Tracking Number (if exists)
+        ...(ticket.trackingNo ? [{
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'text',
+              text: '📦 Tracking:',
+              color: '#6B7280',
+              size: 'xs',
+              weight: 'bold',
+              flex: 0,
+            },
+            {
+              type: 'text',
+              text: ticket.trackingNo,
+              color: '#111111',
+              size: 'sm',
+              margin: 'xs',
+            },
+          ],
+          margin: 'xs',
+        }] : []),
         // Problem Description
         {
           type: 'box',
@@ -181,36 +227,35 @@ export function createDepartmentAssignedFlexMessage(
           contents: [
             {
               type: 'text',
-              text: '📝 รายละเอียดปัญหา',
+              text: 'รายละเอียดปัญหา',
               color: '#6B7280',
               size: 'xs',
               weight: 'bold',
             },
             {
               type: 'text',
-              text: ticket.description.substring(0, 120) + (ticket.description.length > 120 ? '...' : ''),
+              text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
               color: '#111111',
-              size: 'md',
-              weight: 'bold',
+              size: 'sm',
               wrap: true,
               margin: 'xs',
             },
           ],
-          margin: 'lg',
+          margin: 'md',
         },
         // Separator
         {
           type: 'separator',
           margin: 'lg',
         },
-        // Customer Info Card
+        // Recipient Info Card
         {
           type: 'box',
           layout: 'vertical',
           contents: [
             {
               type: 'text',
-              text: '👤 ข้อมูลลูกค้า',
+              text: 'ข้อมูลผู้รับพัสดุ',
               color: '#6B7280',
               size: 'xs',
               weight: 'bold',
@@ -221,11 +266,17 @@ export function createDepartmentAssignedFlexMessage(
               contents: [
                 {
                   type: 'text',
-                  text: ticket.customer.name,
+                  text: '👤',
+                  size: 'sm',
+                  flex: 0,
+                },
+                {
+                  type: 'text',
+                  text: ticket.recipientName,
                   color: '#111111',
                   size: 'sm',
                   weight: 'bold',
-                  flex: 0,
+                  margin: 'xs',
                 },
               ],
               margin: 'sm',
@@ -242,10 +293,24 @@ export function createDepartmentAssignedFlexMessage(
                 },
                 {
                   type: 'text',
-                  text: ticket.customer.phone,
+                  text: ticket.recipientPhone,
                   color: '#374151',
                   size: 'sm',
                   margin: 'xs',
+                },
+              ],
+              margin: 'xs',
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'text',
+                  text: '📍 ' + ticket.recipientAddress,
+                  color: '#374151',
+                  size: 'xs',
+                  wrap: true,
                 },
               ],
               margin: 'xs',
@@ -650,7 +715,7 @@ export function createTicketResolvedFlexMessage(ticket: TicketWithCustomer, tick
           contents: [
             {
               type: 'text',
-              text: '🎉 ปัญหาได้รับการแก้ไขเรียบร้อยแล้ว',
+              text: 'ปัญหาได้รับการแก้ไขเรียบร้อยแล้ว',
               color: '#10B981',
               size: 'sm',
               weight: 'bold',
