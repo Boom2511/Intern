@@ -23,10 +23,10 @@ export const prisma =
     },
   });
 
-// Ensure connection is closed on serverless function shutdown
+// Optimize for serverless environment
 if (process.env.NODE_ENV === 'production') {
-  // Use shorter connection timeout for serverless
-  prisma.$connect();
+  // Don't call $connect() here - let Prisma connect lazily on first query
+  // This prevents connection exhaustion in serverless environments
 }
 
 if (process.env.NODE_ENV !== 'production') {
