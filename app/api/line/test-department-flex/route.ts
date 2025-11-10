@@ -34,6 +34,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create sample ticket data for testing
+    const now = new Date();
+    const slaDeadline = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
+
     const sampleTicket = {
       id: 'test-123',
       ticketNo: 'TK-20250109-001',
@@ -42,8 +45,8 @@ export async function POST(request: NextRequest) {
       status: 'NEW' as const,
       issueType: 'LOST_PARCEL' as const,
       channel: 'CEC' as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
       department: 'DB1',
       assignedTo: null,
       resolvedAt: null,
@@ -58,13 +61,16 @@ export async function POST(request: NextRequest) {
       salesforceId: null,
       issueTypeOther: null,
       customerId: 'customer-123',
+      slaHours: 24,
+      slaDeadline: slaDeadline,
+      slaStatus: 'ON_TRACK' as const,
       customer: {
         id: 'customer-123',
         name: 'นาย ทดสอบ ระบบ',
         phone: '0812345678',
         email: 'test@example.com',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: now,
+        updatedAt: now,
       },
     };
 
