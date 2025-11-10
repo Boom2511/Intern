@@ -12,6 +12,9 @@ import { sanitizePhone } from '@/lib/validations';
 import { generateTicketNumber } from '@/lib/utils';
 import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
 import { getSLAHours, getSLAPriority } from '@/config/issue-types';
+import { lineService } from '@/lib/line';
+import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
+import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 
 /**
  * GET /api/tickets
@@ -218,10 +221,36 @@ export async function POST(request: NextRequest) {
           createdBy: 'System',
         },
       });
-    }
+    } else {
+      // Send LINE notification when ticket is created with department
+      if (lineService.isConfigured()) {
+        const groupId = getDepartmentLineGroup(department);
 
-    // Note: LINE notification จะถูกส่งเมื่อมีการมอบหมาย Ticket ให้ Staff
-    // ไม่ส่ง notification ทันทีตอนสร้าง Ticket
+        if (groupId) {
+          // Get base URL for ticket link
+          const baseUrl = process.env.NEXTAUTH_URL
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+            || 'http://localhost:3000';
+          const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
+
+          // Get department label
+          const deptLabel = getDepartmentLabel(department);
+
+          // Create and send Flex Message
+          const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel, ticketUrl);
+
+          lineService.sendFlexMessage(
+            groupId,
+            `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
+            flexMessage
+          ).then(() => {
+            console.log('✅ LINE notification sent for new ticket:', ticket.ticketNo);
+          }).catch(error => {
+            console.error('❌ Failed to send LINE notification:', error);
+          });
+        }
+      }
+    }
 
     return NextResponse.json(
       { success: true, data: ticket, message: 'สร้าง Ticket สำเร็จ' },
