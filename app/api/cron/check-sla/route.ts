@@ -11,6 +11,9 @@ import { lineService } from '@/lib/line';
 import { createSLAWarningFlexMessage } from '@/lib/line-templates';
 import { Priority } from '@prisma/client';
 
+// Force this route to be dynamic (required for cron jobs)
+export const dynamic = 'force-dynamic';
+
 // SLA thresholds (in hours)
 const SLA_THRESHOLDS = {
   URGENT: 4,   // 4 hours
