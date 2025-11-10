@@ -381,8 +381,13 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 required
                 type="tel"
                 value={formData.recipientPhone}
-                onChange={(e) => setFormData({ ...formData, recipientPhone: e.target.value })}
+                onChange={(e) => {
+                  // Only allow numbers and limit to 10 digits
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setFormData({ ...formData, recipientPhone: value });
+                }}
                 placeholder="เช่น 0812345678"
+                maxLength={10}
               />
               {checkingPhone && (
                 <p className="text-xs text-gray-500 mt-1">กำลังตรวจสอบ ticket ที่มีอยู่...</p>

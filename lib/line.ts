@@ -67,16 +67,35 @@ export class LineMessagingService {
         body: JSON.stringify(body),
       });
 
+      // Check response body even if status is OK - LINE sometimes returns 200 with errors
+      const responseText = await response.text();
+      let responseData: any = {};
+
+      try {
+        if (responseText) {
+          responseData = JSON.parse(responseText);
+        }
+      } catch (e) {
+        // Response is not JSON, likely empty (which is good)
+      }
+
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ LINE API Error Response:', JSON.stringify(errorData, null, 2));
+        console.error('❌ LINE API Error Response:', JSON.stringify(responseData, null, 2));
         console.error('❌ LINE API Status:', response.status);
         console.error('❌ LINE API Request to:', to);
         console.error('❌ LINE API Message:', JSON.stringify(messages, null, 2));
         return false;
       }
 
+      // Check if response contains error even with 200 status
+      if (responseData.message && responseData.message.includes('error')) {
+        console.error('❌ LINE API returned error in 200 response:', JSON.stringify(responseData, null, 2));
+        console.error('❌ Message details:', JSON.stringify(messages, null, 2));
+        return false;
+      }
+
       console.log('✅ LINE message sent successfully to:', to);
+      console.log('📤 Response:', responseText || '(empty - success)');
       return true;
     } catch (error) {
       console.error('Error sending LINE message:', error);
