@@ -130,6 +130,13 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       return;
     }
 
+    // Validate phone number (must be exactly 10 digits starting with 0)
+    const phoneRegex = /^0\d{9}$/;
+    if (!phoneRegex.test(formData.recipientPhone)) {
+      setErrors(['หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0']);
+      return;
+    }
+
     setLoading(true);
 
     try {

@@ -190,9 +190,16 @@ export async function PATCH(
     }
 
     // Send LINE notifications to department-specific group
+    console.log('=== LINE Notification Debug ===');
+    console.log('LINE configured:', lineService.isConfigured());
+    console.log('Ticket department:', ticket.department);
+    console.log('Body department:', body.department);
+    console.log('Existing ticket department:', existingTicket.department);
+
     if (lineService.isConfigured() && ticket.department) {
       // Get LINE group ID for the ticket's department
       const groupId = getDepartmentLineGroup(ticket.department);
+      console.log('Group ID:', groupId);
 
       if (groupId) {
         // Get base URL for ticket link (works on both localhost and production)
@@ -200,9 +207,15 @@ export async function PATCH(
           ? `https://${process.env.VERCEL_URL}`
           : 'http://localhost:3000';
         const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
+        console.log('Ticket URL:', ticketUrl);
 
         // 1. If department was just assigned (changed from null to a department)
+        console.log('Checking condition: body.department && !existingTicket.department');
+        console.log('Result:', body.department && !existingTicket.department);
+
         if (body.department && !existingTicket.department) {
+          console.log('✅ Sending department assignment notification...');
+
           // Get department label for display
           const deptLabel = getDepartmentOptions().find(d => d.value === body.department)?.label || body.department;
 
@@ -213,9 +226,13 @@ export async function PATCH(
             groupId,
             `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
             flexMessage
-          ).catch(error => {
-            console.error('Failed to send LINE department assignment notification:', error);
+          ).then(() => {
+            console.log('✅ LINE notification sent successfully');
+          }).catch(error => {
+            console.error('❌ Failed to send LINE department assignment notification:', error);
           });
+        } else {
+          console.log('❌ Condition not met - notification not sent');
         }
 
         // 2. If ticket was assigned to someone (and was not assigned before)
