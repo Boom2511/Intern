@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       channel: 'CEC' as const,
       createdAt: now,
       updatedAt: now,
-      department: 'DB1',
+      department: 'DB1' as const,
       assignedTo: null,
       resolvedAt: null,
       resolvedBy: null,
