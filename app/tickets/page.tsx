@@ -7,20 +7,40 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import TicketList from '@/components/tickets/TicketList';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, X } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { TicketWithCustomer } from '@/types';
+import { TicketStatus } from '@prisma/client';
+import { getStatusLabel } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function TicketsPage() {
+type SearchParams = {
+  status?: string;
+};
+
+export default async function TicketsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   let tickets: TicketWithCustomer[] = [];
   let error: string | null = null;
 
   try {
+    // Build where clause based on query parameters
+    const whereClause: any = {};
+
+    // Filter by status if provided
+    if (searchParams.status && Object.values(TicketStatus).includes(searchParams.status as TicketStatus)) {
+      whereClause.status = searchParams.status as TicketStatus;
+    }
+
     // Fetch real tickets from database
     tickets = await prisma.ticket.findMany({
+      where: whereClause,
       include: {
         customer: true,
       },
@@ -49,6 +69,20 @@ export default async function TicketsPage() {
         </Link>
       </div>
 
+      {/* Active Filters */}
+      {searchParams.status && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">กรองตามสถานะ:</span>
+          <Badge variant="secondary" className="gap-2">
+            {getStatusLabel(searchParams.status)}
+            <Link href="/tickets" className="hover:bg-gray-300 rounded-full p-0.5">
+              <X className="h-3 w-3" />
+            </Link>
+          </Badge>
+          <span className="text-sm text-gray-500">({tickets.length} รายการ)</span>
+        </div>
+      )}
+
       {/* Error Message */}
       {error && (
         <Card className="border-red-200 bg-red-50">
@@ -73,22 +107,26 @@ export default async function TicketsPage() {
                 <Plus className="h-8 w-8 text-gray-400" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">ยังไม่มี Ticket</h3>
+                <h3 className="font-semibold text-lg">ไม่พบ Ticket</h3>
                 <p className="text-gray-600 mt-1">
-                  เริ่มต้นโดยการสร้าง Ticket แรกของคุณ
+                  {searchParams.status
+                    ? `ไม่มี Ticket ที่มีสถานะ "${getStatusLabel(searchParams.status)}"`
+                    : 'เริ่มต้นโดยการสร้าง Ticket แรกของคุณ'}
                 </p>
               </div>
-              <Link href="/tickets/new">
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  สร้าง Ticket ใหม่
-                </Button>
-              </Link>
+              {!searchParams.status && (
+                <Link href="/tickets/new">
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    สร้าง Ticket ใหม่
+                  </Button>
+                </Link>
+              )}
             </div>
           </CardContent>
         </Card>
       ) : (
-        <TicketList tickets={tickets} />
+        <TicketList tickets={tickets} initialStatus={searchParams.status} />
       )}
     </div>
   );

@@ -25,7 +25,7 @@ function getPriorityColor(priority: Priority): string {
  * Get priority label with SLA info
  */
 function getPrioritySLALabel(slaHours: number): string {
-  return `⏰ โปรดแก้ไขภายใน ${slaHours} ชม. ตาม SLA`;
+  return `โปรดแก้ไขภายใน ${slaHours} ชม. `;
 }
 
 /**
@@ -137,12 +137,13 @@ export function createDepartmentAssignedFlexMessage(
                   size: 'xs',
                   weight: 'bold',
                   align: 'center',
+                  wrap: true,
                 },
               ],
               backgroundColor: getPriorityColor(ticket.priority),
               cornerRadius: 'md',
               paddingAll: '10px',
-              flex: 1,
+              flex: 2,
               justifyContent: 'center',
             },
           ],
@@ -309,11 +310,12 @@ export function createDepartmentAssignedFlexMessage(
         },
         {
           type: 'text',
-          text: 'กดเพื่อดูรายละเอียดและอัปเดตสถานะ',
+          text: 'โปรดกดเพื่อดูรายละเอียดและอัปเดตสถานะ\n กรุณาดำเนินการให้เสร็จภายในเวลาที่กำหนด',
           color: '#94A3B8',
           size: 'xxs',
           align: 'center',
           margin: 'md',
+          wrap: true,
         },
       ],
       paddingAll: '16px',
@@ -591,17 +593,9 @@ export function createTicketResolvedFlexMessage(
   ticket: TicketWithCustomer,
   ticketUrl: string
 ) {
-  // Calculate resolution time
-  const createdTime = new Date(ticket.createdAt).getTime();
-  const resolvedTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : Date.now();
-  const timeDiff = resolvedTime - createdTime;
-  const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-  const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-  const resolutionTime = hours > 0 ? `${hours} ชม. ${minutes} นาที` : `${minutes} นาที`;
-
   return {
     type: 'bubble',
-    size: 'mega',
+    size: 'kilo',
     header: {
       type: 'box',
       layout: 'vertical',
@@ -613,7 +607,7 @@ export function createTicketResolvedFlexMessage(
             {
               type: 'text',
               text: '✅',
-              size: 'xxl',
+              size: 'xl',
               flex: 0,
             },
             {
@@ -622,9 +616,9 @@ export function createTicketResolvedFlexMessage(
               contents: [
                 {
                   type: 'text',
-                  text: 'แก้ไขสำเร็จ!',
+                  text: 'ยืนยันการปิด Ticket',
                   color: '#ffffff',
-                  size: 'xl',
+                  size: 'lg',
                   weight: 'bold',
                 },
                 {
@@ -647,168 +641,15 @@ export function createTicketResolvedFlexMessage(
       type: 'box',
       layout: 'vertical',
       contents: [
-        // 🎉 Success Message
         {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '🎉 ปัญหาได้รับการแก้ไขเรียบร้อยแล้ว',
-              color: '#10B981',
-              size: 'sm',
-              weight: 'bold',
-              align: 'center',
-            },
-          ],
-          backgroundColor: '#D1FAE5',
-          paddingAll: '12px',
-          cornerRadius: 'md',
-        },
-        {
-          type: 'separator',
-          margin: 'md',
-          color: '#E2E8F0',
-        },
-        // 📋 Issue Summary
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '📋 สรุปปัญหา',
-              color: '#64748B',
-              size: 'xxs',
-              weight: 'bold',
-            },
-            {
-              type: 'text',
-              text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-              color: '#1E293B',
-              size: 'sm',
-              wrap: true,
-              margin: 'sm',
-            },
-          ],
-          margin: 'md',
-        },
-        {
-          type: 'separator',
-          margin: 'md',
-          color: '#E2E8F0',
-        },
-        // 📊 Resolution Details - แสดงในรูปแบบตาราง
-        {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '👨‍🔧 แก้ไขโดย',
-                  color: '#64748B',
-                  size: 'xs',
-                  flex: 2,
-                },
-                {
-                  type: 'text',
-                  text: ticket.resolvedBy || 'ไม่ระบุ',
-                  color: '#0F172A',
-                  size: 'sm',
-                  weight: 'bold',
-                  align: 'end',
-                  flex: 2,
-                },
-              ],
-            },
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '⏱️ เวลาที่ใช้',
-                  color: '#64748B',
-                  size: 'xs',
-                  flex: 2,
-                },
-                {
-                  type: 'text',
-                  text: resolutionTime,
-                  color: '#0F172A',
-                  size: 'sm',
-                  weight: 'bold',
-                  align: 'end',
-                  flex: 2,
-                },
-              ],
-              margin: 'sm',
-            },
-            {
-              type: 'box',
-              layout: 'horizontal',
-              contents: [
-                {
-                  type: 'text',
-                  text: '📅 เมื่อ',
-                  color: '#64748B',
-                  size: 'xs',
-                  flex: 2,
-                },
-                {
-                  type: 'text',
-                  text: ticket.resolvedAt
-                    ? formatShortDate(ticket.resolvedAt)
-                    : 'เมื่อสักครู่',
-                  color: '#0F172A',
-                  size: 'xs',
-                  align: 'end',
-                  flex: 2,
-                },
-              ],
-              margin: 'sm',
-            },
-          ],
-          backgroundColor: '#F8FAFC',
-          paddingAll: '12px',
-          cornerRadius: 'md',
-          margin: 'md',
-        },
-        // 👤 Customer Info - Minimal
-        {
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            {
-              type: 'text',
-              text: '👤',
-              flex: 0,
-              size: 'sm',
-            },
-            {
-              type: 'text',
-              text: ticket.customer.name,
-              color: '#475569',
-              size: 'sm',
-              margin: 'sm',
-            },
-            {
-              type: 'text',
-              text: `📞 ${ticket.customer.phone}`,
-              color: '#94A3B8',
-              size: 'xs',
-              align: 'end',
-            },
-          ],
-          margin: 'md',
+          type: 'text',
+          text: `Ticket ${ticket.ticketNo} ได้รับการยืนยันการปิดจากลูกค้าเรียบร้อยแล้ว`,
+          color: '#1E293B',
+          size: 'sm',
+          wrap: true,
         },
       ],
       paddingAll: '16px',
-      spacing: 'none',
     },
     footer: {
       type: 'box',
@@ -818,24 +659,15 @@ export function createTicketResolvedFlexMessage(
           type: 'button',
           action: {
             type: 'uri',
-            label: '📊 ดูรายละเอียดเพิ่มเติม',
+            label: 'ดูรายละเอียด',
             uri: ticketUrl,
           },
           style: 'primary',
           color: '#10B981',
           height: 'sm',
         },
-        {
-          type: 'text',
-          text: '✨ ขอบคุณที่ใช้บริการ Help Desk',
-          color: '#94A3B8',
-          size: 'xxs',
-          align: 'center',
-          margin: 'md',
-        },
       ],
       paddingAll: '16px',
-      spacing: 'sm',
     },
   };
 }

@@ -9,29 +9,51 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TicketCard from './TicketCard';
 import { TicketWithCustomer, TicketStatus } from '@/types';
 import { Search } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface TicketListProps {
   tickets: TicketWithCustomer[];
+  initialStatus?: string;
 }
 
-export default function TicketList({ tickets }: TicketListProps) {
+export default function TicketList({ tickets, initialStatus }: TicketListProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus || 'ALL');
+
+  // Sync statusFilter with URL when initialStatus changes
+  useEffect(() => {
+    setStatusFilter(initialStatus || 'ALL');
+  }, [initialStatus]);
+
+  // Handle status filter change - update URL
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+
+    // Update URL
+    if (value === 'ALL') {
+      router.push('/tickets');
+    } else {
+      router.push(`/tickets?status=${value}`);
+    }
+  };
 
   // Filter and search tickets
   const filteredTickets = useMemo(() => {
     let filtered = tickets;
 
-    // Filter by status
-    if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(ticket => ticket.status === statusFilter);
-    }
+    // Filter by status - NOTE: filtering is now done on server side
+    // This is just for the search functionality
+    // if (statusFilter !== 'ALL') {
+    //   filtered = filtered.filter(ticket => ticket.status === statusFilter);
+    // }
 
     // Search by ticket number, customer name, phone, or description
     if (searchTerm) {
@@ -66,7 +88,7 @@ export default function TicketList({ tickets }: TicketListProps) {
         </div>
 
         <div className="sm:w-48">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={handleStatusChange}>
             <SelectTrigger>
               <SelectValue placeholder="สถานะทั้งหมด" />
             </SelectTrigger>

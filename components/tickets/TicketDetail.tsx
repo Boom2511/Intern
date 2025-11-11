@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +21,8 @@ import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel 
 import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
-import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2 } from 'lucide-react';
+import { ROLE_NAMES, ROLE_LABELS } from '@/config/roles';
+import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Image as ImageIcon } from 'lucide-react';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -34,6 +35,12 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
   const [newNote, setNewNote] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // End user report state
+  const [reportContent, setReportContent] = useState('');
+  const [reportImages, setReportImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const departmentOptions = getDepartmentOptions();
 
@@ -165,6 +172,86 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
     }
   };
 
+  // Handle image selection for end user report
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxSize = 5 * 1024 * 1024; // 5MB per image
+
+    // Validate file sizes
+    for (const file of files) {
+      if (file.size > maxSize) {
+        alert(`ไฟล์ ${file.name} มีขนาดใหญ่เกิน 5MB`);
+        return;
+      }
+    }
+
+    // Limit to 5 images
+    if (reportImages.length + files.length > 5) {
+      alert('สามารถอัปโหลดได้สูงสุด 5 รูปเท่านั้น');
+      return;
+    }
+
+    // Add new images
+    setReportImages([...reportImages, ...files]);
+
+    // Create previews
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setImagePreviews([...imagePreviews, ...newPreviews]);
+  };
+
+  const handleRemoveImage = (index: number) => {
+    const newImages = reportImages.filter((_, i) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+
+    // Revoke old preview URL
+    URL.revokeObjectURL(imagePreviews[index]);
+
+    setReportImages(newImages);
+    setImagePreviews(newPreviews);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportContent.trim()) {
+      alert('กรุณากรอกรายละเอียดปัญหา');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('content', reportContent);
+      formData.append('createdBy', ticket.customer.name);
+
+      // Add images
+      reportImages.forEach(image => {
+        formData.append('images', image);
+      });
+
+      const response = await fetch(`/api/tickets/${ticket.id}/reports`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setReportContent('');
+        setReportImages([]);
+        imagePreviews.forEach(url => URL.revokeObjectURL(url));
+        setImagePreviews([]);
+        // Refresh page to show new report
+        window.location.reload();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการส่งรายงาน');
+      }
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      alert('เกิดข้อผิดพลาดในการส่งรายงาน กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 p-2 md:p-0">
       {/* Header */}
@@ -219,17 +306,106 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
             </CardContent>
           </Card>
 
-          {/* Notes/Comments - Only show in staff mode */}
-          {!isClientMode && (
+          {/* End User Problem Report - Only show in client mode */}
+          {isClientMode && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
-                  บันทึกและความคิดเห็น ({ticket.notes.length})
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg text-red-700">
+                  <AlertTriangle className="h-4 w-4 md:h-5 md:w-5" />
+                  {ROLE_LABELS.PROBLEM_REPORT_TITLE}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Add Note */}
+                <p className="text-sm text-gray-600">
+                  หากพบปัญหาหรือต้องการแจ้งข้อมูลเพิ่มเติม กรุณากรอกรายละเอียดด้านล่าง
+                </p>
+
+                {/* Report Form */}
+                <div className="space-y-4">
+                  <textarea
+                    value={reportContent}
+                    onChange={(e) => setReportContent(e.target.value)}
+                    placeholder="กรุณาอธิบายปัญหาที่พบ..."
+                    rows={4}
+                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+
+                  {/* Image Upload */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={reportImages.length >= 5}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        อัปโหลดรูปภาพ
+                      </Button>
+                      <span className="text-xs text-gray-500">
+                        ({reportImages.length}/5 รูป, สูงสุด 5MB/รูป)
+                      </span>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+
+                    {/* Image Previews */}
+                    {imagePreviews.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={preview}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-md border"
+                            />
+                            <button
+                              onClick={() => handleRemoveImage(index)}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={handleSubmitReport}
+                    disabled={loading || !reportContent.trim()}
+                    className="w-full bg-red-600 hover:bg-red-700"
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    ส่งรายงานปัญหา
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notes/Comments - Show in both modes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
+                {ROLE_LABELS.STAFF_NOTES} ({
+                  isClientMode
+                    ? ticket.notes.filter(note => note.createdBy !== 'System').length
+                    : ticket.notes.length
+                })
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Note - Only in staff mode */}
+              {!isClientMode && (
                 <div className="space-y-2">
                   <textarea
                     value={newNote}
@@ -242,32 +418,82 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
                     เพิ่มบันทึก
                   </Button>
                 </div>
+              )}
 
-                {/* Notes Timeline */}
-                <div className="space-y-4 mt-6">
-                  {ticket.notes.length === 0 ? (
-                    <p className="text-gray-500 text-sm text-center py-4">
-                      ยังไม่มีบันทึก
-                    </p>
-                  ) : (
-                    ticket.notes.map(note => (
-                      <div key={note.id} className="border-l-2 border-blue-500 pl-4 py-2">
+              {/* Notes Timeline - Show all notes */}
+              <div className="space-y-4 mt-6">
+                {ticket.notes.filter(note => {
+                  // Hide system notes from end users
+                  if (isClientMode && note.createdBy === 'System') {
+                    return false;
+                  }
+                  return true;
+                }).length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">
+                    ยังไม่มีบันทึก
+                  </p>
+                ) : (
+                  ticket.notes
+                    .filter(note => {
+                      // Hide system notes from end users
+                      if (isClientMode && note.createdBy === 'System') {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map(note => (
+                      <div
+                        key={note.id}
+                        className={`border-l-2 pl-4 py-2 ${
+                          note.isFromEndUser
+                            ? 'border-red-500 bg-red-50 rounded-r'
+                            : 'border-blue-500'
+                        }`}
+                      >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{note.createdBy}</span>
+                          <span className="font-medium text-sm">
+                            {note.isFromEndUser
+                              ? ROLE_NAMES.END_USER  // End user reports → "พนักงาน" for both
+                              : (isClientMode ? ROLE_NAMES.ADMIN : ROLE_NAMES.ADMIN)  // CEC notes → "Admin" for both
+                            }
+                          </span>
                           <span className="text-xs text-gray-500">
                             {formatRelativeTime(note.createdAt)}
                           </span>
+                          {note.isFromEndUser && (
+                            <Badge variant="outline" className="text-xs bg-red-100 text-red-700 border-red-300">
+                              {ROLE_LABELS.END_USER_REPORTS}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-gray-700 whitespace-pre-wrap">
                           {note.content}
                         </p>
+                        {note.images && note.images.length > 0 && (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {note.images.map((img, idx) => (
+                              <a
+                                key={idx}
+                                href={img}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block"
+                              >
+                                <img
+                                  src={img}
+                                  alt={`Report image ${idx + 1}`}
+                                  className="w-full h-20 object-cover rounded border hover:opacity-80 transition-opacity cursor-pointer"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -305,7 +531,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
                         size="lg"
                       >
                         <CheckCircle className="h-5 w-5 mr-2" />
-                        ✅ ยืนยันว่าแก้ไขแล้ว
+                         ยืนยันว่าแก้ไขแล้ว
                       </Button>
                       <p className="text-xs text-gray-500 text-center">
                         ทีมงานจะดำเนินการปิด Ticket ให้

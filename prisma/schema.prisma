@@ -85,14 +85,17 @@ model Ticket {
 
 // Note model - for adding comments/updates to tickets
 model Note {
-  id        String   @id @default(cuid())
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  content   String   @db.Text
-  createdBy String   // Name or ID of person who created the note
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  ticketId      String
+  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content       String   @db.Text
+  createdBy     String   // Name or ID of person who created the note
+  isFromEndUser Boolean  @default(false) // True if reported by end user
+  images        String[] // Array of image URLs (stored in Supabase storage)
+  createdAt     DateTime @default(now())
 
   @@index([ticketId])
+  @@index([isFromEndUser])
 }
 
 // StatusHistory model - tracks all status changes for audit trail

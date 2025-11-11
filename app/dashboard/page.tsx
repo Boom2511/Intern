@@ -5,8 +5,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -80,50 +81,84 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tickets ทั้งหมด</CardTitle>
-            <Ticket className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTickets}</div>
-            <p className="text-xs text-gray-500 mt-1">รวมทุกสถานะ</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        <Link href="/tickets" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tickets ทั้งหมด</CardTitle>
+              <Ticket className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">รวมทุกสถานะ</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tickets ใหม่</CardTitle>
-            <AlertCircle className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.newTickets}</div>
-            <p className="text-xs text-gray-500 mt-1">รอรับเรื่อง</p>
-          </CardContent>
-        </Card>
+        <Link href="/tickets?status=NEW" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tickets ใหม่</CardTitle>
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.newTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">รอรับเรื่อง</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">กำลังดำเนินการ</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.inProgressTickets}</div>
-            <p className="text-xs text-gray-500 mt-1">อยู่ระหว่างแก้ไข</p>
-          </CardContent>
-        </Card>
+        <Link href="/tickets?status=IN_PROGRESS" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">กำลังดำเนินการ</CardTitle>
+              <Clock className="h-4 w-4 text-yellow-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.inProgressTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">อยู่ระหว่างแก้ไข</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">ปิดแล้ว</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.closedTickets}</div>
-            <p className="text-xs text-gray-500 mt-1">เสร็จสมบูรณ์</p>
-          </CardContent>
-        </Card>
+        <Link href="/tickets?status=PENDING" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">รอดำเนินการ</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pendingTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">เกิน SLA/มีรายงาน</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/tickets?status=RESOLVED" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">แก้ไขแล้ว</CardTitle>
+              <CheckCheck className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.resolvedTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">รอยืนยันปิด</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/tickets?status=CLOSED" className="block">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">ปิดแล้ว</CardTitle>
+              <CheckCircle className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.closedTickets}</div>
+              <p className="text-xs text-gray-500 mt-1">เสร็จสมบูรณ์</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -104,6 +104,28 @@ export async function GET(request: NextRequest) {
     for (const ticket of activeTickets) {
       const slaInfo = calculateRemainingTime(ticket.createdAt, ticket.priority);
 
+      // If SLA is breached and ticket is not already PENDING, update status
+      if (slaInfo.hours <= 0 && ticket.status !== 'PENDING') {
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            status: 'PENDING',
+            slaStatus: 'BREACHED',
+          },
+        });
+
+        // Create status history record
+        await prisma.statusHistory.create({
+          data: {
+            ticketId: ticket.id,
+            fromStatus: ticket.status,
+            toStatus: 'PENDING',
+            changedBy: 'System',
+            note: 'สถานะเปลี่ยนเป็น PENDING เนื่องจากเกินเวลา SLA',
+          },
+        });
+      }
+
       if (slaInfo.isNearSLA) {
         warnings.push({
           ticket,
@@ -131,7 +153,7 @@ export async function GET(request: NextRequest) {
         await prisma.note.create({
           data: {
             ticketId: ticket.id,
-            content: `⚠️ เตือน: ใกล้เกินเวลา SLA (เหลือเวลา: ${slaInfo.displayTime})`,
+            content: `⚠️ เตือน: ${slaInfo.hours <= 0 ? 'เกินเวลา SLA' : `ใกล้เกินเวลา SLA (เหลือเวลา: ${slaInfo.displayTime})`}`,
             createdBy: 'System',
           },
         });

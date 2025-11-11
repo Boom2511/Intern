@@ -185,6 +185,9 @@ export async function POST(request: NextRequest) {
     const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
 
     // Create ticket
+    // If department is assigned, status should be IN_PROGRESS, otherwise NEW
+    const initialStatus = department ? 'IN_PROGRESS' : 'NEW';
+
     const ticket = await prisma.ticket.create({
       data: {
         ticketNo,
@@ -201,7 +204,7 @@ export async function POST(request: NextRequest) {
         description,
         salesforceId: salesforceId || null,
         priority,
-        status: 'NEW',
+        status: initialStatus,
         slaHours,
         slaDeadline,
         slaStatus,
