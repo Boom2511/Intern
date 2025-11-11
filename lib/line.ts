@@ -44,63 +44,93 @@ export class LineMessagingService {
   }
 
   /**
-   * Send a push message to a user or group
+   * Send a push message to a user or group with retry logic
    */
-  async sendPushMessage(to: string, messages: LineMessage[]): Promise<boolean> {
+  async sendPushMessage(to: string, messages: LineMessage[], retries = 3): Promise<boolean> {
     if (!this.isConfigured()) {
       console.error('LINE service is not configured. Please set LINE_CHANNEL_ACCESS_TOKEN.');
       return false;
     }
 
-    try {
-      const body: LinePushRequest = {
-        to,
-        messages,
-      };
-
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.channelAccessToken}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      // Check response body even if status is OK - LINE sometimes returns 200 with errors
-      const responseText = await response.text();
-      let responseData: any = {};
-
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        if (responseText) {
-          responseData = JSON.parse(responseText);
+        const body: LinePushRequest = {
+          to,
+          messages,
+        };
+
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.channelAccessToken}`,
+          },
+          body: JSON.stringify(body),
+          // Add timeout to prevent hanging connections
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+
+        // Check response body even if status is OK - LINE sometimes returns 200 with errors
+        const responseText = await response.text();
+        let responseData: any = {};
+
+        try {
+          if (responseText) {
+            responseData = JSON.parse(responseText);
+          }
+        } catch (e) {
+          // Response is not JSON, likely empty (which is good)
         }
-      } catch (e) {
-        // Response is not JSON, likely empty (which is good)
-      }
 
-      if (!response.ok) {
-        console.error('❌ LINE API Error Response:', JSON.stringify(responseData, null, 2));
-        console.error('❌ LINE API Status:', response.status);
-        console.error('❌ LINE API Request to:', to);
-        console.error('❌ LINE API Message:', JSON.stringify(messages, null, 2));
+        if (!response.ok) {
+          console.error(`❌ LINE API Error (Attempt ${attempt}/${retries}):`, JSON.stringify(responseData, null, 2));
+          console.error('❌ LINE API Status:', response.status);
+          console.error('❌ LINE API Request to:', to);
+          console.error('❌ LINE API Message:', JSON.stringify(messages, null, 2));
+
+          // If it's a client error (4xx), don't retry
+          if (response.status >= 400 && response.status < 500) {
+            return false;
+          }
+
+          // For server errors (5xx), retry
+          if (attempt < retries) {
+            const delay = attempt * 1000; // Exponential backoff: 1s, 2s, 3s
+            console.log(`⏳ Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          return false;
+        }
+
+        // Check if response contains error even with 200 status
+        if (responseData.message && responseData.message.includes('error')) {
+          console.error('❌ LINE API returned error in 200 response:', JSON.stringify(responseData, null, 2));
+          console.error('❌ Message details:', JSON.stringify(messages, null, 2));
+          return false;
+        }
+
+        console.log('✅ LINE message sent successfully to:', to);
+        console.log('📤 Response:', responseText || '(empty - success)');
+        return true;
+      } catch (error: any) {
+        console.error(`❌ Error sending LINE message (Attempt ${attempt}/${retries}):`, error.message || error);
+
+        // If it's a network error and we have retries left, try again
+        if (attempt < retries) {
+          const delay = attempt * 1000;
+          console.log(`⏳ Network error, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Final attempt failed
+        console.error('❌ All retry attempts failed');
         return false;
       }
-
-      // Check if response contains error even with 200 status
-      if (responseData.message && responseData.message.includes('error')) {
-        console.error('❌ LINE API returned error in 200 response:', JSON.stringify(responseData, null, 2));
-        console.error('❌ Message details:', JSON.stringify(messages, null, 2));
-        return false;
-      }
-
-      console.log('✅ LINE message sent successfully to:', to);
-      console.log('📤 Response:', responseText || '(empty - success)');
-      return true;
-    } catch (error) {
-      console.error('Error sending LINE message:', error);
-      return false;
     }
+
+    return false;
   }
 
   /**
