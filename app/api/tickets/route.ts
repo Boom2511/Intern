@@ -250,15 +250,16 @@ export async function POST(request: NextRequest) {
           const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel, ticketUrl);
           console.log('✅ Sending LINE notification for new ticket...');
 
-          lineService.sendFlexMessage(
-            groupId,
-            `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
-            flexMessage
-          ).then(() => {
+          try {
+            await lineService.sendFlexMessage(
+              groupId,
+              `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
+              flexMessage
+            );
             console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
-          }).catch(error => {
+          } catch (error) {
             console.error('❌ Failed to send LINE notification:', error);
-          });
+          }
         } else {
           console.log('❌ No group ID found for department:', department);
         }
