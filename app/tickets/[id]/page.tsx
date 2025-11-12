@@ -6,13 +6,14 @@
 
 'use client';
 
+import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import TicketDetail from '@/components/tickets/TicketDetail';
 import { useTicket } from '@/hooks/useTicket';
 
-export default function TicketPage() {
+function TicketDetailContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const ticketId = params.id as string;
@@ -74,5 +75,26 @@ export default function TicketPage() {
 
       <TicketDetail ticket={ticket} viewMode={viewMode} />
     </div>
+  );
+}
+
+export default function TicketPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <TicketDetailContent />
+    </Suspense>
   );
 }

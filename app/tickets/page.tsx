@@ -6,6 +6,7 @@
 
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import { getStatusLabel } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useTickets } from '@/hooks/useTickets';
 
-export default function TicketsPage() {
+function TicketsContent() {
   const searchParams = useSearchParams();
   const status = searchParams.get('status') || undefined;
 
@@ -124,5 +125,26 @@ export default function TicketsPage() {
         !isLoading && !isError && <TicketList tickets={tickets} initialStatus={status} />
       )}
     </div>
+  );
+}
+
+export default function TicketsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <TicketsContent />
+    </Suspense>
   );
 }
