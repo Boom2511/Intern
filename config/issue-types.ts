@@ -43,23 +43,11 @@ export const SLA_CONFIG: Record<IssueType, IssueTypeConfig> = {
     label: 'สอบถามข้อมูล',
     description: 'สอบถามข้อมูลทั่วไป',
   },
-  WRONG_ADDRESS: {
+  OTHER: {
     slaHours: 24,
     priority: 'MEDIUM',
     label: 'อื่นๆ',
     description: 'ปัญหาอื่นๆ ที่ต้องระบุรายละเอียด',
-  },
-  RECIPIENT_NOT_HOME: {
-    slaHours: 24,
-    priority: 'MEDIUM',
-    label: 'อื่นๆ (เก่า)',
-    description: 'ใช้สำหรับข้อมูลเก่าเท่านั้น - ไม่แสดงในฟอร์ม',
-  },
-  OTHER: {
-    slaHours: 24,
-    priority: 'MEDIUM',
-    label: 'อื่นๆ (เก่า 2)',
-    description: 'ใช้สำหรับข้อมูลเก่าเท่านั้น - ไม่แสดงในฟอร์ม',
   },
 };
 
@@ -88,11 +76,7 @@ export function getIssueTypeLabel(issueType: IssueType): string {
  * Get all issue types as options for select dropdown
  */
 export function getIssueTypeOptions() {
-  // Exclude old/deprecated issue types from the form
-  const excludedTypes = ['RECIPIENT_NOT_HOME', 'OTHER'];
-
   return Object.entries(SLA_CONFIG)
-    .filter(([value]) => !excludedTypes.includes(value))
     .map(([value, config]) => ({
       value: value as IssueType,
       label: config.label,

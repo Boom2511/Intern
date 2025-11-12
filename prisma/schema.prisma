@@ -126,8 +126,6 @@ enum IssueType {
   RETURN_TO_SENDER    // ส่งคืนผู้ส่ง
   DAMAGED_PARCEL      // พัสดุเสียหาย
   LOST_PARCEL         // พัสดุสูญหาย
-  WRONG_ADDRESS       // ที่อยู่ผิด
-  RECIPIENT_NOT_HOME  // ผู้รับไม่อยู่
   OTHER               // อื่นๆ
 }
 
