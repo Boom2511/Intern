@@ -22,7 +22,7 @@ function TicketDetailContent() {
   const viewMode = searchParams.get('mode') === 'client' ? 'client' : 'staff';
 
   // Use SWR hook with 30-second polling
-  const { ticket, isLoading, isError, isValidating } = useTicket(ticketId, {
+  const { ticket, isLoading, isError, isValidating, mutate } = useTicket(ticketId, {
     refreshInterval: 30000,
   });
 
@@ -73,7 +73,7 @@ function TicketDetailContent() {
         </div>
       )}
 
-      <TicketDetail ticket={ticket} viewMode={viewMode} />
+      <TicketDetail ticket={ticket} viewMode={viewMode} mutate={mutate} />
     </div>
   );
 }

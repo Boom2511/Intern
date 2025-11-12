@@ -27,9 +27,10 @@ import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Bu
 interface TicketDetailProps {
   ticket: TicketWithRelations;
   viewMode?: 'staff' | 'client'; // staff = full control, client = limited to resolved status only
+  mutate?: () => void; // SWR mutate function for refreshing data
 }
 
-export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetailProps) {
+export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: TicketDetailProps) {
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
   const [assignedTo, setAssignedTo] = useState<string>(ticket.assignedTo || '');
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
@@ -63,8 +64,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
 
       if (data.success) {
         setStatus(newStatus);
-        // Refresh page to show updated data
-        window.location.reload();
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        } else {
+          // Fallback to page reload if mutate is not available
+          window.location.reload();
+        }
       } else {
         alert(data.error || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
       }
@@ -89,8 +95,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
 
       if (data.success) {
         setAssignedTo(newAssignee === 'none' ? '' : newAssignee);
-        // Refresh page to show updated data
-        window.location.reload();
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        } else {
+          // Fallback to page reload if mutate is not available
+          window.location.reload();
+        }
       } else {
         alert(data.error || 'เกิดข้อผิดพลาดในการมอบหมายงาน');
       }
@@ -125,8 +136,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
         if (updateData.status) {
           setStatus(updateData.status);
         }
-        // Refresh page to show updated data and LINE notification
-        window.location.reload();
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        } else {
+          // Fallback to page reload if mutate is not available
+          window.location.reload();
+        }
       } else {
         alert(data.error || 'เกิดข้อผิดพลาดในการเลือกแผนก');
       }
@@ -159,8 +175,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
 
       if (data.success) {
         setNewNote('');
-        // Refresh page to show new note
-        window.location.reload();
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        } else {
+          // Fallback to page reload if mutate is not available
+          window.location.reload();
+        }
       } else {
         alert(data.error || 'เกิดข้อผิดพลาดในการเพิ่มบันทึก');
       }
@@ -239,8 +260,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff' }: TicketDetai
         setReportImages([]);
         imagePreviews.forEach(url => URL.revokeObjectURL(url));
         setImagePreviews([]);
-        // Refresh page to show new report
-        window.location.reload();
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        } else {
+          // Fallback to page reload if mutate is not available
+          window.location.reload();
+        }
       } else {
         alert(data.error || 'เกิดข้อผิดพลาดในการส่งรายงาน');
       }
