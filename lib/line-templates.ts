@@ -165,7 +165,7 @@ export function createDepartmentAssignedFlexMessage(
               contents: [
                 {
                   type: 'text',
-                  text: (ticket.issueType === 'WRONG_ADDRESS' || ticket.issueType === 'OTHER') && ticket.issueTypeOther
+                  text: ticket.issueType === 'OTHER' && ticket.issueTypeOther
                     ? ticket.issueTypeOther
                     : getIssueTypeLabel(ticket.issueType),
                   color: '#0284C7',

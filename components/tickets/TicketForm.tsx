@@ -120,7 +120,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       return;
     }
 
-    if (formData.issueType === 'WRONG_ADDRESS' && !formData.issueTypeOther) {
+    if (formData.issueType === 'OTHER' && !formData.issueTypeOther) {
       setErrors(['กรุณาระบุรายละเอียดเพิ่มเติมสำหรับประเภทปัญหา "อื่นๆ"']);
       return;
     }
@@ -306,7 +306,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
             </div>
           </div>
 
-          {formData.issueType === 'WRONG_ADDRESS' && (
+          {formData.issueType === 'OTHER' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 ระบุรายละเอียดเพิ่มเติม <span className="text-red-500">*</span>

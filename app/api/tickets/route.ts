@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         customerId: customer.id,
         channel,
         issueType,
-        issueTypeOther: (issueType === 'WRONG_ADDRESS' || issueType === 'OTHER') ? issueTypeOther : null,
+        issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
         department: department || null,
         trackingNo: trackingNo || null,
         zoneId: zoneId || null,
