@@ -126,7 +126,7 @@ export async function PATCH(
             // Use simple text message for status changes
             const fromStatusLabel = getStatusLabel(ticket.status);
             const toStatusLabel = getStatusLabel(status);
-            await lineService.sendMessage(
+            await lineService.sendTextMessage(
               groupId,
               `🔔 อัพเดตสถานะ: ${ticket.ticketNo}\n` +
               `จาก: ${fromStatusLabel} → ${toStatusLabel}\n` +
