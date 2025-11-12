@@ -8,8 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateSLAStatus } from '@/lib/sla';
 import { lineService } from '@/lib/line';
-import { createDepartmentAssignedFlexMessage, createStatusChangedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
+import { getStatusLabel } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -121,18 +122,15 @@ export async function PATCH(
             || 'http://localhost:3000';
           const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
 
-          const flexMessage = createStatusChangedFlexMessage(
-            { ...ticket, status },
-            ticket.status,
-            status,
-            ticketUrl
-          );
-
           try {
-            await lineService.sendFlexMessage(
+            // Use simple text message for status changes
+            const fromStatusLabel = getStatusLabel(ticket.status);
+            const toStatusLabel = getStatusLabel(status);
+            await lineService.sendMessage(
               groupId,
-              `🔔 อัพเดตสถานะ: ${ticket.ticketNo}`,
-              flexMessage
+              `🔔 อัพเดตสถานะ: ${ticket.ticketNo}\n` +
+              `จาก: ${fromStatusLabel} → ${toStatusLabel}\n` +
+              `ดูรายละเอียด: ${ticketUrl}`
             );
             console.log('✅ LINE notification sent for status change:', ticket.ticketNo);
           } catch (error) {
