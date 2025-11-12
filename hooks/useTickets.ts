@@ -32,7 +32,7 @@ export function useTickets(options: UseTicketsOptions = {}) {
   );
 
   return {
-    tickets: data?.tickets || [],
+    tickets: data?.data || [],
     isLoading,
     isError: error,
     isValidating,
