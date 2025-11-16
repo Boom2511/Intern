@@ -9,14 +9,25 @@ const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export interface UseTicketsOptions {
   status?: string;
+  priority?: string;
+  department?: string;
+  issueType?: string;
+  search?: string;
   refreshInterval?: number;
 }
 
 export function useTickets(options: UseTicketsOptions = {}) {
-  const { status, refreshInterval = 30000 } = options;
+  const { status, priority, department, issueType, search, refreshInterval = 30000 } = options;
 
   // Build URL with query params
-  const url = status ? `/api/tickets?status=${status}` : '/api/tickets';
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.append('status', status);
+  if (priority && priority !== 'all') params.append('priority', priority);
+  if (department && department !== 'all') params.append('department', department);
+  if (issueType && issueType !== 'all') params.append('issueType', issueType);
+  if (search) params.append('search', search);
+
+  const url = params.toString() ? `/api/tickets?${params.toString()}` : '/api/tickets';
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     url,

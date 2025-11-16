@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority');
     const search = searchParams.get('search');
     const customerId = searchParams.get('customerId');
+    const department = searchParams.get('department');
+    const issueType = searchParams.get('issueType');
 
     // Build where clause
     const where: any = {};
@@ -45,6 +47,14 @@ export async function GET(request: NextRequest) {
 
     if (customerId) {
       where.customerId = customerId;
+    }
+
+    if (department) {
+      where.department = department;
+    }
+
+    if (issueType) {
+      where.issueType = issueType;
     }
 
     if (search) {

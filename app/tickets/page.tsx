@@ -12,18 +12,27 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import TicketList from '@/components/tickets/TicketList';
-import { Plus, AlertCircle, X, Loader2 } from 'lucide-react';
-import { getStatusLabel } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import TicketFilters from '@/components/tickets/TicketFilters';
+import { Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 
 function TicketsContent() {
   const searchParams = useSearchParams();
+
+  // Get all filter parameters
   const status = searchParams.get('status') || undefined;
+  const priority = searchParams.get('priority') || undefined;
+  const department = searchParams.get('department') || undefined;
+  const issueType = searchParams.get('issueType') || undefined;
+  const search = searchParams.get('search') || undefined;
 
   // Use SWR hook with 30-second polling
   const { tickets, isLoading, isError, isValidating } = useTickets({
     status,
+    priority,
+    department,
+    issueType,
+    search,
     refreshInterval: 30000,
   });
 
@@ -51,19 +60,8 @@ function TicketsContent() {
         </Link>
       </div>
 
-      {/* Active Filters */}
-      {status && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">กรองตามสถานะ:</span>
-          <Badge variant="secondary" className="gap-2">
-            {getStatusLabel(status)}
-            <Link href="/tickets" className="hover:bg-gray-300 rounded-full p-0.5">
-              <X className="h-3 w-3" />
-            </Link>
-          </Badge>
-          {!isLoading && <span className="text-sm text-gray-500">({tickets.length} รายการ)</span>}
-        </div>
-      )}
+      {/* Advanced Search/Filter */}
+      <TicketFilters />
 
       {/* Loading State */}
       {isLoading && (
