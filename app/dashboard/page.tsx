@@ -1,54 +1,49 @@
 /**
  * Dashboard Page
  * Overview of ticket statistics and recent activity
+ * Uses SWR for auto-refresh every 60 seconds
  */
+
+'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle } from 'lucide-react';
-import { prisma } from '@/lib/prisma';
+import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useDashboardStats } from '@/hooks/useDashboardStats';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export default function DashboardPage() {
+  // Use SWR hook with 60-second polling for dashboard
+  const { stats, isLoading, isError, isValidating } = useDashboardStats({
+    refreshInterval: 60000, // 60 seconds
+  });
 
-async function fetchDashboardStats() {
-  try {
-    const [
-      totalTickets,
-      newTickets,
-      inProgressTickets,
-      pendingTickets,
-      resolvedTickets,
-      closedTickets,
-    ] = await Promise.all([
-      prisma.ticket.count(),
-      prisma.ticket.count({ where: { status: 'NEW' } }),
-      prisma.ticket.count({ where: { status: 'IN_PROGRESS' } }),
-      prisma.ticket.count({ where: { status: 'PENDING' } }),
-      prisma.ticket.count({ where: { status: 'RESOLVED' } }),
-      prisma.ticket.count({ where: { status: 'CLOSED' } }),
-    ]);
-
-    return {
-      totalTickets,
-      newTickets,
-      inProgressTickets,
-      pendingTickets,
-      resolvedTickets,
-      closedTickets,
-      openTickets: newTickets + inProgressTickets + pendingTickets,
-    };
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    return null;
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-4 bg-gray-200 rounded w-20"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-gray-200 rounded w-12"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
   }
-}
 
-export default async function DashboardPage() {
-  const stats = await fetchDashboardStats();
-
-  if (!stats) {
+  // Error state
+  if (isError || !stats) {
     return (
       <div className="space-y-6">
         <div>
@@ -75,9 +70,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Updating indicator */}
+      {isValidating && !isLoading && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm font-medium">กำลังอัพเดต...</span>
+        </div>
+      )}
+
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk</p>
+        <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk (อัพเดตอัตโนมัติทุก 60 วินาที)</p>
       </div>
 
       {/* Stats Overview */}
