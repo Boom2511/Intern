@@ -12,45 +12,45 @@ export interface DepartmentConfig {
   zone?: string; // Geographic zone if applicable
 }
 
-// For now, using a single LINE group for all departments
-// In production, each department should have its own LINE group
+// Each department has its own LINE group for notifications
+// Fallback to default group if department-specific group is not configured
 const DEFAULT_LINE_GROUP = process.env.LINE_DEFAULT_GROUP_ID || '';
 
 export const DEPARTMENTS: Record<Department, DepartmentConfig> = {
   DB1: {
     label: 'D1',
     description: 'แผนก D1',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB1 || DEFAULT_LINE_GROUP,
   },
   DB2: {
     label: 'D2',
     description: 'แผนก D2',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB2 || DEFAULT_LINE_GROUP,
   },
   DB3: {
     label: 'D3',
     description: 'แผนก D3',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB3 || DEFAULT_LINE_GROUP,
   },
   DB4: {
     label: 'D4',
     description: 'แผนก D4',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB4 || DEFAULT_LINE_GROUP,
   },
   DB5: {
     label: 'นำจ่ายรถยนต์',
     description: 'แผนกนำจ่ายรถยนต์',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB5 || DEFAULT_LINE_GROUP,
   },
   DB6: {
     label: 'บป',
     description: 'บริการประชาชน',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_DB6 || DEFAULT_LINE_GROUP,
   },
   TEST: {
     label: 'ทดสอบ',
     description: 'แผนกทดสอบระบบ',
-    lineGroupId: DEFAULT_LINE_GROUP,
+    lineGroupId: process.env.LINE_GROUP_TEST || DEFAULT_LINE_GROUP,
   },
 };
 
