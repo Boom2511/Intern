@@ -15,6 +15,7 @@ import TicketList from '@/components/tickets/TicketList';
 import TicketFilters from '@/components/tickets/TicketFilters';
 import { Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
+import { getStatusLabel } from '@/lib/utils';
 
 function TicketsContent() {
   const searchParams = useSearchParams();
