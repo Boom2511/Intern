@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { uploadFile, generateFileName, isStorageConfigured } from '@/lib/storage';
 
 export async function POST(
   request: NextRequest,
@@ -35,18 +36,36 @@ export async function POST(
       );
     }
 
-    // For now, we'll store image data as base64 strings in the database
-    // In production, you should upload to Supabase Storage or Cloudinary
+    // Upload images to Supabase Storage (or fallback to base64)
     const imageUrls: string[] = [];
 
-    for (const image of images) {
-      if (image && image.size > 0) {
-        // Convert image to base64
-        const bytes = await image.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        const base64 = buffer.toString('base64');
-        const dataUrl = `data:${image.type};base64,${base64}`;
-        imageUrls.push(dataUrl);
+    if (isStorageConfigured()) {
+      // Use cloud storage
+      for (const image of images) {
+        if (image && image.size > 0) {
+          try {
+            const bytes = await image.arrayBuffer();
+            const buffer = Buffer.from(bytes);
+            const fileName = generateFileName(params.id, image.name);
+            const publicUrl = await uploadFile(buffer, fileName, image.type);
+            imageUrls.push(publicUrl);
+          } catch (error) {
+            console.error('Failed to upload image:', error);
+            // Continue with other images
+          }
+        }
+      }
+    } else {
+      // Fallback to base64 (not recommended for production)
+      console.warn('Cloud storage not configured, using base64 fallback');
+      for (const image of images) {
+        if (image && image.size > 0) {
+          const bytes = await image.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+          const base64 = buffer.toString('base64');
+          const dataUrl = `data:${image.type};base64,${base64}`;
+          imageUrls.push(dataUrl);
+        }
       }
     }
 
