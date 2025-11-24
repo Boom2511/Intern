@@ -3,52 +3,60 @@
  * Uses Supabase Storage for file uploads
  */
 
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const BUCKET_NAME = process.env.SUPABASE_BUCKET_NAME || 'helpdesk-images';
 
-/**
- * Upload file to Supabase Storage
- * @param file - File buffer
- * @param fileName - Unique file name (e.g., tickets/ticket-id/timestamp-filename.jpg)
- * @param contentType - MIME type (e.g., image/jpeg)
- * @returns Public URL of uploaded file
- */
+// Lazy initialization - สร้าง client เมื่อใช้งานจริงเท่านั้น
+let supabaseClient: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      throw new Error('Supabase credentials not configured');
+    }
+
+    // Debug log (ลบออกหลัง debug เสร็จ)
+    console.log('Initializing Supabase client:', {
+      url,
+      keyPrefix: key.substring(0, 20) + '...',
+      keyLength: key.length,
+    });
+
+    supabaseClient = createClient(url, key);
+  }
+  return supabaseClient;
+}
+
 export async function uploadFile(
   file: Buffer | File,
   fileName: string,
   contentType: string
 ): Promise<string> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, file, {
-        contentType,
-        upsert: false, // Don't overwrite existing files
-      });
+  const supabase = getSupabaseClient(); // ใช้ function แทน
 
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw new Error(error.message);
-    }
+  const { data, error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .upload(fileName, file, {
+      contentType,
+      upsert: false,
+    });
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(fileName);
-
-    return urlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading file to Supabase:', error);
-    throw new Error('Failed to upload file');
+  if (error) {
+    console.error('Supabase upload error:', error);
+    throw error;
   }
+
+  const { data: urlData } = supabase.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
 }
+
 
 /**
  * Delete file from Supabase Storage
