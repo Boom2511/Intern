@@ -222,6 +222,19 @@ export class LineMessagingService {
         if (response.status === 429) {
           ApiLogger.log429(requestId, this.apiUrl, getRetryAfterSeconds(response));
 
+          // Check if this is a monthly quota limit (non-retryable)
+          const isMonthlyQuotaExceeded =
+            responseData.message &&
+            (responseData.message.includes('monthly limit') ||
+             responseData.message.includes('quota exceeded'));
+
+          if (isMonthlyQuotaExceeded) {
+            console.error('❌ LINE monthly quota exceeded. Cannot retry until quota resets.');
+            console.error('💡 Action required: Upgrade your LINE Messaging API plan or wait for monthly reset.');
+            lineMetrics.recordRetry(this.apiUrl, 'quota_exceeded_no_retry');
+            return false;
+          }
+
           if (attempt < maxRetries) {
             // Respect Retry-After header if present
             const retryAfterSeconds = getRetryAfterSeconds(response);
