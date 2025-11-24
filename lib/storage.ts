@@ -41,6 +41,17 @@ export async function uploadFile(
 
   const uploadUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${fileName}`;
 
+  // แปลง Buffer เป็น ArrayBuffer ถ้าจำเป็น
+  let bodyData: BodyInit;
+  if (Buffer.isBuffer(file)) {
+    bodyData = file.buffer.slice(
+      file.byteOffset,
+      file.byteOffset + file.byteLength
+    ) as ArrayBuffer;
+  } else {
+    bodyData = file;
+  }
+
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -48,7 +59,7 @@ export async function uploadFile(
       'Content-Type': contentType,
       'apikey': serviceKey,
     },
-    body: file,
+    body: bodyData,
   });
 
   if (!response.ok) {
@@ -60,6 +71,7 @@ export async function uploadFile(
   const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
   return publicUrl;
 }
+
 
 
 /**
