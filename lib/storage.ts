@@ -34,13 +34,15 @@ export async function uploadFile(
 ): Promise<string> {
   const supabase = getSupabaseClient();
 
-  // แปลง Buffer เป็น Uint8Array แล้วสร้าง Blob
-  let uploadData: File | Blob;
+  // แปลงเป็น ArrayBuffer สำหรับ Supabase
+  let uploadData: ArrayBuffer | File;
   
   if (Buffer.isBuffer(file)) {
-    // แปลง Buffer เป็น Uint8Array ก่อนสร้าง Blob
-    const uint8Array = new Uint8Array(file);
-    uploadData = new Blob([uint8Array], { type: contentType });
+    // แปลง Buffer เป็น ArrayBuffer
+    uploadData = file.buffer.slice(
+      file.byteOffset,
+      file.byteOffset + file.byteLength
+    );
   } else {
     uploadData = file;
   }
@@ -63,6 +65,7 @@ export async function uploadFile(
 
   return urlData.publicUrl;
 }
+
 
 
 /**
