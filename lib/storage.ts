@@ -7,7 +7,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const BUCKET_NAME = process.env.SUPABASE_BUCKET_NAME || 'helpdesk-images';
 
-// Lazy initialization - สร้าง client เมื่อใช้งานจริงเท่านั้น
+// Lazy initialization
 let supabaseClient: SupabaseClient | null = null;
 
 function getSupabaseClient(): SupabaseClient {
@@ -19,24 +19,20 @@ function getSupabaseClient(): SupabaseClient {
       throw new Error('Supabase credentials not configured');
     }
 
-    // Debug log (ลบออกหลัง debug เสร็จ)
-    console.log('Initializing Supabase client:', {
-      url,
-      keyPrefix: key.substring(0, 20) + '...',
-      keyLength: key.length,
-    });
-
     supabaseClient = createClient(url, key);
   }
   return supabaseClient;
 }
 
+/**
+ * Upload file to Supabase Storage
+ */
 export async function uploadFile(
   file: Buffer | File,
   fileName: string,
   contentType: string
 ): Promise<string> {
-  const supabase = getSupabaseClient(); // ใช้ function แทน
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
@@ -57,51 +53,40 @@ export async function uploadFile(
   return urlData.publicUrl;
 }
 
-
 /**
  * Delete file from Supabase Storage
- * @param fileName - File path to delete
  */
 export async function deleteFile(fileName: string): Promise<void> {
-  try {
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([fileName]);
+  const supabase = getSupabaseClient();
 
-    if (error) {
-      console.error('Supabase delete error:', error);
-      throw new Error(error.message);
-    }
-  } catch (error) {
-    console.error('Error deleting file from Supabase:', error);
-    throw new Error('Failed to delete file');
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove([fileName]);
+
+  if (error) {
+    console.error('Supabase delete error:', error);
+    throw new Error(error.message);
   }
 }
 
 /**
  * Delete multiple files from Supabase Storage
- * @param fileNames - Array of file paths to delete
  */
 export async function deleteFiles(fileNames: string[]): Promise<void> {
-  try {
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove(fileNames);
+  const supabase = getSupabaseClient();
 
-    if (error) {
-      console.error('Supabase delete multiple files error:', error);
-      throw new Error(error.message);
-    }
-  } catch (error) {
-    console.error('Error deleting files from Supabase:', error);
-    throw new Error('Failed to delete files');
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove(fileNames);
+
+  if (error) {
+    console.error('Supabase delete multiple files error:', error);
+    throw new Error(error.message);
   }
 }
 
 /**
  * Generate unique file name for uploads
- * @param ticketId - Ticket ID
- * @param originalName - Original file name
  */
 export function generateFileName(ticketId: string, originalName: string): string {
   const timestamp = Date.now();
@@ -121,12 +106,9 @@ export function isStorageConfigured(): boolean {
 
 /**
  * Extract file name from Supabase URL
- * @param url - Full Supabase storage URL
  */
 export function extractFileName(url: string): string {
   if (url.startsWith('http')) {
-    // Extract path from Supabase URL
-    // Format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
     const parts = url.split(`/${BUCKET_NAME}/`);
     return parts[1] || url;
   }
@@ -135,7 +117,6 @@ export function extractFileName(url: string): string {
 
 /**
  * Check if URL is a data URL (base64)
- * @param url - URL to check
  */
 export function isDataUrl(url: string): boolean {
   return url.startsWith('data:');
@@ -143,7 +124,6 @@ export function isDataUrl(url: string): boolean {
 
 /**
  * Convert data URL to Buffer
- * @param dataUrl - Data URL string
  */
 export function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; contentType: string } {
   const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
