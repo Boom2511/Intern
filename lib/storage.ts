@@ -34,22 +34,9 @@ export async function uploadFile(
 ): Promise<string> {
   const supabase = getSupabaseClient();
 
-  // แปลงเป็น ArrayBuffer สำหรับ Supabase
-  let uploadData: ArrayBuffer | File;
-  
-  if (Buffer.isBuffer(file)) {
-    // แปลง Buffer เป็น ArrayBuffer และ cast type
-    uploadData = file.buffer.slice(
-      file.byteOffset,
-      file.byteOffset + file.byteLength
-    ) as ArrayBuffer;
-  } else {
-    uploadData = file;
-  }
-
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(fileName, uploadData, {
+    .upload(fileName, file, {  // ส่ง Buffer/File โดยตรงเลย ไม่แปลง
       contentType,
       upsert: false,
     });
@@ -65,6 +52,7 @@ export async function uploadFile(
 
   return urlData.publicUrl;
 }
+
 
 /**
  * Delete file from Supabase Storage
