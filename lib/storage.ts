@@ -52,6 +52,13 @@ export async function uploadFile(
     bodyData = file;
   }
 
+  console.log('Upload attempt:', {
+    url: uploadUrl,
+    contentType,
+    fileSize: Buffer.isBuffer(file) ? file.length : (file as File).size,
+    bucketName: BUCKET_NAME,
+  });
+
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -62,15 +69,23 @@ export async function uploadFile(
     body: bodyData,
   });
 
+  const responseText = await response.text();
+  
+  console.log('Upload response:', {
+    status: response.status,
+    statusText: response.statusText,
+    body: responseText,
+  });
+
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Upload failed:', errorText);
-    throw new Error(`Upload failed: ${response.status} ${errorText}`);
+    console.error('Upload failed:', responseText);
+    throw new Error(`Upload failed: ${response.status} - ${responseText}`);
   }
 
   const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
   return publicUrl;
 }
+
 
 
 
