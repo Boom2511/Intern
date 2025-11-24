@@ -34,9 +34,19 @@ export async function uploadFile(
 ): Promise<string> {
   const supabase = getSupabaseClient();
 
+  // แปลง Buffer เป็น Blob สำหรับ Supabase
+  let uploadData: File | Blob;
+  
+  if (Buffer.isBuffer(file)) {
+    // สร้าง Blob จาก Buffer
+    uploadData = new Blob([file], { type: contentType });
+  } else {
+    uploadData = file;
+  }
+
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(fileName, file, {
+    .upload(fileName, uploadData, {
       contentType,
       upsert: false,
     });
