@@ -34,12 +34,13 @@ export async function uploadFile(
 ): Promise<string> {
   const supabase = getSupabaseClient();
 
-  // แปลง Buffer เป็น Blob สำหรับ Supabase
+  // แปลง Buffer เป็น Uint8Array แล้วสร้าง Blob
   let uploadData: File | Blob;
   
   if (Buffer.isBuffer(file)) {
-    // สร้าง Blob จาก Buffer
-    uploadData = new Blob([file], { type: contentType });
+    // แปลง Buffer เป็น Uint8Array ก่อนสร้าง Blob
+    const uint8Array = new Uint8Array(file);
+    uploadData = new Blob([uint8Array], { type: contentType });
   } else {
     uploadData = file;
   }
@@ -62,6 +63,7 @@ export async function uploadFile(
 
   return urlData.publicUrl;
 }
+
 
 /**
  * Delete file from Supabase Storage
