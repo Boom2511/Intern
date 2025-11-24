@@ -38,11 +38,11 @@ export async function uploadFile(
   let uploadData: ArrayBuffer | File;
   
   if (Buffer.isBuffer(file)) {
-    // แปลง Buffer เป็น ArrayBuffer
+    // แปลง Buffer เป็น ArrayBuffer และ cast type
     uploadData = file.buffer.slice(
       file.byteOffset,
       file.byteOffset + file.byteLength
-    );
+    ) as ArrayBuffer;
   } else {
     uploadData = file;
   }
@@ -65,8 +65,6 @@ export async function uploadFile(
 
   return urlData.publicUrl;
 }
-
-
 
 /**
  * Delete file from Supabase Storage
