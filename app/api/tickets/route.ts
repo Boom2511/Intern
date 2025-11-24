@@ -261,12 +261,17 @@ export async function POST(request: NextRequest) {
           console.log('✅ Sending LINE notification for new ticket...');
 
           try {
-            await lineService.sendFlexMessage(
+            const success = await lineService.sendFlexMessage(
               groupId,
               `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
               flexMessage
             );
-            console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
+
+            if (success) {
+              console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
+            } else {
+              console.error('❌ LINE notification failed for new ticket:', ticket.ticketNo);
+            }
           } catch (error) {
             console.error('❌ Failed to send LINE notification:', error);
           }

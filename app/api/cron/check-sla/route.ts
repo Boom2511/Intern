@@ -141,13 +141,17 @@ export async function GET(request: NextRequest) {
           ticketUrl
         );
 
-        await lineService.sendFlexMessage(
+        const success = await lineService.sendFlexMessage(
           groupId,
           `⚠️ เตือน SLA: ${ticket.ticketNo}`,
           flexMessage
-        ).catch(error => {
-          console.error(`Failed to send SLA warning for ticket ${ticket.ticketNo}:`, error);
-        });
+        );
+
+        if (success) {
+          console.log(`✅ SLA warning sent for ticket ${ticket.ticketNo}`);
+        } else {
+          console.error(`❌ Failed to send SLA warning for ticket ${ticket.ticketNo}`);
+        }
 
         // Add a note to the ticket
         await prisma.note.create({
