@@ -25,32 +25,40 @@ function getSupabaseClient(): SupabaseClient {
 }
 
 /**
- * Upload file to Supabase Storage
+ * Upload file to Supabase Storage using fetch directly
  */
 export async function uploadFile(
   file: Buffer | File,
   fileName: string,
   contentType: string
 ): Promise<string> {
-  const supabase = getSupabaseClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(fileName, file, {  // ส่ง Buffer/File โดยตรงเลย ไม่แปลง
-      contentType,
-      upsert: false,
-    });
-
-  if (error) {
-    console.error('Supabase upload error:', error);
-    throw error;
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error('Supabase credentials not configured');
   }
 
-  const { data: urlData } = supabase.storage
-    .from(BUCKET_NAME)
-    .getPublicUrl(fileName);
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${fileName}`;
 
-  return urlData.publicUrl;
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${serviceKey}`,
+      'Content-Type': contentType,
+      'apikey': serviceKey,
+    },
+    body: file,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Upload failed:', errorText);
+    throw new Error(`Upload failed: ${response.status} ${errorText}`);
+  }
+
+  const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
+  return publicUrl;
 }
 
 
