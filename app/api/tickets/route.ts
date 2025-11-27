@@ -225,6 +225,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Track notification status
+    let notificationSent = false;
+    let notificationError: string | null = null;
+
     // If no department specified, add a note
     if (!department) {
       await prisma.note.create({
@@ -269,22 +273,35 @@ export async function POST(request: NextRequest) {
 
             if (success) {
               console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
+              notificationSent = true;
             } else {
               console.error('❌ LINE notification failed for new ticket:', ticket.ticketNo);
+              notificationError = 'Failed to send notification (quota exceeded or rate limited)';
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error('❌ Failed to send LINE notification:', error);
+            notificationError = error.message || 'Unknown error';
           }
         } else {
           console.log('❌ No group ID found for department:', department);
+          notificationError = 'No LINE group configured for this department';
         }
       } else {
         console.log('❌ LINE service not configured');
+        notificationError = 'LINE service is disabled or not configured';
       }
     }
 
     return NextResponse.json(
-      { success: true, data: ticket, message: 'สร้าง Ticket สำเร็จ' },
+      {
+        success: true,
+        data: ticket,
+        message: 'สร้าง Ticket สำเร็จ',
+        notification: {
+          sent: notificationSent,
+          error: notificationError,
+        }
+      },
       { status: 201 }
     );
   } catch (error) {
