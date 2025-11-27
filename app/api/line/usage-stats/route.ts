@@ -38,7 +38,7 @@ export async function GET() {
       // Assume we're using free tier
       const estimatedQuotaUsed = summary.totalRequests - summary.rateLimitErrors;
       const quotaRemaining = Math.max(0, 500 - estimatedQuotaUsed);
-      const quotaPercentage = (estimatedQuotaUsed / 500 * 100).toFixed(1);
+      const quotaPercentage = parseFloat((estimatedQuotaUsed / 500 * 100).toFixed(1));
 
       insights.push(`\n📊 Estimated Quota Usage (Free Tier):`);
       insights.push(`   Used: ${estimatedQuotaUsed}/500 (${quotaPercentage}%)`);
