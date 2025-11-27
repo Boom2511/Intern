@@ -6,7 +6,9 @@
       "Bash(npx tsc:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nAdd HTTP 429 rate limiting solution with quota detection\n\nFeatures:\n- Rate limiting with Bottleneck queue (prevents rate limit 429s)\n- Exponential backoff with jitter for retries\n- Retry-After header support\n- Monthly quota detection (prevents wasteful retries)\n- Prometheus metrics for monitoring\n- Structured logging with request IDs\n- Configurable via environment variables\n\nFixes monthly quota exhaustion detection to fail fast\ninstead of retrying 4 times unnecessarily.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(npx tsx:*)"
     ],
     "deny": [],
     "ask": []
