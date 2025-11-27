@@ -87,6 +87,11 @@ export class LineMessagingService {
    * Check if LINE service is configured
    */
   isConfigured(): boolean {
+    // Emergency kill switch
+    if (process.env.DISABLE_LINE_NOTIFICATIONS === 'true') {
+      console.log('⚠️ LINE notifications are disabled via DISABLE_LINE_NOTIFICATIONS env var');
+      return false;
+    }
     return !!this.channelAccessToken;
   }
 
