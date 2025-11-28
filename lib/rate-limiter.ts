@@ -86,9 +86,11 @@ export function getRetryAfterSeconds(response: Response): number | undefined {
 
 /**
  * Default retry configuration
+ * NOTE: Retries reduced to 1 to minimize quota usage
+ * LINE API counts ALL API calls (including 429 failures) toward monthly quota
  */
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: parseInt(process.env.API_MAX_RETRIES || '4', 10),
+  maxRetries: parseInt(process.env.API_MAX_RETRIES || '1', 10),
   baseDelay: 1000, // 1 second
   maxDelay: 60000, // 60 seconds
   jitterMs: parseInt(process.env.API_RETRY_JITTER_MS || '200', 10),
@@ -100,13 +102,17 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
  * Free tier: ~500 pushes per minute
  * Basic tier: ~1000 pushes per minute
  * Standard tier: ~2000 pushes per minute
+ *
+ * NOTE: Strengthened to minimize quota usage
+ * - Reduced concurrency from 5 to 2 (prevent burst sending)
+ * - Increased minTime from 200ms to 500ms (2 requests/second max)
  */
 export const LINE_RATE_LIMITER_CONFIG: RateLimiterConfig = {
-  // Max concurrent requests
-  maxConcurrent: parseInt(process.env.LINE_RATE_LIMIT_MAX_CONCURRENCY || '5', 10),
+  // Max concurrent requests (reduced to prevent bursts)
+  maxConcurrent: parseInt(process.env.LINE_RATE_LIMIT_MAX_CONCURRENCY || '2', 10),
 
-  // Minimum time between requests (ms)
-  minTime: parseInt(process.env.LINE_RATE_LIMIT_MIN_TIME_MS || '200', 10),
+  // Minimum time between requests (ms) - increased for stricter throttling
+  minTime: parseInt(process.env.LINE_RATE_LIMIT_MIN_TIME_MS || '500', 10),
 
   // Optional: Token bucket for burst control
   reservoir: process.env.LINE_RATE_LIMIT_RESERVOIR

@@ -7,8 +7,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { lineService } from '@/lib/line';
-import { createSLAWarningFlexMessage } from '@/lib/line-templates';
 import { Priority } from '@prisma/client';
 
 // Force this route to be dynamic (required for cron jobs)
@@ -68,21 +66,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!lineService.isConfigured()) {
-      return NextResponse.json({
-        success: false,
-        message: 'LINE service is not configured',
-      }, { status: 500 });
-    }
-
-    const groupId = process.env.LINE_DEFAULT_GROUP_ID;
-    if (!groupId) {
-      return NextResponse.json({
-        success: false,
-        message: 'LINE_DEFAULT_GROUP_ID is not configured',
-      }, { status: 500 });
-    }
-
     // Get all active tickets (not RESOLVED or CLOSED)
     const activeTickets = await prisma.ticket.findMany({
       where: {
@@ -133,27 +116,11 @@ export async function GET(request: NextRequest) {
           remainingHours: slaInfo.hours,
         });
 
-        // Send LINE notification
-        const ticketUrl = `${process.env.NEXTAUTH_URL}/tickets/${ticket.id}`;
-        const flexMessage = createSLAWarningFlexMessage(
-          ticket,
-          slaInfo.displayTime,
-          ticketUrl
-        );
+        // NOTE: Removed LINE notification for SLA warnings to reduce quota usage
+        // SLA warnings are still tracked via notes only
+        console.log(`⚠️ SLA warning for ticket ${ticket.ticketNo} (${slaInfo.displayTime} remaining)`);
 
-        const success = await lineService.sendFlexMessage(
-          groupId,
-          `⚠️ เตือน SLA: ${ticket.ticketNo}`,
-          flexMessage
-        );
-
-        if (success) {
-          console.log(`✅ SLA warning sent for ticket ${ticket.ticketNo}`);
-        } else {
-          console.error(`❌ Failed to send SLA warning for ticket ${ticket.ticketNo}`);
-        }
-
-        // Add a note to the ticket
+        // Add a note to the ticket (notification via system note only)
         await prisma.note.create({
           data: {
             ticketId: ticket.id,

@@ -113,31 +113,8 @@ export async function PATCH(
         },
       });
 
-      // Send LINE notification for status change
-      if (lineService.isConfigured() && ticket.department) {
-        const groupId = getDepartmentLineGroup(ticket.department);
-        if (groupId) {
-          const baseUrl = process.env.NEXTAUTH_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-            || 'http://localhost:3000';
-          const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
-
-          try {
-            // Use simple text message for status changes
-            const fromStatusLabel = getStatusLabel(ticket.status);
-            const toStatusLabel = getStatusLabel(status);
-            await lineService.sendTextMessage(
-              groupId,
-              `🔔 อัพเดตสถานะ: ${ticket.ticketNo}\n` +
-              `จาก: ${fromStatusLabel} → ${toStatusLabel}\n` +
-              `ดูรายละเอียด: ${ticketUrl}`
-            );
-            console.log('✅ LINE notification sent for status change:', ticket.ticketNo);
-          } catch (error) {
-            console.error('❌ Failed to send LINE notification:', error);
-          }
-        }
-      }
+      // NOTE: Removed LINE notification for status changes to reduce quota usage
+      // Only send notifications for new ticket creation with department assignment
     }
 
     // Handle department update
@@ -161,8 +138,10 @@ export async function PATCH(
         });
       }
 
-      // Send LINE notification when department is assigned
-      if (newDepartment && lineService.isConfigured()) {
+      // Send LINE notification when department is assigned for the FIRST time only
+      // Only send if ticket had no department before (ticket.department is null)
+      // This prevents notifications on department reassignments to reduce quota usage
+      if (newDepartment && !ticket.department && lineService.isConfigured()) {
         const groupId = getDepartmentLineGroup(newDepartment);
         if (groupId) {
           const baseUrl = process.env.NEXTAUTH_URL
@@ -183,11 +162,13 @@ export async function PATCH(
               `🔔 Ticket มอบหมาย: ${ticket.ticketNo}`,
               flexMessage
             );
-            console.log('✅ LINE notification sent for department assignment:', ticket.ticketNo);
+            console.log('✅ LINE notification sent for initial department assignment:', ticket.ticketNo);
           } catch (error) {
             console.error('❌ Failed to send LINE notification:', error);
           }
         }
+      } else if (newDepartment && ticket.department) {
+        console.log(`ℹ️ Department reassignment (${ticket.department} → ${newDepartment}) - notification skipped to save quota`);
       }
     }
 

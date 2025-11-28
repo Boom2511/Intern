@@ -172,9 +172,23 @@ export class LineMessagingService {
       method: 'POST',
     });
 
+    // Log quota usage tracking
+    console.log(`📊 LINE API Call Tracking:`, {
+      requestId,
+      to,
+      maxRetries,
+      timestamp: new Date().toISOString(),
+    });
+
     // Wrap the request in rate limiter queue
     return this.rateLimiter.schedule(async () => {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Log each attempt for quota tracking
+        console.log(`📤 LINE API Attempt ${attempt}/${maxRetries}:`, {
+          requestId,
+          to,
+          timestamp: new Date().toISOString(),
+        });
         const result = await this.makeApiRequest(to, messages, requestId, attempt);
 
         if (!result.success) {
@@ -209,10 +223,20 @@ export class LineMessagingService {
           // Check if response contains error even with 200 status
           if (responseData.message && responseData.message.includes('error')) {
             console.error('❌ LINE API returned error in 200 response:', JSON.stringify(responseData, null, 2));
+            console.log(`❌ Quota Impact: This failed call counts toward monthly quota`, {
+              requestId,
+              attempt,
+              to,
+            });
             return false;
           }
 
           console.log('✅ LINE message sent successfully to:', to);
+          console.log(`✅ Quota Impact: 1 API call counted (attempt ${attempt}/${maxRetries})`, {
+            requestId,
+            to,
+            totalCallsThisRequest: attempt,
+          });
           return true;
         }
 
@@ -236,6 +260,12 @@ export class LineMessagingService {
           if (isMonthlyQuotaExceeded) {
             console.error('❌ LINE monthly quota exceeded. Cannot retry until quota resets.');
             console.error('💡 Action required: Upgrade your LINE Messaging API plan or wait for monthly reset.');
+            console.log(`❌ Quota Impact: This 429 error counts toward monthly quota (attempt ${attempt})`, {
+              requestId,
+              to,
+              totalCallsThisRequest: attempt,
+              reason: 'monthly_quota_exceeded',
+            });
             lineMetrics.recordRetry(this.apiUrl, 'quota_exceeded_no_retry');
             return false;
           }
@@ -246,6 +276,12 @@ export class LineMessagingService {
             const delay = calculateBackoffDelay(attempt, this.retryConfig, retryAfterSeconds);
 
             console.log(`⏳ Rate limited (429). Retrying in ${delay}ms...`);
+            console.log(`⚠️ Quota Impact: 429 error counts toward quota, will retry (attempt ${attempt}/${maxRetries})`, {
+              requestId,
+              to,
+              retryDelay: `${delay}ms`,
+              totalCallsSoFar: attempt,
+            });
             ApiLogger.logRetry(requestId, attempt, maxRetries, delay, 'rate_limit_429');
             lineMetrics.recordRetry(this.apiUrl, 'rate_limit_429');
 
@@ -254,6 +290,11 @@ export class LineMessagingService {
           }
 
           console.error('❌ Rate limit exceeded. All retry attempts failed.');
+          console.log(`❌ Quota Impact: Total API calls for this request: ${attempt}`, {
+            requestId,
+            to,
+            allCallsCountedTowardQuota: true,
+          });
           return false;
         }
 
