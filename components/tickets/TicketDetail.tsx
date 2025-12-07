@@ -23,7 +23,7 @@ import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { ROLE_NAMES, ROLE_LABELS } from '@/config/roles';
-import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Image as ImageIcon, Package, MapPin, FileText, Tag } from 'lucide-react';
+import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Package, MapPin, FileText, Tag } from 'lucide-react';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -44,7 +44,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
   const [reportImages, setReportImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const departmentOptions = getDepartmentOptions();
 
@@ -496,7 +495,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
                   {/* Image Upload */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -504,24 +503,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                         onClick={() => fileInputRef.current?.click()}
                         disabled={reportImages.length >= 5}
                       >
-                        <ImageIcon className="h-4 w-4 mr-2" />
-                        เลือกจากแกลเลอรี่
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => cameraInputRef.current?.click()}
-                        disabled={reportImages.length >= 5}
-                      >
                         <Upload className="h-4 w-4 mr-2" />
-                        ถ่ายรูป
+                        อัปโหลดรูปภาพ
                       </Button>
                       <span className="text-xs text-gray-500">
                         ({reportImages.length}/5 รูป, สูงสุด 5MB/รูป)
                       </span>
                     </div>
-                    {/* File input for gallery */}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -529,18 +517,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       multiple
                       onChange={handleImageSelect}
                       className="hidden"
-                      aria-label="เลือกรูปภาพจากแกลเลอรี่"
-                    />
-                    {/* File input for camera */}
-                    <input
-                      ref={cameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      multiple
-                      onChange={handleImageSelect}
-                      className="hidden"
-                      aria-label="ถ่ายรูปด้วยกล้อง"
+                      aria-label="อัปโหลดรูปภาพ"
                     />
 
                     {/* Image Previews */}
