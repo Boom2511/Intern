@@ -45,23 +45,21 @@ function formatShortDate(date: Date): string {
  * Generate LIFF URL for ticket
  * Uses LIFF ID from environment variable
  *
- * LIFF URL format: https://liff.line.me/{liffId}?liff.state={path}
- * The path should be the full path after the domain
- *
- * IMPORTANT: Set LIFF Endpoint URL to: https://intern-tawny.vercel.app
- * Then pass the full path in liff.state: /liff/tickets/{ticketId}
+ * LIFF URL format: https://liff.line.me/{liffId}/{ticketId}
+ * Endpoint URL in LINE Console: https://intern-tawny.vercel.app/liff/tickets
+ * Final URL: https://intern-tawny.vercel.app/liff/tickets/{ticketId}
  */
 function getLiffUrl(ticketId: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   if (!liffId) {
     // Fallback to web URL if LIFF ID is not configured
-    const fallbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'}/tickets/${ticketId}`;
+    const fallbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'}/tickets/${ticketId}?mode=client`;
     console.log('⚠️ LIFF ID not configured, using fallback URL:', fallbackUrl);
     return fallbackUrl;
   }
-  // LIFF URL with liff.state parameter containing the full path
-  const path = `/liff/tickets/${ticketId}`;
-  const liffUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(path)}`;
+  // LIFF URL: Append ticket ID after LIFF ID
+  // This gets appended to the Endpoint URL configured in LINE Console
+  const liffUrl = `https://liff.line.me/${liffId}/${ticketId}?mode=client`;
   console.log('✅ LIFF URL generated:', liffUrl);
   return liffUrl;
 }
