@@ -454,10 +454,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 <div className="flex items-start gap-3">
                   <UserCog className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 space-y-1">
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-600">สร้างโดย:</span>{' '}
-                      <span className="text-gray-900">{ticket.createdBy || 'พนักงาน CEC'}</span>
-                    </div>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Clock className="h-4 w-4" />
                       <span>สร้างเมื่อ {formatThaiDate(ticket.createdAt)}</span>
