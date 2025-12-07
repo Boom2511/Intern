@@ -3,6 +3,9 @@ import { getCurrentUser } from '@/lib/auth';
 import { Permission, hasPermission } from '@/lib/auth';
 import TestFlexClient from './TestFlexClient';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export default async function TestFlexPage() {
   const currentUser = await getCurrentUser();
 
