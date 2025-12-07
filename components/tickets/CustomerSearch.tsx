@@ -53,7 +53,7 @@ export default function CustomerSearch({ onCustomerSelect }: CustomerSearchProps
   }, [phone, onCustomerSelect]);
 
   const openTickets = customer?.tickets.filter(
-    t => t.status !== 'CLOSED' && t.status !== 'RESOLVED'
+    (t: any) => t.status !== 'CLOSED' && t.status !== 'RESOLVED'
   ) || [];
 
   return (
@@ -108,7 +108,7 @@ export default function CustomerSearch({ onCustomerSelect }: CustomerSearchProps
                         ลูกค้ามี {openTickets.length} ticket ที่ยังไม่ปิด
                       </p>
                       <ul className="mt-2 space-y-1 text-yellow-700">
-                        {openTickets.map(ticket => (
+                        {openTickets.map((ticket: any) => (
                           <li key={ticket.id}>
                             • {ticket.ticketNo}: {ticket.description.substring(0, 50)}...
                           </li>

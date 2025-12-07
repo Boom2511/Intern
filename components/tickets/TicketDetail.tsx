@@ -514,9 +514,11 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       multiple
                       onChange={handleImageSelect}
                       className="hidden"
+                      aria-label="อัปโหลดรูปภาพ"
                     />
 
                     {/* Image Previews */}
@@ -561,7 +563,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
                 {ROLE_LABELS.STAFF_NOTES} ({
                   isClientMode
-                    ? ticket.notes.filter(note => note.createdBy !== 'System').length
+                    ? ticket.notes.filter((note: any) => note.createdBy !== 'System').length
                     : ticket.notes.length
                 })
               </CardTitle>
@@ -585,7 +587,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
               {/* Notes Timeline - Show all notes */}
               <div className="space-y-4 mt-6">
-                {ticket.notes.filter(note => {
+                {ticket.notes.filter((note: any) => {
                   // Hide system notes from end users
                   if (isClientMode && note.createdBy === 'System') {
                     return false;
@@ -597,14 +599,14 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   </p>
                 ) : (
                   ticket.notes
-                    .filter(note => {
+                    .filter((note: any) => {
                       // Hide system notes from end users
                       if (isClientMode && note.createdBy === 'System') {
                         return false;
                       }
                       return true;
                     })
-                    .map(note => (
+                    .map((note: any) => (
                       <div
                         key={note.id}
                         className={`border-l-2 pl-4 py-2 ${
@@ -634,7 +636,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                         </p>
                         {note.images && note.images.length > 0 && (
                           <div className="mt-2 grid grid-cols-3 gap-2">
-                            {note.images.map((img, idx) => (
+                            {note.images.map((img: string, idx: number) => (
                               <a
                                 key={idx}
                                 href={img}
@@ -779,12 +781,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 <CardTitle className="text-base md:text-lg">ผู้สร้าง Ticket</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <UserCog className="h-4 w-4 text-gray-400" />
-                  <span className="font-medium text-sm md:text-base">
-                    {ticket.createdBy || 'พนักงาน CEC'}
-                  </span>
-                </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <Clock className="h-4 w-4 text-gray-400" />
                   <span className="text-sm">{formatThaiDate(ticket.createdAt)}</span>
