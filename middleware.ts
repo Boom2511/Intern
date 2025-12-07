@@ -12,7 +12,15 @@ export async function middleware(request: NextRequest) {
     '/liff',  // LIFF routes (LINE Front-end Framework) - authenticated by LINE
     '/api/liff',  // LIFF API routes
   ];
-  if (publicRoutes.some(route => pathname.startsWith(route))) {
+
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
+
+  // Debug logging for LIFF routes
+  if (pathname.startsWith('/liff')) {
+    console.log('[Middleware] LIFF route detected:', pathname, 'isPublic:', isPublicRoute);
+  }
+
+  if (isPublicRoute) {
     return NextResponse.next();
   }
 
