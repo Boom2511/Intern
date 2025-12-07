@@ -144,16 +144,11 @@ export async function PATCH(
       if (newDepartment && !ticket.department && lineService.isConfigured()) {
         const groupId = getDepartmentLineGroup(newDepartment);
         if (groupId) {
-          const baseUrl = process.env.NEXTAUTH_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-            || 'http://localhost:3000';
-          const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
           const deptLabel = getDepartmentLabel(newDepartment);
 
           const flexMessage = createDepartmentAssignedFlexMessage(
             { ...ticket, department: newDepartment },
-            deptLabel,
-            ticketUrl
+            deptLabel
           );
 
           try {

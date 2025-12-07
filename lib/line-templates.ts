@@ -49,9 +49,13 @@ function getLiffUrl(ticketId: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   if (!liffId) {
     // Fallback to web URL if LIFF ID is not configured
-    return `${process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'}/tickets/${ticketId}`;
+    const fallbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'}/tickets/${ticketId}`;
+    console.log('⚠️ LIFF ID not configured, using fallback URL:', fallbackUrl);
+    return fallbackUrl;
   }
-  return `https://liff.line.me/${liffId}/tickets/${ticketId}`;
+  const liffUrl = `https://liff.line.me/${liffId}/tickets/${ticketId}`;
+  console.log('✅ LIFF URL generated:', liffUrl);
+  return liffUrl;
 }
 
 export function createDepartmentAssignedFlexMessage(

@@ -287,19 +287,12 @@ export async function POST(request: NextRequest) {
         console.log('Group ID:', groupId);
 
         if (groupId) {
-          // Get base URL for ticket link
-          const baseUrl = process.env.NEXTAUTH_URL
-            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-            || 'http://localhost:3000';
-          const ticketUrl = `${baseUrl}/tickets/${ticket.id}?mode=client`;
-          console.log('Ticket URL:', ticketUrl);
-
           // Get department label
           const deptLabel = getDepartmentLabel(department);
           console.log('Department label:', deptLabel);
 
-          // Create and send Flex Message
-          const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel, ticketUrl);
+          // Create and send Flex Message (will use LIFF URL automatically)
+          const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel);
           console.log('✅ Sending LINE notification for new ticket...');
 
           try {
