@@ -44,6 +44,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
   const [reportImages, setReportImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const departmentOptions = getDepartmentOptions();
 
@@ -495,7 +496,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
                   {/* Image Upload */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Button
                         type="button"
                         variant="outline"
@@ -503,22 +504,43 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                         onClick={() => fileInputRef.current?.click()}
                         disabled={reportImages.length >= 5}
                       >
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        เลือกจากแกลเลอรี่
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={reportImages.length >= 5}
+                      >
                         <Upload className="h-4 w-4 mr-2" />
-                        อัปโหลดรูปภาพ
+                        ถ่ายรูป
                       </Button>
                       <span className="text-xs text-gray-500">
                         ({reportImages.length}/5 รูป, สูงสุด 5MB/รูป)
                       </span>
                     </div>
+                    {/* File input for gallery */}
                     <input
                       ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageSelect}
+                      className="hidden"
+                      aria-label="เลือกรูปภาพจากแกลเลอรี่"
+                    />
+                    {/* File input for camera */}
+                    <input
+                      ref={cameraInputRef}
                       type="file"
                       accept="image/*"
                       capture="environment"
                       multiple
                       onChange={handleImageSelect}
                       className="hidden"
-                      aria-label="อัปโหลดรูปภาพ"
+                      aria-label="ถ่ายรูปด้วยกล้อง"
                     />
 
                     {/* Image Previews */}
