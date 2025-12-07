@@ -48,8 +48,8 @@ function formatShortDate(date: Date): string {
  * LIFF URL format: https://liff.line.me/{liffId}/{path}
  * The {path} is appended to the Endpoint URL configured in LINE Developers Console
  *
- * Endpoint URL should be: https://intern-tawny.vercel.app
- * Then path /liff/tickets/{ticketId} will be appended automatically
+ * IMPORTANT: Set LIFF Endpoint URL to: https://intern-tawny.vercel.app/liff/tickets
+ * Then we only append /{ticketId} to make: /liff/tickets/{ticketId}
  */
 function getLiffUrl(ticketId: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -59,8 +59,9 @@ function getLiffUrl(ticketId: string): string {
     console.log('⚠️ LIFF ID not configured, using fallback URL:', fallbackUrl);
     return fallbackUrl;
   }
-  // Full path including /liff prefix for our app structure
-  const liffUrl = `https://liff.line.me/${liffId}/liff/tickets/${ticketId}`;
+  // LIFF URL: Append only ticket ID to the endpoint URL
+  // Result: https://intern-tawny.vercel.app/liff/tickets/{ticketId}
+  const liffUrl = `https://liff.line.me/${liffId}/${ticketId}`;
   console.log('✅ LIFF URL generated:', liffUrl);
   return liffUrl;
 }
