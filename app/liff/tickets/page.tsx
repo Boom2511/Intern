@@ -17,36 +17,19 @@ function LiffRedirect() {
     // Get the path from liff.state parameter
     const liffState = searchParams.get('liff.state');
     console.log('[LIFF Redirect] liff.state:', liffState);
+    console.log('[LIFF Redirect] Full URL:', window.location.href);
 
     if (liffState) {
-      // LIFF state can be in different formats:
-      // 1. Just ticket ID: /{ticketId}
-      // 2. Full path: /liff/tickets/{ticketId}
-      let ticketId: string | null = null;
-
-      // Try to extract ticket ID from full path first
-      const fullPathMatch = liffState.match(/\/liff\/tickets\/([^/?]+)/);
-      if (fullPathMatch && fullPathMatch[1]) {
-        ticketId = fullPathMatch[1];
-      } else {
-        // Try to extract just the ID (format: /{ticketId})
-        const idMatch = liffState.match(/^\/([^/?]+)$/);
-        if (idMatch && idMatch[1]) {
-          ticketId = idMatch[1];
-        }
-      }
-
-      console.log('[LIFF Redirect] Extracted ticket ID:', ticketId);
-
-      if (ticketId) {
-        // Redirect to the actual LIFF ticket detail page with mode=client
-        window.location.href = `/liff/tickets/${ticketId}?mode=client`;
-        return;
-      }
+      // liff.state contains the full path: /liff/tickets/{ticketId}
+      // Just append ?mode=client and redirect
+      const targetUrl = `${liffState}?mode=client`;
+      console.log('[LIFF Redirect] Redirecting to:', targetUrl);
+      window.location.href = targetUrl;
+      return;
     }
 
     // If no valid state, show error
-    console.error('[LIFF Redirect] No valid liff.state parameter found. Full URL:', window.location.href);
+    console.error('[LIFF Redirect] No liff.state parameter found. Full URL:', window.location.href);
   }, [searchParams]);
 
   return (
