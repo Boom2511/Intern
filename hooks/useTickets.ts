@@ -13,11 +13,26 @@ export interface UseTicketsOptions {
   department?: string;
   issueType?: string;
   search?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
   refreshInterval?: number;
 }
 
 export function useTickets(options: UseTicketsOptions = {}) {
-  const { status, priority, department, issueType, search, refreshInterval = 30000 } = options;
+  const {
+    status,
+    priority,
+    department,
+    issueType,
+    search,
+    startDate,
+    endDate,
+    page = 1,
+    limit = 20,
+    refreshInterval = 30000
+  } = options;
 
   // Build URL with query params
   const params = new URLSearchParams();
@@ -26,8 +41,12 @@ export function useTickets(options: UseTicketsOptions = {}) {
   if (department && department !== 'all') params.append('department', department);
   if (issueType && issueType !== 'all') params.append('issueType', issueType);
   if (search) params.append('search', search);
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  params.append('page', page.toString());
+  params.append('limit', limit.toString());
 
-  const url = params.toString() ? `/api/tickets?${params.toString()}` : '/api/tickets';
+  const url = `/api/tickets?${params.toString()}`;
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     url,
@@ -44,6 +63,7 @@ export function useTickets(options: UseTicketsOptions = {}) {
 
   return {
     tickets: data?.data || [],
+    pagination: data?.pagination,
     isLoading,
     isError: error,
     isValidating,

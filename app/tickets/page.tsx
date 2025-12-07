@@ -6,19 +6,21 @@
 
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Pagination } from '@/components/ui/pagination';
 import TicketList from '@/components/tickets/TicketList';
 import TicketFilters from '@/components/tickets/TicketFilters';
-import { Plus, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, AlertCircle, Loader2, RefreshCw, ArrowLeft } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { getStatusLabel } from '@/lib/utils';
 
 function TicketsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Get all filter parameters
   const status = searchParams.get('status') || undefined;
@@ -26,43 +28,110 @@ function TicketsContent() {
   const department = searchParams.get('department') || undefined;
   const issueType = searchParams.get('issueType') || undefined;
   const search = searchParams.get('search') || undefined;
+  const startDate = searchParams.get('startDate') || undefined;
+  const endDate = searchParams.get('endDate') || undefined;
+  const pageParam = searchParams.get('page');
+  const [currentPage, setCurrentPage] = useState(pageParam ? parseInt(pageParam, 10) : 1);
 
   // Use SWR hook with 30-second polling
-  const { tickets, isLoading, isError, isValidating } = useTickets({
+  const { tickets, pagination, isLoading, isError, isValidating, mutate } = useTickets({
     status,
     priority,
     department,
     issueType,
     search,
+    startDate,
+    endDate,
+    page: currentPage,
+    limit: 20,
     refreshInterval: 30000,
   });
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Update URL
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', page.toString());
+    router.push(`/tickets?${params.toString()}`, { scroll: false });
+  };
+
+  // Manual refresh
+  const handleRefresh = () => {
+    mutate();
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">Tickets</h1>
-            {isValidating && !isLoading && (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>กำลังอัพเดต...</span>
-              </div>
-            )}
-          </div>
-          <p className="text-gray-600 mt-2">จัดการและติดตาม Tickets ทั้งหมด</p>
-        </div>
-        <Link href="/tickets/new">
-          <Button size="lg">
-            <Plus className="h-5 w-5 mr-2" />
-            สร้าง Ticket ใหม่
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="mr-2"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            กลับ
           </Button>
-        </Link>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">Tickets</h1>
+              {isValidating && !isLoading && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>กำลังอัพเดต...</span>
+                </div>
+              )}
+            </div>
+            <p className="text-gray-600 mt-2">
+              จัดการและติดตาม Tickets ทั้งหมด
+              {pagination && (
+                <span className="ml-2 text-sm">
+                  ({pagination.totalCount} รายการ)
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleRefresh}
+            disabled={isValidating}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isValidating ? 'animate-spin' : ''}`} />
+            รีเฟรช
+          </Button>
+          <Link href="/tickets/new">
+            <Button size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              สร้าง Ticket ใหม่
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Advanced Search/Filter */}
       <TicketFilters />
+
+      {/* Pagination Top */}
+      {!isLoading && !isError && pagination && pagination.totalPages > 1 && (
+        <Card>
+          <CardContent className="py-2">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={handlePageChange}
+              hasNextPage={pagination.hasNextPage}
+              hasPreviousPage={pagination.hasPreviousPage}
+              isLoading={isValidating}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading State */}
       {isLoading && (
@@ -121,7 +190,25 @@ function TicketsContent() {
           </CardContent>
         </Card>
       ) : (
-        !isLoading && !isError && <TicketList tickets={tickets} initialStatus={status} />
+        !isLoading && !isError && (
+          <>
+            <TicketList tickets={tickets} initialStatus={status} />
+            {pagination && pagination.totalPages > 1 && (
+              <Card>
+                <CardContent className="py-2">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    hasNextPage={pagination.hasNextPage}
+                    hasPreviousPage={pagination.hasPreviousPage}
+                    isLoading={isValidating}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )
       )}
     </div>
   );

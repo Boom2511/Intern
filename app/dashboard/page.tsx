@@ -8,15 +8,24 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle, Loader2, RefreshCw, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   // Use SWR hook with 60-second polling for dashboard
-  const { stats, isLoading, isError, isValidating } = useDashboardStats({
+  const { stats, isLoading, isError, isValidating, mutate } = useDashboardStats({
     refreshInterval: 60000, // 60 seconds
   });
+
+  // Manual refresh
+  const handleRefresh = () => {
+    mutate();
+  };
 
   // Loading state
   if (isLoading) {
@@ -78,9 +87,30 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk (อัพเดตอัตโนมัติทุก 60 วินาที)</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            กลับ
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk (อัพเดตอัตโนมัติทุก 60 วินาที)</p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={handleRefresh}
+          disabled={isValidating}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isValidating ? 'animate-spin' : ''}`} />
+          รีเฟรช
+        </Button>
       </div>
 
       {/* Stats Overview */}

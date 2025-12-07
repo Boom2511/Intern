@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus, Priority } from '@/types';
 import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel } from '@/lib/utils';
@@ -22,7 +23,7 @@ import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { ROLE_NAMES, ROLE_LABELS } from '@/config/roles';
-import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Image as ImageIcon, Package, MapPin, FileText, Tag } from 'lucide-react';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -31,6 +32,7 @@ interface TicketDetailProps {
 }
 
 export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: TicketDetailProps) {
+  const { toast } = useToast();
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
   const [assignedTo, setAssignedTo] = useState<string>(ticket.assignedTo || '');
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
@@ -64,19 +66,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
       if (data.success) {
         setStatus(newStatus);
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'อัปเดตสถานะเรียบร้อยแล้ว',
+        });
         // Refresh data using SWR mutate
         if (mutate) {
           mutate();
-        } else {
-          // Fallback to page reload if mutate is not available
-          window.location.reload();
         }
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถอัปเดตสถานะได้',
+        });
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ กรุณาลองใหม่อีกครั้ง');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถอัปเดตสถานะได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setLoading(false);
     }
@@ -95,19 +107,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
       if (data.success) {
         setAssignedTo(newAssignee === 'none' ? '' : newAssignee);
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'มอบหมายงานเรียบร้อยแล้ว',
+        });
         // Refresh data using SWR mutate
         if (mutate) {
           mutate();
-        } else {
-          // Fallback to page reload if mutate is not available
-          window.location.reload();
         }
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการมอบหมายงาน');
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถมอบหมายงานได้',
+        });
       }
     } catch (error) {
       console.error('Error updating assignee:', error);
-      alert('เกิดข้อผิดพลาดในการมอบหมายงาน กรุณาลองใหม่อีกครั้ง');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถมอบหมายงานได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setLoading(false);
     }
@@ -136,19 +158,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         if (updateData.status) {
           setStatus(updateData.status);
         }
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'เลือกแผนกเรียบร้อยแล้ว',
+        });
         // Refresh data using SWR mutate
         if (mutate) {
           mutate();
-        } else {
-          // Fallback to page reload if mutate is not available
-          window.location.reload();
         }
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการเลือกแผนก');
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถเลือกแผนกได้',
+        });
       }
     } catch (error) {
       console.error('Error updating department:', error);
-      alert('เกิดข้อผิดพลาดในการเลือกแผนก กรุณาลองใหม่อีกครั้ง');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถเลือกแผนกได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setLoading(false);
     }
@@ -175,19 +207,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
       if (data.success) {
         setNewNote('');
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'เพิ่มบันทึกเรียบร้อยแล้ว',
+        });
         // Refresh data using SWR mutate
         if (mutate) {
           mutate();
-        } else {
-          // Fallback to page reload if mutate is not available
-          window.location.reload();
         }
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการเพิ่มบันทึก');
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถเพิ่มบันทึกได้',
+        });
       }
     } catch (error) {
       console.error('Error adding note:', error);
-      alert('เกิดข้อผิดพลาดในการเพิ่มบันทึก กรุณาลองใหม่อีกครั้ง');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถเพิ่มบันทึกได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setLoading(false);
     }
@@ -201,14 +243,22 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
     // Validate file sizes
     for (const file of files) {
       if (file.size > maxSize) {
-        alert(`ไฟล์ ${file.name} มีขนาดใหญ่เกิน 5MB`);
+        toast({
+          variant: 'warning',
+          title: 'ไฟล์ขนาดใหญ่เกินไป',
+          description: `ไฟล์ ${file.name} มีขนาดใหญ่เกิน 5MB`,
+        });
         return;
       }
     }
 
     // Limit to 5 images
     if (reportImages.length + files.length > 5) {
-      alert('สามารถอัปโหลดได้สูงสุด 5 รูปเท่านั้น');
+      toast({
+        variant: 'warning',
+        title: 'จำนวนรูปเกินกำหนด',
+        description: 'สามารถอัปโหลดได้สูงสุด 5 รูปเท่านั้น',
+      });
       return;
     }
 
@@ -233,7 +283,11 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
   const handleSubmitReport = async () => {
     if (!reportContent.trim()) {
-      alert('กรุณากรอกรายละเอียดปัญหา');
+      toast({
+        variant: 'warning',
+        title: 'กรุณากรอกข้อมูล',
+        description: 'กรุณากรอกรายละเอียดปัญหา',
+      });
       return;
     }
 
@@ -260,19 +314,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         setReportImages([]);
         imagePreviews.forEach(url => URL.revokeObjectURL(url));
         setImagePreviews([]);
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'ส่งรายงานปัญหาเรียบร้อยแล้ว',
+        });
         // Refresh data using SWR mutate
         if (mutate) {
           mutate();
-        } else {
-          // Fallback to page reload if mutate is not available
-          window.location.reload();
         }
       } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการส่งรายงาน');
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถส่งรายงานได้',
+        });
       }
     } catch (error) {
       console.error('Error submitting report:', error);
-      alert('เกิดข้อผิดพลาดในการส่งรายงาน กรุณาลองใหม่อีกครั้ง');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถส่งรายงานได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setLoading(false);
     }
@@ -302,33 +366,110 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
       <div className={`grid grid-cols-1 ${isClientMode ? 'max-w-2xl mx-auto' : 'lg:grid-cols-3'} gap-4 md:gap-6`}>
         {/* Main Content */}
         <div className={`${!isClientMode && 'lg:col-span-2'} space-y-4 md:space-y-6`}>
-          {/* Description */}
+          {/* Ticket Information Card - Enhanced for Client Mode */}
           <Card>
             <CardHeader>
-              <CardTitle>รายละเอียด</CardTitle>
+              <CardTitle>ข้อมูล Ticket</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Issue Type Badge */}
-              <div className="flex items-center gap-2 pb-3 border-b">
-                <span className="text-sm font-medium text-gray-600">ประเภทปัญหา:</span>
-                <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
-                  {getIssueTypeLabel(ticket.issueType)}
-                </Badge>
-                {ticket.issueTypeOther && (
-                  <span className="text-sm text-gray-600">({ticket.issueTypeOther})</span>
+              {/* Issue Type and Tracking Number - Same Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-3 border-b">
+                {/* Issue Type */}
+                <div className="flex items-start gap-3">
+                  <Tag className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-600 block mb-1">ประเภทปัญหา</span>
+                    <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+                      {getIssueTypeLabel(ticket.issueType)}
+                    </Badge>
+                    {ticket.issueTypeOther && (
+                      <span className="text-sm text-gray-600 ml-2">({ticket.issueTypeOther})</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tracking Number */}
+                {ticket.trackingNo && (
+                  <div className="flex items-start gap-3">
+                    <Package className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-gray-600 block mb-1">เลขพัสดุ</span>
+                      <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                        {ticket.trackingNo}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              <p className="whitespace-pre-wrap">{ticket.description}</p>
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="h-4 w-4" />
-                <span>สร้างเมื่อ {formatThaiDate(ticket.createdAt)}</span>
-              </div>
-              {ticket.updatedAt !== ticket.createdAt && (
-                <div className="mt-1 text-sm text-gray-500">
-                  อัปเดตล่าสุด {formatRelativeTime(ticket.updatedAt)}
+              {/* Department - Show in client mode */}
+              {isClientMode && ticket.department && (
+                <div className="flex items-start gap-3 pb-3 border-b">
+                  <Building2 className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-600 block mb-1">แผนกรับผิดชอบ</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {departmentOptions.find(d => d.value === ticket.department)?.label}
+                    </span>
+                  </div>
                 </div>
               )}
+
+              {/* Recipient Information */}
+              <div className="flex items-start gap-3 pb-3 border-b">
+                <MapPin className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-600 block mb-2">ข้อมูลผู้รับ</span>
+                  <div className="space-y-1 text-sm text-gray-900">
+                    <div><strong>ชื่อ:</strong> {ticket.recipientName}</div>
+                    <div><strong>เบอร์โทร:</strong> {ticket.recipientPhone}</div>
+                    <div><strong>ที่อยู่:</strong> {ticket.recipientAddress}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salesforce ID - If available */}
+              {isClientMode && ticket.salesforceId && (
+                <div className="flex items-start gap-3 pb-3 border-b">
+                  <FileText className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-600 block mb-1">Salesforce No.</span>
+                    <span className="text-sm font-mono text-gray-900">
+                      {ticket.salesforceId}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              <div>
+                <span className="text-sm font-medium text-gray-600 block mb-2">รายละเอียดปัญหา</span>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                  {ticket.description}
+                </p>
+              </div>
+
+              {/* Creator and Timestamp */}
+              <div className="pt-3 border-t">
+                <div className="flex items-start gap-3">
+                  <UserCog className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-1">
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-600">สร้างโดย:</span>{' '}
+                      <span className="text-gray-900">{ticket.createdBy || 'พนักงาน CEC'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Clock className="h-4 w-4" />
+                      <span>สร้างเมื่อ {formatThaiDate(ticket.createdAt)}</span>
+                    </div>
+                    {ticket.updatedAt !== ticket.createdAt && (
+                      <div className="text-sm text-gray-500">
+                        อัปเดตล่าสุด {formatRelativeTime(ticket.updatedAt)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -635,31 +776,22 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
             </CardContent>
           </Card>
 
-          {/* Customer Info - Only show in staff mode */}
+          {/* Ticket Creator Info - Only show in staff mode */}
           {!isClientMode && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base md:text-lg">ข้อมูลลูกค้า</CardTitle>
+                <CardTitle className="text-base md:text-lg">ผู้สร้าง Ticket</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-gray-400" />
-                  <span className="font-medium text-sm md:text-base break-all">{ticket.customer.name}</span>
+                  <UserCog className="h-4 w-4 text-gray-400" />
+                  <span className="font-medium text-sm md:text-base">
+                    {ticket.createdBy || 'พนักงาน CEC'}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm break-all">{ticket.customer.phone}</span>
-                </div>
-                {ticket.customer.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm break-all">{ticket.customer.email}</span>
-                  </div>
-                )}
-                <div className="pt-2">
-                  <Button variant="outline" size="sm" className="w-full">
-                    ดู Tickets อื่นของลูกค้า
-                  </Button>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm">{formatThaiDate(ticket.createdAt)}</span>
                 </div>
               </CardContent>
             </Card>

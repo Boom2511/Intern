@@ -23,6 +23,8 @@ import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments
  * - priority: Filter by priority
  * - search: Search in ticket number, customer name, or phone
  * - customerId: Filter by customer ID
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 20)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -33,6 +35,13 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const department = searchParams.get('department');
     const issueType = searchParams.get('issueType');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // Pagination params
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const skip = (page - 1) * limit;
 
     // Build where clause
     const where: any = {};
@@ -60,11 +69,30 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { ticketNo: { contains: search, mode: 'insensitive' } },
-        { subject: { contains: search, mode: 'insensitive' } },
+        { trackingNo: { contains: search, mode: 'insensitive' } },
+        { salesforceId: { contains: search, mode: 'insensitive' } },
         { customer: { name: { contains: search, mode: 'insensitive' } } },
         { customer: { phone: { contains: search } } },
       ];
     }
+
+    // Date range filtering (Thailand timezone GMT+7)
+    if (startDate || endDate) {
+      where.createdAt = {};
+
+      if (startDate) {
+        // Start of the day in Thailand timezone
+        where.createdAt.gte = new Date(startDate + 'T00:00:00+07:00');
+      }
+
+      if (endDate) {
+        // End of the day in Thailand timezone
+        where.createdAt.lte = new Date(endDate + 'T23:59:59.999+07:00');
+      }
+    }
+
+    // Get total count for pagination
+    const totalCount = await prisma.ticket.count({ where });
 
     // Fetch tickets with customer relation
     const tickets = await prisma.ticket.findMany({
@@ -79,11 +107,21 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: 'desc',
       },
+      skip,
+      take: limit,
     });
 
     return NextResponse.json({
       success: true,
       data: tickets,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNextPage: skip + tickets.length < totalCount,
+        hasPreviousPage: page > 1,
+      },
     });
   } catch (error) {
     console.error('Error fetching tickets:', error);

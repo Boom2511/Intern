@@ -1,0 +1,78 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export async function middleware(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Allow public routes
+  const publicRoutes = [
+    '/login',
+    '/api/auth/login',
+    '/api/auth/logout',
+    '/liff',  // LIFF routes (LINE Front-end Framework) - authenticated by LINE
+    '/api/liff',  // LIFF API routes
+  ];
+  if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Allow public access to client mode tickets (both page and API)
+  if (searchParams.get('mode') === 'client') {
+    return NextResponse.next();
+  }
+
+  // Allow public access to ticket detail API (used by client mode pages)
+  // Pattern: /api/tickets/[id] (but not /api/tickets without ID)
+  if (pathname.match(/^\/api\/tickets\/[^\/]+$/)) {
+    return NextResponse.next();
+  }
+
+  // Check if user is authenticated
+  const sessionToken = request.cookies.get('session_token')?.value;
+
+  if (!sessionToken) {
+    // Redirect to login if not authenticated
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Verify session token
+  try {
+    const payload = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+
+    if (payload.exp < Date.now()) {
+      // Session expired - redirect to login
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete('session_token');
+      return response;
+    }
+
+    // Token is valid - let the request through
+    // Permission checks will be handled by the UI and API routes
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    // Invalid token - redirect to login
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    const response = NextResponse.redirect(loginUrl);
+    response.cookies.delete('session_token');
+    return response;
+  }
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};

@@ -55,8 +55,12 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [existingTickets, setExistingTickets] = useState<ExistingTicket[]>([]);
+  const [existingTrackingTickets, setExistingTrackingTickets] = useState<ExistingTicket[]>([]);
   const [checkingPhone, setCheckingPhone] = useState(false);
+  const [checkingTracking, setCheckingTracking] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null);
   const [formData, setFormData] = useState<TicketFormData>({
     customerName: '',
     customerPhone: '',
@@ -70,7 +74,75 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   });
 
   const issueTypeOptions = getIssueTypeOptions();
-  const departmentOptions = getDepartmentOptions();
+  const allDepartmentOptions = getDepartmentOptions();
+
+  // Load current user to check permissions
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUser(data.user);
+        }
+      } catch (error) {
+        console.error('Failed to load current user:', error);
+      }
+    };
+    loadCurrentUser();
+  }, []);
+
+  // Filter out TEST department for non-ADMINISTRATOR users
+  const departmentOptions = currentUser?.role === 'ADMINISTRATOR'
+    ? allDepartmentOptions
+    : allDepartmentOptions.filter(option => option.value !== 'TEST');
+
+  // Real-time validation functions
+  const validatePhone = (phone: string): string | null => {
+    if (!phone) return null;
+    if (phone.length < 10) return 'หมายเลขโทรศัพท์ต้องมี 10 หลัก';
+    if (!/^0\d{9}$/.test(phone)) return 'หมายเลขโทรศัพท์ต้องขึ้นต้นด้วย 0 และมี 10 หลัก';
+    return null;
+  };
+
+  const validateEmail = (email: string): string | null => {
+    if (!email) return null;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'รูปแบบอีเมลไม่ถูกต้อง';
+    return null;
+  };
+
+  // Real-time field validation on blur
+  const validateField = (field: string, value: any) => {
+    let error: string | null = null;
+
+    switch (field) {
+      case 'recipientPhone':
+        error = validatePhone(value);
+        break;
+      case 'customerEmail':
+        error = validateEmail(value);
+        break;
+      case 'recipientName':
+        if (!value) error = 'กรุณากรอกชื่อผู้รับ';
+        break;
+      case 'recipientAddress':
+        if (!value) error = 'กรุณากรอกที่อยู่ผู้รับ';
+        break;
+      case 'description':
+        if (!value) error = 'กรุณากรอกรายละเอียดปัญหา';
+        break;
+      case 'issueType':
+        if (!value) error = 'กรุณาเลือกประเภทปัญหา';
+        break;
+    }
+
+    setFieldErrors(prev => ({
+      ...prev,
+      [field]: error || '',
+    }));
+
+    return error;
+  };
 
   // Check for existing tickets when phone number is entered
   useEffect(() => {
@@ -104,6 +176,41 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     const debounceTimer = setTimeout(checkExistingTickets, 500);
     return () => clearTimeout(debounceTimer);
   }, [formData.recipientPhone]);
+
+  // Check for existing tickets with same tracking number
+  useEffect(() => {
+    const checkTrackingNumber = async () => {
+      if (formData.trackingNo && formData.trackingNo.length >= 5) {
+        setCheckingTracking(true);
+        try {
+          const response = await fetch(`/api/tickets?search=${encodeURIComponent(formData.trackingNo)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data) {
+              // Filter for tickets with exact tracking number match (not CLOSED)
+              const matchingTickets = data.data.filter(
+                (ticket: any) =>
+                  ticket.trackingNo === formData.trackingNo &&
+                  ticket.status !== 'CLOSED'
+              );
+              setExistingTrackingTickets(matchingTickets);
+            } else {
+              setExistingTrackingTickets([]);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking tracking number:', error);
+        } finally {
+          setCheckingTracking(false);
+        }
+      } else {
+        setExistingTrackingTickets([]);
+      }
+    };
+
+    const debounceTimer = setTimeout(checkTrackingNumber, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [formData.trackingNo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,7 +278,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Existing Tickets Warning */}
+      {/* Existing Tickets Warning (Phone) */}
       {existingTickets.length > 0 && (
         <Card className="border-amber-200 bg-amber-50">
           <CardHeader>
@@ -191,6 +298,43 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                   href={`/tickets/${ticket.id}`}
                   target="_blank"
                   className="block p-3 bg-white border border-amber-200 rounded-md hover:bg-amber-50 transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-sm">{ticket.ticketNo}</p>
+                      <p className="text-xs text-gray-600 mt-1">{ticket.description}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                      {ticket.status}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Existing Tickets Warning (Tracking Number) */}
+      {existingTrackingTickets.length > 0 && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-800 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              พบ Ticket ที่ใช้เลขพัสดุนี้อยู่แล้ว!
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-red-700 mb-3">
+              เลขพัสดุนี้มี {existingTrackingTickets.length} Ticket ที่ยังไม่ได้ปิด กรุณาตรวจสอบว่าเป็นเลขพัสดุเดียวกันหรือไม่
+            </p>
+            <div className="space-y-2">
+              {existingTrackingTickets.map((ticket) => (
+                <Link
+                  key={ticket.id}
+                  href={`/tickets/${ticket.id}`}
+                  target="_blank"
+                  className="block p-3 bg-white border border-red-200 rounded-md hover:bg-red-50 transition-colors"
                 >
                   <div className="flex justify-between items-start">
                     <div>
@@ -338,6 +482,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 onChange={(e) => setFormData({ ...formData, trackingNo: e.target.value })}
                 placeholder="เช่น EM123456789TH"
               />
+              {checkingTracking && (
+                <p className="text-xs text-gray-500 mt-1">กำลังตรวจสอบเลขพัสดุ...</p>
+              )}
             </div>
 
             <div>
@@ -369,8 +516,16 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 required
                 value={formData.recipientName}
                 onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+                onBlur={(e) => validateField('recipientName', e.target.value)}
                 placeholder="กรอกชื่อผู้รับ"
+                className={fieldErrors.recipientName ? 'border-red-500 focus:ring-red-500' : ''}
               />
+              {fieldErrors.recipientName && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {fieldErrors.recipientName}
+                </p>
+              )}
             </div>
 
             <div>
@@ -385,11 +540,23 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                   // Only allow numbers and limit to 10 digits
                   const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                   setFormData({ ...formData, recipientPhone: value });
+                  // Clear error when typing
+                  if (fieldErrors.recipientPhone) {
+                    setFieldErrors(prev => ({ ...prev, recipientPhone: '' }));
+                  }
                 }}
+                onBlur={(e) => validateField('recipientPhone', e.target.value)}
                 placeholder="เช่น 0812345678"
                 maxLength={10}
+                className={fieldErrors.recipientPhone ? 'border-red-500 focus:ring-red-500' : ''}
               />
-              {checkingPhone && (
+              {fieldErrors.recipientPhone && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {fieldErrors.recipientPhone}
+                </p>
+              )}
+              {checkingPhone && !fieldErrors.recipientPhone && (
                 <p className="text-xs text-gray-500 mt-1">กำลังตรวจสอบ ticket ที่มีอยู่...</p>
               )}
             </div>
@@ -403,10 +570,21 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               required
               value={formData.recipientAddress}
               onChange={(e) => setFormData({ ...formData, recipientAddress: e.target.value })}
+              onBlur={(e) => validateField('recipientAddress', e.target.value)}
               placeholder="กรอกที่อยู่ผู้รับพัสดุ"
               rows={3}
-              className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${
+                fieldErrors.recipientAddress
+                  ? 'border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
             />
+            {fieldErrors.recipientAddress && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {fieldErrors.recipientAddress}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -425,10 +603,21 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               required
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onBlur={(e) => validateField('description', e.target.value)}
               placeholder="อธิบายรายละเอียดปัญหาหรือคำถาม"
               rows={5}
-              className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${
+                fieldErrors.description
+                  ? 'border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
             />
+            {fieldErrors.description && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {fieldErrors.description}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -3,10 +3,76 @@
  * Main navigation bar for the application
  */
 
+'use client';
+
 import Link from 'next/link';
-import { LayoutDashboard, Ticket, Menu, UserCog } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface CurrentUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR';
+  isActive: boolean;
+}
 
 export default function Navbar() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCurrentUser();
+  }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me');
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUser(data.user);
+      }
+    } catch (error) {
+      console.error('Failed to load current user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'ADMINISTRATOR': return 'bg-purple-100 text-purple-800 hover:bg-purple-200';
+      case 'ADMIN': return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+      case 'OPERATOR': return 'bg-green-100 text-green-800 hover:bg-green-200';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'ADMINISTRATOR': return 'Administrator';
+      case 'ADMIN': return 'Admin';
+      case 'OPERATOR': return 'Operator';
+      default: return role;
+    }
+  };
+
+  const canAccessUserManagement = currentUser && (currentUser.role === 'ADMINISTRATOR' || currentUser.role === 'ADMIN');
+  const canAccessTestPages = currentUser && currentUser.role === 'ADMINISTRATOR';
+
   return (
     <nav className="bg-blue-600 shadow-lg">
       <div className="container mx-auto px-4">
@@ -14,11 +80,11 @@ export default function Navbar() {
           {/* Logo/Brand */}
           <Link href="/" className="flex items-center space-x-2 font-bold text-xl text-white hover:text-blue-100 transition">
             <Ticket className="h-6 w-6 text-white" />
-            <span className="text-white">Help Desk - ไปรษณีย์ไทย</span>
+            <span className="text-white">PostServe</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center space-x-6">
+          <div className="hidden md:flex items-center space-x-4">
             <Link
               href="/dashboard"
               className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
@@ -33,19 +99,58 @@ export default function Navbar() {
               <Ticket className="h-4 w-4 text-white" />
               <span className="text-white">Tickets</span>
             </Link>
-            <Link
-              href="/staff"
-              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-            >
-              <UserCog className="h-4 w-4 text-white" />
-              <span className="text-white">Staff</span>
-            </Link>
+
+            {/* User Management - Only for ADMIN and ADMINISTRATOR */}
+            {canAccessUserManagement && (
+              <Link
+                href="/staff"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              >
+                <UserCog className="h-4 w-4 text-white" />
+                <span className="text-white">User Management</span>
+              </Link>
+            )}
+
+            {/* Test Pages - Only for ADMINISTRATOR */}
+            {canAccessTestPages && (
+              <Link
+                href="/test-flex"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              >
+                <FlaskConical className="h-4 w-4 text-white" />
+                <span className="text-white">Test</span>
+              </Link>
+            )}
+
             <Link
               href="/tickets/new"
               className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
             >
               สร้าง Ticket ใหม่
             </Link>
+
+            {/* User Info and Logout */}
+            {!loading && currentUser && (
+              <div className="flex items-center space-x-3 ml-2 pl-3 border-l border-blue-400">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-white" />
+                  <div className="flex flex-col">
+                    <span className="text-white text-sm font-medium">{currentUser.name}</span>
+                    <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5`}>
+                      {getRoleLabel(currentUser.role)}
+                    </Badge>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                  title="ออกจากระบบ"
+                >
+                  <LogOut className="h-4 w-4 text-white" />
+                  <span className="text-white text-sm">Logout</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}

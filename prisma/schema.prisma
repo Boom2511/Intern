@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL") 
 }
 
 // Customer model - stores customer information
@@ -105,12 +105,21 @@ model StatusHistory {
   ticket    Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   fromStatus TicketStatus
   toStatus   TicketStatus
-  changedBy  String       // User who made the change
+
+  // Changed by information
+  changedBy  String       // User who made the change (for CEC staff)
+
+  // LINE user information (for updates via LIFF)
+  changedByLineUserId   String?  // LINE User ID
+  changedByLineName     String?  // Display name from LINE
+  changedByLineAvatar   String?  // Profile picture URL from LINE
+
   note       String?      @db.Text
   createdAt  DateTime     @default(now())
 
   @@index([ticketId])
   @@index([createdAt])
+  @@index([changedByLineUserId])
 }
 
 // Channel enum - where the ticket came from
@@ -162,4 +171,26 @@ enum SLAStatus {
   ON_TRACK     // Within SLA time
   AT_RISK      // 80%+ of SLA time used
   BREACHED     // SLA deadline passed
+}
+
+// User model - for authentication and authorization
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String
+  role      UserRole @default(OPERATOR)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+// User Role enum
+enum UserRole {
+  ADMINISTRATOR  // Full access to everything
+  ADMIN          // User management + CEC, no test pages
+  OPERATOR       // CEC only, no user management or test pages
 }

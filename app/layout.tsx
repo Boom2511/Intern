@@ -6,11 +6,12 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import ConditionalNavbar from '@/components/ConditionalNavbar';
+import { Toaster } from '@/components/ui/toaster';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
-  title: 'Help Desk - ไปรษณีย์ไทย',
-  description: 'ระบบจัดการ Ticket สำหรับไปรษณีย์ไทย',
+  title: 'PostServe - Help Desk System',
+  description: 'ระบบจัดการ Ticket สำหรับ PostServe',
 };
 
 export default function RootLayout({
@@ -27,6 +28,7 @@ export default function RootLayout({
         <main className="container mx-auto px-4 py-8">
           {children}
         </main>
+        <Toaster />
       </body>
     </html>
   );
