@@ -45,8 +45,10 @@ function formatShortDate(date: Date): string {
  * Generate LIFF URL for ticket
  * Uses LIFF ID from environment variable
  *
- * Using LIFF Permanent Link format to preserve ticket ID through OAuth
- * Format: https://liff.line.me/{liffId}?liff.state={url-encoded-path}
+ * Simple path-based LIFF URL (no liff.state parameter)
+ * Format: https://liff.line.me/{liffId}/{ticketId}
+ * Endpoint URL: https://intern-tawny.vercel.app/liff/tickets
+ * Result: https://intern-tawny.vercel.app/liff/tickets/{ticketId}
  */
 function getLiffUrl(ticketId: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -59,11 +61,10 @@ function getLiffUrl(ticketId: string): string {
     return fallbackUrl;
   }
 
-  // Use LIFF Permanent Link with liff.state to preserve ticket ID through OAuth
-  // The full URL path will be passed in liff.state parameter
-  const targetPath = `/liff/tickets/${ticketId}`;
-  const liffUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(targetPath)}`;
-  console.log('✅ LIFF URL generated:', liffUrl, 'Target:', targetPath);
+  // Simple LIFF URL with ticket ID in path
+  // LIFF will append /{ticketId} to the Endpoint URL
+  const liffUrl = `https://liff.line.me/${liffId}/${ticketId}`;
+  console.log('✅ LIFF URL generated:', liffUrl);
   return liffUrl;
 }
 
