@@ -45,7 +45,8 @@ function HomeContent() {
 
     // Small delay to ensure state is set before redirect
     setTimeout(() => {
-      window.location.href = liffState;
+      // Redirect without liff.state parameter to prevent loop
+      window.location.replace(liffState);
     }, 100);
   }, [searchParams, router]);
 

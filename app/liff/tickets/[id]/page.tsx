@@ -84,8 +84,10 @@ export default function LiffTicketDetailPage() {
       // Check if logged in (only matters if in LINE app)
       if (!liff.isLoggedIn()) {
         console.log('[LIFF] Not logged in, attempting login...');
-        // Redirect to LINE login
-        liff.login({ redirectUri: window.location.href });
+        // Redirect to LINE login with clean URL (without query params)
+        const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+        console.log('[LIFF] Login redirect URI:', cleanUrl);
+        liff.login({ redirectUri: cleanUrl });
         return;
       }
 
