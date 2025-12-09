@@ -20,17 +20,33 @@ function HomeContent() {
 
   useEffect(() => {
     const liffState = searchParams.get('liff.state');
+    const currentPath = window.location.pathname;
+
+    console.log('[Root] Current pathname:', currentPath);
     console.log('[Root] liff.state:', liffState);
     console.log('[Root] All search params:', Object.fromEntries(searchParams.entries()));
 
-    if (liffState) {
-      setIsRedirecting(true);
-      // liff.state contains the target path (e.g., /liff/tickets/{ticketId})
-      console.log('[Root] Redirecting to LIFF state:', liffState);
-
-      // Use window.location for reliable redirect
-      window.location.href = liffState;
+    // Skip redirect if:
+    // 1. No liff.state parameter
+    // 2. Already at the target path (prevent loop)
+    // 3. Not at root path (prevent interfering with other pages)
+    if (!liffState || currentPath === liffState || currentPath !== '/') {
+      console.log('[Root] Skipping redirect:', {
+        hasLiffState: !!liffState,
+        currentPath,
+        liffState,
+        isRoot: currentPath === '/'
+      });
+      return;
     }
+
+    setIsRedirecting(true);
+    console.log('[Root] Redirecting to LIFF state:', liffState);
+
+    // Small delay to ensure state is set before redirect
+    setTimeout(() => {
+      window.location.href = liffState;
+    }, 100);
   }, [searchParams, router]);
 
   if (isRedirecting) {
