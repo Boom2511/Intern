@@ -42,8 +42,18 @@ function HomeContent() {
       return;
     }
 
+    // Check if we've already redirected to this liff.state
+    const lastRedirect = sessionStorage.getItem('last_liff_redirect');
+    if (lastRedirect === liffState) {
+      console.log('[Root] ⛔ Already redirected to this liff.state, skipping to prevent loop');
+      return;
+    }
+
     setIsRedirecting(true);
     console.log('[Root] ⚡ Redirecting to LIFF state:', liffState);
+
+    // Mark this redirect in sessionStorage
+    sessionStorage.setItem('last_liff_redirect', liffState);
 
     // Small delay to ensure state is set before redirect
     setTimeout(() => {
