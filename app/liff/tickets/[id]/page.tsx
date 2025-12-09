@@ -44,19 +44,21 @@ export default function LiffTicketDetailPage() {
   const [liffInitialized, setLiffInitialized] = useState(false);
 
   useEffect(() => {
-    // Prevent multiple initializations
+    // Run only once on mount
     if (liffInitialized) {
       console.log('[LIFF] Already initialized, skipping');
       return;
     }
     initLiff();
-  }, [liffInitialized]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const initLiff = async () => {
     try {
       setLiffInitialized(true); // Mark as initialized immediately
 
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+      console.log('[LIFF] Starting initialization. LIFF ID configured:', !!liffId);
 
       if (!liffId) {
         console.error('[LIFF] LIFF ID is not configured, loading ticket without LINE profile');
@@ -65,14 +67,16 @@ export default function LiffTicketDetailPage() {
         return;
       }
 
-      console.log('[LIFF] Initializing LIFF with ID:', liffId);
+      console.log('[LIFF] Initializing LIFF SDK with ID:', liffId);
 
       // Initialize LIFF SDK
       await liff.init({ liffId });
 
-      console.log('[LIFF] LIFF initialized');
+      console.log('[LIFF] ✅ LIFF initialized successfully');
       console.log('[LIFF] isLoggedIn:', liff.isLoggedIn());
       console.log('[LIFF] isInClient:', liff.isInClient());
+      console.log('[LIFF] OS:', liff.getOS());
+      console.log('[LIFF] Language:', liff.getLanguage());
 
       // Check if running in LINE app
       if (!liff.isInClient()) {

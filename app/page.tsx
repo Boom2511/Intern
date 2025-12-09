@@ -19,9 +19,11 @@ function HomeContent() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
+    // Only run once on mount to prevent redirect loops
     const liffState = searchParams.get('liff.state');
     const currentPath = window.location.pathname;
 
+    console.log('[Root] Mounted. Checking for LIFF redirect...');
     console.log('[Root] Current pathname:', currentPath);
     console.log('[Root] liff.state:', liffState);
     console.log('[Root] All search params:', Object.fromEntries(searchParams.entries()));
@@ -41,14 +43,15 @@ function HomeContent() {
     }
 
     setIsRedirecting(true);
-    console.log('[Root] Redirecting to LIFF state:', liffState);
+    console.log('[Root] ⚡ Redirecting to LIFF state:', liffState);
 
     // Small delay to ensure state is set before redirect
     setTimeout(() => {
       // Redirect without liff.state parameter to prevent loop
       window.location.replace(liffState);
     }, 100);
-  }, [searchParams, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isRedirecting) {
     return (
