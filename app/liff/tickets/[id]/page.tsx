@@ -41,13 +41,21 @@ export default function LiffTicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liffInitialized, setLiffInitialized] = useState(false);
 
   useEffect(() => {
+    // Prevent multiple initializations
+    if (liffInitialized) {
+      console.log('[LIFF] Already initialized, skipping');
+      return;
+    }
     initLiff();
-  }, []);
+  }, [liffInitialized]);
 
   const initLiff = async () => {
     try {
+      setLiffInitialized(true); // Mark as initialized immediately
+
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
 
       if (!liffId) {
@@ -58,7 +66,13 @@ export default function LiffTicketDetailPage() {
       }
 
       console.log('[LIFF] Initializing LIFF with ID:', liffId);
-      await liff.init({ liffId });
+
+      // Check if already initialized
+      if (liff.isInClient() && liff.isLoggedIn()) {
+        console.log('[LIFF] LIFF already initialized');
+      } else {
+        await liff.init({ liffId });
+      }
 
       console.log('[LIFF] LIFF initialized, isLoggedIn:', liff.isLoggedIn());
       console.log('[LIFF] isInClient:', liff.isInClient());
