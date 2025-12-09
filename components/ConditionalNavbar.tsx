@@ -23,5 +23,10 @@ export default function ConditionalNavbar() {
     return null;
   }
 
+  // Hide navbar for all LIFF pages (LINE Front-end Framework)
+  if (pathname?.startsWith('/liff')) {
+    return null;
+  }
+
   return <Navbar />;
 }
