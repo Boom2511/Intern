@@ -51,9 +51,9 @@ export default function LiffTicketDetailPage() {
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
 
       if (!liffId) {
-        console.error('[LIFF] LIFF ID is not configured, redirecting to normal ticket page');
-        // Fallback: redirect to normal ticket page with client mode
-        window.location.href = `/tickets/${ticketId}?mode=client`;
+        console.error('[LIFF] LIFF ID is not configured, loading ticket without LINE profile');
+        // Load ticket without LINE authentication
+        await loadTicket('anonymous');
         return;
       }
 
@@ -63,31 +63,27 @@ export default function LiffTicketDetailPage() {
       console.log('[LIFF] LIFF initialized, isLoggedIn:', liff.isLoggedIn());
       console.log('[LIFF] isInClient:', liff.isInClient());
 
-      // If opened in external browser (not LINE app), redirect to normal ticket page
-      if (!liff.isInClient()) {
-        console.warn('[LIFF] Not in LINE client, redirecting to normal ticket page');
-        window.location.href = `/tickets/${ticketId}?mode=client`;
-        return;
+      // Try to get LINE profile if available (optional)
+      if (liff.isLoggedIn()) {
+        try {
+          const profile = await liff.getProfile();
+          console.log('[LIFF] Profile loaded:', profile.displayName);
+          setLineProfile(profile);
+          await loadTicket(profile.userId);
+        } catch (err) {
+          console.warn('[LIFF] Failed to get profile, loading without authentication:', err);
+          await loadTicket('anonymous');
+        }
+      } else {
+        // Don't require login - just show ticket in read-only mode
+        console.log('[LIFF] Not logged in, loading ticket in read-only mode');
+        await loadTicket('anonymous');
       }
-
-      if (!liff.isLoggedIn()) {
-        console.log('[LIFF] Not logged in, calling liff.login()');
-        liff.login();
-        return;
-      }
-
-      // Get LINE profile
-      const profile = await liff.getProfile();
-      console.log('[LIFF] Profile loaded:', profile.displayName);
-      setLineProfile(profile);
-
-      // Load ticket
-      await loadTicket(profile.userId);
     } catch (err) {
       console.error('[LIFF] Init error:', err);
-      // Fallback to normal ticket page if LIFF fails
-      console.warn('[LIFF] Falling back to normal ticket page');
-      window.location.href = `/tickets/${ticketId}?mode=client`;
+      // Load ticket without LIFF authentication
+      console.warn('[LIFF] Loading ticket without LINE authentication');
+      await loadTicket('anonymous');
     }
   };
 
@@ -317,8 +313,10 @@ export default function LiffTicketDetailPage() {
 
       {/* Action Buttons (Fixed Bottom) */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 space-y-2 shadow-lg">
-        {ticket.status === 'NEW' && (
+        {/* Show action buttons only if LINE profile is available */}
+        {lineProfile && ticket.status === 'NEW' && (
           <button
+            type="button"
             onClick={() => updateStatus('IN_PROGRESS')}
             disabled={updating}
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
@@ -337,9 +335,10 @@ export default function LiffTicketDetailPage() {
           </button>
         )}
 
-        {ticket.status === 'IN_PROGRESS' && (
+        {lineProfile && ticket.status === 'IN_PROGRESS' && (
           <>
             <button
+              type="button"
               onClick={() => updateStatus('RESOLVED')}
               disabled={updating}
               className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
@@ -358,6 +357,7 @@ export default function LiffTicketDetailPage() {
             </button>
 
             <button
+              type="button"
               onClick={() => updateStatus('PENDING')}
               disabled={updating}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 px-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
@@ -377,8 +377,9 @@ export default function LiffTicketDetailPage() {
           </>
         )}
 
-        {ticket.status === 'PENDING' && (
+        {lineProfile && ticket.status === 'PENDING' && (
           <button
+            type="button"
             onClick={() => updateStatus('IN_PROGRESS')}
             disabled={updating}
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
@@ -403,6 +404,15 @@ export default function LiffTicketDetailPage() {
               <CheckCircle2 className="w-5 h-5" />
               <span className="font-medium">Ticket นี้ได้รับการดำเนินการเรียบร้อยแล้ว</span>
             </div>
+          </div>
+        )}
+
+        {/* Read-only message if no LINE profile */}
+        {!lineProfile && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && (
+          <div className="text-center py-3">
+            <p className="text-sm text-gray-600">
+              📱 เปิดใน LINE เพื่ออัปเดตสถานะ Ticket
+            </p>
           </div>
         )}
 
