@@ -44,15 +44,20 @@ export default function LiffTicketDetailPage() {
 
   // Use ref instead of state to prevent re-renders triggering re-initialization
   const liffInitialized = useRef(false);
+  const loginAttempted = useRef(false);
+  const mountCount = useRef(0);
 
   useEffect(() => {
+    mountCount.current += 1;
+    console.log(`[LIFF] ⚡ Component mounted (count: ${mountCount.current})`);
+
     // Run only once on mount - use ref to persist across re-renders
     if (liffInitialized.current) {
-      console.log('[LIFF] Already initialized, skipping');
+      console.log('[LIFF] ⛔ Already initialized, skipping');
       return;
     }
 
-    console.log('[LIFF] Component mounted, starting initialization...');
+    console.log('[LIFF] 🚀 Starting LIFF initialization...');
     liffInitialized.current = true;
     initLiff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,7 +95,16 @@ export default function LiffTicketDetailPage() {
 
       // Check if logged in (only matters if in LINE app)
       if (!liff.isLoggedIn()) {
-        console.log('[LIFF] Not logged in, attempting login...');
+        // Prevent multiple login attempts
+        if (loginAttempted.current) {
+          console.log('[LIFF] ⛔ Login already attempted, skipping to prevent loop');
+          await loadTicket('anonymous');
+          return;
+        }
+
+        console.log('[LIFF] 🔐 Not logged in, attempting login...');
+        loginAttempted.current = true;
+
         // Redirect to LINE login with clean URL (without query params)
         const cleanUrl = `${window.location.origin}${window.location.pathname}`;
         console.log('[LIFF] Login redirect URI:', cleanUrl);
