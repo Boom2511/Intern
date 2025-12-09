@@ -67,31 +67,31 @@ export default function LiffTicketDetailPage() {
 
       console.log('[LIFF] Initializing LIFF with ID:', liffId);
 
-      // Check if already initialized
-      if (liff.isInClient() && liff.isLoggedIn()) {
-        console.log('[LIFF] LIFF already initialized');
-      } else {
-        await liff.init({ liffId });
-      }
+      // Initialize LIFF SDK
+      await liff.init({ liffId });
 
-      console.log('[LIFF] LIFF initialized, isLoggedIn:', liff.isLoggedIn());
+      console.log('[LIFF] LIFF initialized');
+      console.log('[LIFF] isLoggedIn:', liff.isLoggedIn());
       console.log('[LIFF] isInClient:', liff.isInClient());
 
-      // Try to get LINE profile if available (optional)
-      if (liff.isLoggedIn()) {
-        try {
-          const profile = await liff.getProfile();
-          console.log('[LIFF] Profile loaded:', profile.displayName);
-          setLineProfile(profile);
-          await loadTicket(profile.userId);
-        } catch (err) {
-          console.warn('[LIFF] Failed to get profile, loading without authentication:', err);
-          await loadTicket('anonymous');
-        }
-      } else {
-        // Don't require login - just show ticket in read-only mode
-        console.log('[LIFF] Not logged in, loading ticket in read-only mode');
-        await loadTicket('anonymous');
+      // Check if logged in
+      if (!liff.isLoggedIn()) {
+        console.log('[LIFF] Not logged in, attempting login...');
+        // Redirect to LINE login
+        liff.login({ redirectUri: window.location.href });
+        return;
+      }
+
+      // Get LINE profile
+      try {
+        const profile = await liff.getProfile();
+        console.log('[LIFF] Profile loaded:', profile.displayName, profile.userId);
+        setLineProfile(profile);
+        await loadTicket(profile.userId);
+      } catch (err) {
+        console.error('[LIFF] Failed to get profile:', err);
+        setError('ไม่สามารถโหลดข้อมูล LINE profile ได้');
+        setLoading(false);
       }
     } catch (err) {
       console.error('[LIFF] Init error:', err);
