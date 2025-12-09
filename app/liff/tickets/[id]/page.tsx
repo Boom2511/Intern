@@ -103,11 +103,19 @@ export default function LiffTicketDetailPage() {
         }
 
         console.log('[LIFF] 🔐 Not logged in, attempting login...');
+        console.log('[LIFF] Current URL:', window.location.href);
+        console.log('[LIFF] Has query params:', window.location.search);
         loginAttempted.current = true;
 
         // Redirect to LINE login with clean URL (without query params)
         const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-        console.log('[LIFF] Login redirect URI:', cleanUrl);
+        console.log('[LIFF] Login redirect URI (clean):', cleanUrl);
+
+        // Add small delay before login to ensure logs are visible
+        console.log('[LIFF] ⏳ Waiting 500ms before login redirect...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        console.log('[LIFF] 🚪 Calling liff.login() now...');
         liff.login({ redirectUri: cleanUrl });
         return;
       }
