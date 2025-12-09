@@ -51,6 +51,12 @@ export default function LiffTicketDetailPage() {
     mountCount.current += 1;
     console.log(`[LIFF] ⚡ Component mounted (count: ${mountCount.current})`);
 
+    // Visual debugging - change document title to see if component even mounts
+    document.title = `LIFF Mount #${mountCount.current}`;
+
+    // Change background color to show mounting (will be visible even if page reloads)
+    document.body.style.backgroundColor = mountCount.current > 2 ? '#fee' : '#efe';
+
     // Run only once on mount - use ref to persist across re-renders
     if (liffInitialized.current) {
       console.log('[LIFF] ⛔ Already initialized, skipping');

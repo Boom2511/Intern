@@ -28,7 +28,8 @@ function LiffRedirect() {
     }
 
     console.error('[LIFF Redirect] No valid liff.state found');
-  }, [searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

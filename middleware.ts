@@ -24,6 +24,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow root path if liff.state parameter is present (LIFF OAuth callback)
+  // This allows LINE LIFF to redirect through root page to actual LIFF pages
+  if (pathname === '/' && searchParams.has('liff.state')) {
+    console.log('[Middleware] Root path with liff.state detected, allowing through');
+    return NextResponse.next();
+  }
+
   // Allow public access to client mode tickets (both page and API)
   if (searchParams.get('mode') === 'client') {
     return NextResponse.next();
