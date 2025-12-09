@@ -55,11 +55,9 @@ function HomeContent() {
     // Mark this redirect in sessionStorage
     sessionStorage.setItem('last_liff_redirect', liffState);
 
-    // Small delay to ensure state is set before redirect
-    setTimeout(() => {
-      // Redirect without liff.state parameter to prevent loop
-      window.location.replace(liffState);
-    }, 100);
+    // Use router.replace instead of window.location to prevent history issues
+    console.log('[Root] Using router.replace to prevent back button issues');
+    router.replace(liffState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

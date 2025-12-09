@@ -78,7 +78,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
-          <Link href="/" className="flex items-center space-x-2 font-bold text-xl text-white hover:text-blue-100 transition">
+          <Link href="/" prefetch={false} className="flex items-center space-x-2 font-bold text-xl text-white hover:text-blue-100 transition">
             <Ticket className="h-6 w-6 text-white" />
             <span className="text-white">PostServe</span>
           </Link>
