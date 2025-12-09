@@ -21,12 +21,15 @@ function HomeContent() {
   useEffect(() => {
     const liffState = searchParams.get('liff.state');
     console.log('[Root] liff.state:', liffState);
+    console.log('[Root] All search params:', Object.fromEntries(searchParams.entries()));
 
     if (liffState) {
       setIsRedirecting(true);
-      // liff.state contains the target path
+      // liff.state contains the target path (e.g., /liff/tickets/{ticketId})
       console.log('[Root] Redirecting to LIFF state:', liffState);
-      router.push(liffState);
+
+      // Use window.location for reliable redirect
+      window.location.href = liffState;
     }
   }, [searchParams, router]);
 
