@@ -74,7 +74,14 @@ export default function LiffTicketDetailPage() {
       console.log('[LIFF] isLoggedIn:', liff.isLoggedIn());
       console.log('[LIFF] isInClient:', liff.isInClient());
 
-      // Check if logged in
+      // Check if running in LINE app
+      if (!liff.isInClient()) {
+        console.log('[LIFF] Not in LINE app - loading as read-only');
+        await loadTicket('anonymous');
+        return;
+      }
+
+      // Check if logged in (only matters if in LINE app)
       if (!liff.isLoggedIn()) {
         console.log('[LIFF] Not logged in, attempting login...');
         // Redirect to LINE login
