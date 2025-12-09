@@ -20,16 +20,11 @@ function LiffRedirect() {
     console.log('[LIFF Redirect] Full URL:', window.location.href);
 
     if (liffState) {
-      // liff.state format: /{ticketId}
-      // Remove leading slash to get ticket ID
-      const ticketId = liffState.replace(/^\//, '');
-
-      if (ticketId) {
-        const targetUrl = `/liff/tickets/${ticketId}`;
-        console.log('[LIFF Redirect] Redirecting to:', targetUrl);
-        window.location.href = targetUrl;
-        return;
-      }
+      // liff.state contains the full path: /liff/tickets/{ticketId}
+      // Just use it directly
+      console.log('[LIFF Redirect] Redirecting to:', liffState);
+      window.location.href = liffState;
+      return;
     }
 
     console.error('[LIFF Redirect] No valid liff.state found');
