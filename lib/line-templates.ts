@@ -47,7 +47,7 @@ function formatShortDate(date: Date): string {
  *
  * LIFF URL format: https://liff.line.me/{liffId}/{ticketId}
  * Endpoint URL in LINE Console: https://intern-tawny.vercel.app/liff/tickets
- * Final URL: https://intern-tawny.vercel.app/liff/tickets/{ticketId}
+ * Final URL: https://intern-tawny.vercel.app/liff/tickets/{ticketId}?mode=client
  */
 function getLiffUrl(ticketId: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -58,8 +58,9 @@ function getLiffUrl(ticketId: string): string {
     return fallbackUrl;
   }
   // LIFF URL: Append ticket ID after LIFF ID
-  // This gets appended to the Endpoint URL configured in LINE Console
-  const liffUrl = `https://liff.line.me/${liffId}/${ticketId}?mode=client`;
+  // LIFF will automatically append this to the Endpoint URL
+  // Result: /liff/tickets/{ticketId}?mode=client
+  const liffUrl = `https://liff.line.me/${liffId}/${ticketId}`;
   console.log('✅ LIFF URL generated:', liffUrl);
   return liffUrl;
 }
