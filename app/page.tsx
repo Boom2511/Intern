@@ -1,14 +1,46 @@
 /**
  * Home Page
- * Landing page with overview and quick actions
+ * Handles LIFF redirect if liff.state is present
+ * Otherwise shows landing page with overview and quick actions
  */
 
+'use client';
+
+import { useEffect, Suspense, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Ticket, LayoutDashboard, Plus, Search } from 'lucide-react';
 
-export default function HomePage() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    const liffState = searchParams.get('liff.state');
+    console.log('[Root] liff.state:', liffState);
+
+    if (liffState) {
+      setIsRedirecting(true);
+      // liff.state contains the target path
+      console.log('[Root] Redirecting to LIFF state:', liffState);
+      router.push(liffState);
+    }
+  }, [searchParams, router]);
+
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">กำลังโหลด...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Hero Section */}
@@ -133,5 +165,20 @@ export default function HomePage() {
 
       </div>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">กำลังโหลด...</p>
+        </div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
