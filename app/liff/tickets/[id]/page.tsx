@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import liff from '@line/liff';
 import { Clock, Package, MapPin, Tag, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
@@ -41,22 +41,25 @@ export default function LiffTicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [liffInitialized, setLiffInitialized] = useState(false);
+
+  // Use ref instead of state to prevent re-renders triggering re-initialization
+  const liffInitialized = useRef(false);
 
   useEffect(() => {
-    // Run only once on mount
-    if (liffInitialized) {
+    // Run only once on mount - use ref to persist across re-renders
+    if (liffInitialized.current) {
       console.log('[LIFF] Already initialized, skipping');
       return;
     }
+
+    console.log('[LIFF] Component mounted, starting initialization...');
+    liffInitialized.current = true;
     initLiff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initLiff = async () => {
     try {
-      setLiffInitialized(true); // Mark as initialized immediately
-
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
       console.log('[LIFF] Starting initialization. LIFF ID configured:', !!liffId);
 
