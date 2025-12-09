@@ -51,28 +51,43 @@ export default function LiffTicketDetailPage() {
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
 
       if (!liffId) {
-        setError('LIFF ID is not configured');
-        setLoading(false);
+        console.error('[LIFF] LIFF ID is not configured, redirecting to normal ticket page');
+        // Fallback: redirect to normal ticket page with client mode
+        window.location.href = `/tickets/${ticketId}?mode=client`;
         return;
       }
 
+      console.log('[LIFF] Initializing LIFF with ID:', liffId);
       await liff.init({ liffId });
 
+      console.log('[LIFF] LIFF initialized, isLoggedIn:', liff.isLoggedIn());
+      console.log('[LIFF] isInClient:', liff.isInClient());
+
+      // If opened in external browser (not LINE app), redirect to normal ticket page
+      if (!liff.isInClient()) {
+        console.warn('[LIFF] Not in LINE client, redirecting to normal ticket page');
+        window.location.href = `/tickets/${ticketId}?mode=client`;
+        return;
+      }
+
       if (!liff.isLoggedIn()) {
+        console.log('[LIFF] Not logged in, calling liff.login()');
         liff.login();
         return;
       }
 
       // Get LINE profile
       const profile = await liff.getProfile();
+      console.log('[LIFF] Profile loaded:', profile.displayName);
       setLineProfile(profile);
 
       // Load ticket
       await loadTicket(profile.userId);
     } catch (err) {
-      console.error('LIFF init error:', err);
-      setError('ไม่สามารถเริ่มต้น LIFF ได้');
-      setLoading(false);
+      console.error('[LIFF] Init error:', err);
+      // Fallback to normal ticket page if LIFF fails
+      console.warn('[LIFF] Falling back to normal ticket page');
+      window.location.href = `/tickets/${ticketId}?mode=client`;
     }
   };
 
