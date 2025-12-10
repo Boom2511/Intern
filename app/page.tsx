@@ -42,18 +42,22 @@ function HomeContent() {
       return;
     }
 
-    // Check if we've already redirected to this liff.state
+    // Check if we've already redirected to this liff.state (compare path only, ignore query params)
+    const liffPath = liffState.split('?')[0]; // Remove query params like ?liff.hback=2
     const lastRedirect = sessionStorage.getItem('last_liff_redirect');
-    if (lastRedirect === liffState) {
-      console.log('[Root] ⛔ Already redirected to this liff.state, skipping to prevent loop');
+    if (lastRedirect === liffPath) {
+      console.log('[Root] ⛔ Already redirected to this path, skipping to prevent loop');
+      console.log('[Root] Last redirect:', lastRedirect);
+      console.log('[Root] Current path:', liffPath);
       return;
     }
 
     setIsRedirecting(true);
     console.log('[Root] ⚡ Redirecting to LIFF state:', liffState);
+    console.log('[Root] Path (without query):', liffPath);
 
-    // Mark this redirect in sessionStorage
-    sessionStorage.setItem('last_liff_redirect', liffState);
+    // Mark this redirect in sessionStorage (path only, without query params)
+    sessionStorage.setItem('last_liff_redirect', liffPath);
 
     // Use window.location.replace for LINE WebView compatibility
     // router.replace() doesn't work in LINE's embedded browser
