@@ -34,9 +34,11 @@ function LiffRedirect() {
       return;
     }
 
-    // Use router.replace to prevent history issues
-    console.log('[LIFF Redirect] Using router.replace to:', liffState);
-    router.replace(liffState);
+    // Use window.location.replace for LINE WebView compatibility
+    console.log('[LIFF Redirect] Using window.location.replace to:', liffState);
+    setTimeout(() => {
+      window.location.replace(liffState);
+    }, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

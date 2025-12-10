@@ -55,9 +55,12 @@ function HomeContent() {
     // Mark this redirect in sessionStorage
     sessionStorage.setItem('last_liff_redirect', liffState);
 
-    // Use router.replace instead of window.location to prevent history issues
-    console.log('[Root] Using router.replace to prevent back button issues');
-    router.replace(liffState);
+    // Use window.location.replace for LINE WebView compatibility
+    // router.replace() doesn't work in LINE's embedded browser
+    console.log('[Root] Using window.location.replace for LINE WebView');
+    setTimeout(() => {
+      window.location.replace(liffState);
+    }, 500); // Small delay to ensure visual feedback is visible
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
