@@ -21,11 +21,6 @@ interface Note {
   createdBy: string;
   createdAt: string;
   images?: string[];
-  metadata?: {
-    lineUserId?: string;
-    lineName?: string;
-    lineAvatar?: string;
-  };
 }
 
 interface CommentSectionProps {
@@ -170,9 +165,10 @@ export default function CommentSection({
           notes.map((note) => (
             <div key={note.id} className="bg-gray-50 rounded-lg p-3 space-y-2">
               <div className="flex items-start gap-2">
-                {note.metadata?.lineAvatar && (
+                {/* Show LINE profile picture for current user's comments */}
+                {lineProfile && note.createdBy.includes(lineProfile.displayName) && lineProfile.pictureUrl && (
                   <img
-                    src={note.metadata.lineAvatar}
+                    src={lineProfile.pictureUrl}
                     alt={note.createdBy}
                     className="w-8 h-8 rounded-full"
                   />
@@ -236,6 +232,8 @@ export default function CommentSection({
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
+                    aria-label="Remove image"
+                    title="Remove image"
                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                   >
                     <X className="w-3 h-3" />
@@ -260,6 +258,8 @@ export default function CommentSection({
               accept="image/*"
               multiple
               onChange={handleImageSelect}
+              aria-label="Upload images"
+              title="Upload images"
               className="hidden"
             />
             <button

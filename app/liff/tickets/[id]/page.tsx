@@ -41,11 +41,6 @@ interface Note {
   createdBy: string;
   createdAt: string;
   images?: string[];
-  metadata?: {
-    lineUserId?: string;
-    lineName?: string;
-    lineAvatar?: string;
-  };
 }
 
 interface StatusHistoryItem {

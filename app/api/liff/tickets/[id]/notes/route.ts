@@ -38,20 +38,15 @@ export async function POST(
     }
 
     // Create note with LINE user info
+    // Note: LINE user metadata is stored in createdBy field for now
+    // Format: "DisplayName (via LINE)"
     const note = await prisma.note.create({
       data: {
         ticketId: params.id,
         content,
-        createdBy: lineName || 'LINE User',
+        createdBy: lineName ? `${lineName} (via LINE)` : `LINE User ${lineUserId}`,
         isFromEndUser: true, // Mark as from end user (via LIFF)
         images: images || [],
-        // Store LINE user info in metadata
-        metadata: {
-          lineUserId,
-          lineName,
-          lineAvatar,
-          source: 'LIFF',
-        },
       },
     });
 
