@@ -531,6 +531,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                               className="w-full h-24 object-cover rounded-md border"
                             />
                             <button
+                              type="button"
+                              aria-label={`ลบรูปภาพที่ ${index + 1}`}
                               onClick={() => handleRemoveImage(index)}
                               className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
@@ -608,11 +610,10 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     .map((note: any) => (
                       <div
                         key={note.id}
-                        className={`border-l-2 pl-4 py-2 ${
-                          note.isFromEndUser
+                        className={`border-l-2 pl-4 py-2 ${note.isFromEndUser
                             ? 'border-red-500 bg-red-50 rounded-r'
                             : 'border-blue-500'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-sm">
@@ -695,7 +696,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                         size="lg"
                       >
                         <CheckCircle className="h-5 w-5 mr-2" />
-                         ยืนยันว่าแก้ไขแล้ว
+                        ยืนยันว่าแก้ไขแล้ว
                       </Button>
                       <p className="text-xs text-gray-500 text-center">
                         ทีมงานจะดำเนินการปิด Ticket ให้

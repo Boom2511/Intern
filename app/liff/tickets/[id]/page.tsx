@@ -9,6 +9,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import liff from '@line/liff';
 import { Clock, Package, MapPin, Tag, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import VConsole from '@/components/VConsole';
 
 interface Ticket {
   id: string;
@@ -515,6 +516,9 @@ export default function LiffTicketDetailPage() {
           </div>
         )}
       </div>
+
+      {/* VConsole for mobile debugging */}
+      <VConsole />
     </div>
   );
 }

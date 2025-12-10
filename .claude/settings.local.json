@@ -16,7 +16,9 @@
       "Bash(npx prisma:*)",
       "Bash(timeout /t 2)",
       "Bash(echo:*)",
-      "Bash(node scripts/check-env.js:*)"
+      "Bash(node scripts/check-env.js:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []
