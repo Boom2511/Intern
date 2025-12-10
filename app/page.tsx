@@ -94,6 +94,14 @@ function HomeContent() {
   // Show warning if liff.state is present but not redirecting
   if (showDebug) {
     const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+
+    const handleRetryRedirect = () => {
+      console.log('[Root] 🔄 User requested retry, clearing sessionStorage...');
+      sessionStorage.removeItem('last_liff_redirect');
+      console.log('[Root] Reloading page to retry redirect...');
+      window.location.reload();
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-red-100 p-4">
         <div className="max-w-lg bg-white p-6 rounded-lg shadow-xl">
@@ -119,9 +127,17 @@ function HomeContent() {
               ❌ หน้านี้ควรจะ redirect ไปที่ <span className="font-mono text-xs">{liffStateDebug}</span> แต่ไม่ redirect!
             </p>
             <p className="text-gray-600 text-xs mt-2">
-              ตรวจสอบ console logs หรือติดต่อ admin
+              มีปัญหา: sessionStorage บล็อก redirect เพราะเคยพยายาม redirect ไปที่นี่แล้ว
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={handleRetryRedirect}
+            className="w-full mt-4 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            🔄 ลองใหม่อีกครั้ง (Clear Cache & Retry)
+          </button>
         </div>
       </div>
     );
