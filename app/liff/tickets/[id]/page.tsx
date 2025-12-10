@@ -54,12 +54,6 @@ export default function LiffTicketDetailPage() {
     console.log('[LIFF] Current URL:', window.location.href);
     console.log('[LIFF] Has liff.state param?', new URLSearchParams(window.location.search).has('liff.state'));
 
-    // Visual debugging - change document title to see if component even mounts
-    document.title = `LIFF Mount #${mountCount.current}`;
-
-    // Change background color to show mounting (will be visible even if page reloads)
-    document.body.style.backgroundColor = mountCount.current > 2 ? '#fee' : '#efe';
-
     // If we have liff.state in URL, we're being redirected incorrectly
     if (window.location.search.includes('liff.state')) {
       console.error('[LIFF] ⛔⛔⛔ CRITICAL: LIFF detail page has liff.state parameter!');
@@ -126,15 +120,7 @@ export default function LiffTicketDetailPage() {
         console.log('[LIFF] Current URL:', window.location.href);
         console.log('[LIFF] Has query params:', window.location.search);
 
-        // CRITICAL: Don't call liff.login() for now - just load as anonymous
-        // This is to test if liff.login() is causing the redirect loop
-        console.warn('[LIFF] ⚠️⚠️⚠️ SKIPPING liff.login() TO TEST LOOP');
-        console.warn('[LIFF] Loading ticket as anonymous instead');
-        loginAttempted.current = true;
-        await loadTicket('anonymous');
-        return;
-
-        /* ORIGINAL LOGIN CODE - COMMENTED OUT FOR TESTING
+        // Mark login attempted to prevent loop
         loginAttempted.current = true;
 
         // Redirect to LINE login with clean URL (without query params)
@@ -148,7 +134,6 @@ export default function LiffTicketDetailPage() {
         console.log('[LIFF] 🚪 Calling liff.login() now...');
         liff.login({ redirectUri: cleanUrl });
         return;
-        */
       }
 
       // Get LINE profile
