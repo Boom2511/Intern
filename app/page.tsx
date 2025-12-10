@@ -45,30 +45,39 @@ function HomeContent() {
 
     // Check if we've already redirected to this liff.state (compare path only, ignore query params)
     const liffPath = liffState.split('?')[0]; // Remove query params like ?liff.hback=2
-    const lastRedirect = sessionStorage.getItem('last_liff_redirect');
+    const redirectKey = 'last_liff_redirect';
+    const redirectTimeKey = 'last_liff_redirect_time';
 
-    // If we're still at root (/) but sessionStorage says we redirected, it means redirect failed
-    // Clear sessionStorage and try again
-    if (lastRedirect === liffPath && currentPath === '/') {
-      console.log('[Root] ⚠️ SessionStorage shows redirect to:', lastRedirect);
-      console.log('[Root] But we are still at root (/), so previous redirect failed');
-      console.log('[Root] Clearing sessionStorage and retrying...');
-      sessionStorage.removeItem('last_liff_redirect');
-      // Don't return, let it continue to redirect below
-    } else if (lastRedirect === liffPath) {
-      // If we're not at root but have matching redirect, we're in a loop
-      console.log('[Root] ⛔ Already redirected to this path, skipping to prevent loop');
-      console.log('[Root] Last redirect:', lastRedirect);
-      console.log('[Root] Current path:', liffPath);
-      return;
+    const lastRedirect = sessionStorage.getItem(redirectKey);
+    const lastRedirectTime = sessionStorage.getItem(redirectTimeKey);
+    const now = Date.now();
+    const REDIRECT_COOLDOWN = 5000; // 5 seconds cooldown
+
+    // Check if we recently tried to redirect to this path
+    if (lastRedirect === liffPath && lastRedirectTime) {
+      const timeSinceRedirect = now - parseInt(lastRedirectTime);
+      console.log('[Root] Previous redirect to:', lastRedirect);
+      console.log('[Root] Time since redirect:', timeSinceRedirect, 'ms');
+
+      if (timeSinceRedirect < REDIRECT_COOLDOWN) {
+        console.log('[Root] ⛔ Redirect attempted less than 5s ago, blocking to prevent loop');
+        console.log('[Root] Will allow retry after:', REDIRECT_COOLDOWN - timeSinceRedirect, 'ms');
+        return;
+      } else {
+        console.log('[Root] ⏰ Cooldown expired, allowing retry');
+        // Clear old redirect data and continue
+        sessionStorage.removeItem(redirectKey);
+        sessionStorage.removeItem(redirectTimeKey);
+      }
     }
 
     setIsRedirecting(true);
     console.log('[Root] ⚡ Redirecting to LIFF state:', liffState);
     console.log('[Root] Path (without query):', liffPath);
 
-    // Mark this redirect in sessionStorage (path only, without query params)
-    sessionStorage.setItem('last_liff_redirect', liffPath);
+    // Mark this redirect in sessionStorage with timestamp
+    sessionStorage.setItem(redirectKey, liffPath);
+    sessionStorage.setItem(redirectTimeKey, now.toString());
 
     // Use window.location.replace for LINE WebView compatibility
     // router.replace() doesn't work in LINE's embedded browser
@@ -109,6 +118,7 @@ function HomeContent() {
     const handleRetryRedirect = () => {
       console.log('[Root] 🔄 User requested retry, clearing sessionStorage...');
       sessionStorage.removeItem('last_liff_redirect');
+      sessionStorage.removeItem('last_liff_redirect_time');
       console.log('[Root] Reloading page to retry redirect...');
       window.location.reload();
     };
