@@ -10,6 +10,8 @@ import { useParams } from 'next/navigation';
 import liff from '@line/liff';
 import { Clock, Package, MapPin, Tag, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import VConsole from '@/components/VConsole';
+import CommentSection from '@/components/liff/CommentSection';
+import StatusHistory from '@/components/liff/StatusHistory';
 
 interface Ticket {
   id: string;
@@ -33,6 +35,29 @@ interface LineProfile {
   pictureUrl?: string;
 }
 
+interface Note {
+  id: string;
+  content: string;
+  createdBy: string;
+  createdAt: string;
+  images?: string[];
+  metadata?: {
+    lineUserId?: string;
+    lineName?: string;
+    lineAvatar?: string;
+  };
+}
+
+interface StatusHistoryItem {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  changedBy: string;
+  changedByLineName?: string;
+  changedByLineAvatar?: string;
+  createdAt: string;
+}
+
 export default function LiffTicketDetailPage() {
   const params = useParams();
   const ticketId = params.id as string;
@@ -42,6 +67,11 @@ export default function LiffTicketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // New features state
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Use ref instead of state to prevent re-renders triggering re-initialization
   const liffInitialized = useRef(false);
@@ -157,11 +187,20 @@ export default function LiffTicketDetailPage() {
 
   const loadTicket = async (lineUserId: string) => {
     try {
+      // Load ticket data
       const res = await fetch(`/api/liff/tickets/${ticketId}/status?lineUserId=${lineUserId}`);
       const data = await res.json();
 
       if (data.success) {
         setTicket(data.data);
+
+        // Load notes and status history
+        if (data.data.statusHistory) {
+          setStatusHistory(data.data.statusHistory);
+        }
+
+        // Load notes separately
+        loadNotes();
       } else {
         setError(data.error || 'ไม่พบข้อมูล Ticket');
       }
@@ -171,6 +210,23 @@ export default function LiffTicketDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadNotes = async () => {
+    try {
+      const res = await fetch(`/api/liff/tickets/${ticketId}/notes`);
+      const data = await res.json();
+
+      if (data.success) {
+        setNotes(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load notes:', err);
+    }
+  };
+
+  const handleCommentAdded = (note: Note) => {
+    setNotes((prev) => [note, ...prev]);
   };
 
   const updateStatus = async (newStatus: string) => {
@@ -284,39 +340,48 @@ export default function LiffTicketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 shadow-lg">
-        <div className="flex items-center gap-3 mb-2">
-          <Package className="w-6 h-6" />
-          <h1 className="text-lg font-bold">{ticket.ticketNo}</h1>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 pb-20">
+      {/* Header with Gradient */}
+      <div className="bg-gradient-to-br from-green-600 via-green-700 to-teal-600 text-white p-6 shadow-xl">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+            <Package className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold tracking-tight">{ticket.ticketNo}</h1>
+            <p className="text-sm text-green-100 mt-0.5">PostServe Help Desk</p>
+          </div>
         </div>
-        <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(ticket.status)}`}>
+        <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-medium shadow-md ${getStatusColor(ticket.status)}`}>
           {getStatusLabel(ticket.status)}
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3">
         {/* Issue Type */}
-        <div className="bg-white rounded-lg p-4 shadow">
+        <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
           <div className="flex items-start gap-3">
-            <Tag className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-blue-50 p-2 rounded-lg">
+              <Tag className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            </div>
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-600 mb-1">ประเภทปัญหา</h3>
-              <p className="text-base font-medium text-gray-900">{getIssueTypeLabel(ticket.issueType)}</p>
+              <p className="text-base font-semibold text-gray-900">{getIssueTypeLabel(ticket.issueType)}</p>
             </div>
           </div>
         </div>
 
         {/* Tracking Number */}
         {ticket.trackingNo && (
-          <div className="bg-white rounded-lg p-4 shadow">
+          <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
             <div className="flex items-start gap-3">
-              <Package className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="bg-indigo-50 p-2 rounded-lg">
+                <Package className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+              </div>
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-gray-600 mb-1">เลขพัสดุ</h3>
-                <p className="text-base font-mono bg-gray-100 px-3 py-2 rounded text-gray-900">
+                <p className="text-base font-mono bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-2 rounded-lg text-gray-900 border border-gray-200">
                   {ticket.trackingNo}
                 </p>
               </div>
@@ -325,7 +390,7 @@ export default function LiffTicketDetailPage() {
         )}
 
         {/* Recipient Info */}
-        <div className="bg-white rounded-lg p-4 shadow">
+        <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
@@ -484,19 +549,34 @@ export default function LiffTicketDetailPage() {
           </div>
         )}
 
+        {/* Status History */}
+        <StatusHistory
+          history={statusHistory}
+          isOpen={showHistory}
+          onToggle={() => setShowHistory(!showHistory)}
+        />
+
+        {/* Comment Section */}
+        <CommentSection
+          ticketId={ticketId}
+          lineProfile={lineProfile}
+          notes={notes}
+          onCommentAdded={handleCommentAdded}
+        />
+
         {/* User Info */}
         {lineProfile && (
-          <div className="bg-blue-50 rounded-lg p-3 flex items-center gap-3">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 flex items-center gap-3 border border-blue-100">
             {lineProfile.pictureUrl && (
               <img
                 src={lineProfile.pictureUrl}
                 alt={lineProfile.displayName}
-                className="w-10 h-10 rounded-full"
+                className="w-10 h-10 rounded-full ring-2 ring-blue-200"
               />
             )}
             <div className="flex-1 text-sm">
               <div className="font-medium text-gray-900">{lineProfile.displayName}</div>
-              <div className="text-gray-600 text-xs">กำลังดู Ticket นี้</div>
+              <div className="text-blue-600 text-xs">กำลังดู Ticket นี้</div>
             </div>
           </div>
         )}
