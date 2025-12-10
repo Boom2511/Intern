@@ -1,33 +1,42 @@
 'use client';
 
 import { useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 /**
  * LIFF Tickets Index Page
  * Handles redirect from LIFF with liff.state parameter
  *
- * LIFF URL: https://liff.line.me/{liffId}/{ticketId}
+ * LIFF URL: https://liff.line.me/{liffId}?liff.state=/liff/tickets/{ticketId}
  * Endpoint URL: https://intern-tawny.vercel.app/liff/tickets
- * Result: /liff/tickets?liff.state=/{ticketId}
+ * Result: /liff/tickets?liff.state=/liff/tickets/{ticketId}
+ * Then redirects to: /liff/tickets/{ticketId}
  */
 function LiffRedirect() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     const liffState = searchParams.get('liff.state');
     console.log('[LIFF Redirect] liff.state:', liffState);
     console.log('[LIFF Redirect] Full URL:', window.location.href);
+    console.log('[LIFF Redirect] Current pathname:', window.location.pathname);
 
-    if (liffState) {
-      // liff.state contains the full path: /liff/tickets/{ticketId}
-      // Just use it directly
-      console.log('[LIFF Redirect] Redirecting to:', liffState);
-      window.location.href = liffState;
+    if (!liffState) {
+      console.error('[LIFF Redirect] No liff.state found');
       return;
     }
 
-    console.error('[LIFF Redirect] No valid liff.state found');
+    // Ensure liff.state is a valid path starting with /liff/tickets/
+    if (!liffState.startsWith('/liff/tickets/')) {
+      console.error('[LIFF Redirect] Invalid liff.state format:', liffState);
+      console.error('[LIFF Redirect] Expected: /liff/tickets/{ticketId}');
+      return;
+    }
+
+    // Use router.replace to prevent history issues
+    console.log('[LIFF Redirect] Using router.replace to:', liffState);
+    router.replace(liffState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
