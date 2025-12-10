@@ -46,7 +46,17 @@ function HomeContent() {
     // Check if we've already redirected to this liff.state (compare path only, ignore query params)
     const liffPath = liffState.split('?')[0]; // Remove query params like ?liff.hback=2
     const lastRedirect = sessionStorage.getItem('last_liff_redirect');
-    if (lastRedirect === liffPath) {
+
+    // If we're still at root (/) but sessionStorage says we redirected, it means redirect failed
+    // Clear sessionStorage and try again
+    if (lastRedirect === liffPath && currentPath === '/') {
+      console.log('[Root] ⚠️ SessionStorage shows redirect to:', lastRedirect);
+      console.log('[Root] But we are still at root (/), so previous redirect failed');
+      console.log('[Root] Clearing sessionStorage and retrying...');
+      sessionStorage.removeItem('last_liff_redirect');
+      // Don't return, let it continue to redirect below
+    } else if (lastRedirect === liffPath) {
+      // If we're not at root but have matching redirect, we're in a loop
       console.log('[Root] ⛔ Already redirected to this path, skipping to prevent loop');
       console.log('[Root] Last redirect:', lastRedirect);
       console.log('[Root] Current path:', liffPath);
