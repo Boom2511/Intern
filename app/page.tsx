@@ -6,8 +6,7 @@
 
 'use client';
 
-import { useEffect, Suspense, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,154 +14,9 @@ import { Ticket, LayoutDashboard, Plus, Search } from 'lucide-react';
 import VConsole from '@/components/VConsole';
 
 function HomeContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
-  useEffect(() => {
-    // Only run once on mount to prevent redirect loops
-    const liffState = searchParams.get('liff.state');
-    const currentPath = window.location.pathname;
-
-    console.log('[Root] Mounted. Checking for LIFF redirect...');
-    console.log('[Root] Current pathname:', currentPath);
-    console.log('[Root] liff.state:', liffState);
-    console.log('[Root] All search params:', Object.fromEntries(searchParams.entries()));
-
-    // Skip redirect if:
-    // 1. No liff.state parameter
-    // 2. Already at the target path (prevent loop)
-    // 3. Not at root path (prevent interfering with other pages)
-    if (!liffState || currentPath === liffState || currentPath !== '/') {
-      console.log('[Root] Skipping redirect:', {
-        hasLiffState: !!liffState,
-        currentPath,
-        liffState,
-        isRoot: currentPath === '/'
-      });
-      return;
-    }
-
-    // Check if we've already redirected to this liff.state (compare path only, ignore query params)
-    const liffPath = liffState.split('?')[0]; // Remove query params like ?liff.hback=2
-    const redirectKey = 'last_liff_redirect';
-    const redirectTimeKey = 'last_liff_redirect_time';
-
-    const lastRedirect = sessionStorage.getItem(redirectKey);
-    const lastRedirectTime = sessionStorage.getItem(redirectTimeKey);
-    const now = Date.now();
-    const REDIRECT_COOLDOWN = 5000; // 5 seconds cooldown
-
-    // Check if we recently tried to redirect to this path
-    if (lastRedirect === liffPath && lastRedirectTime) {
-      const timeSinceRedirect = now - parseInt(lastRedirectTime);
-      console.log('[Root] Previous redirect to:', lastRedirect);
-      console.log('[Root] Time since redirect:', timeSinceRedirect, 'ms');
-
-      if (timeSinceRedirect < REDIRECT_COOLDOWN) {
-        console.log('[Root] ⛔ Redirect attempted less than 5s ago, blocking to prevent loop');
-        console.log('[Root] Will allow retry after:', REDIRECT_COOLDOWN - timeSinceRedirect, 'ms');
-        return;
-      } else {
-        console.log('[Root] ⏰ Cooldown expired, allowing retry');
-        // Clear old redirect data and continue
-        sessionStorage.removeItem(redirectKey);
-        sessionStorage.removeItem(redirectTimeKey);
-      }
-    }
-
-    setIsRedirecting(true);
-    console.log('[Root] ⚡ Redirecting to LIFF state:', liffState);
-    console.log('[Root] Path (without query):', liffPath);
-
-    // Mark this redirect in sessionStorage with timestamp
-    sessionStorage.setItem(redirectKey, liffPath);
-    sessionStorage.setItem(redirectTimeKey, now.toString());
-
-    // Use window.location.replace for LINE WebView compatibility
-    // router.replace() doesn't work in LINE's embedded browser
-    console.log('[Root] Using window.location.replace for LINE WebView');
-    setTimeout(() => {
-      window.location.replace(liffState);
-    }, 500); // Small delay to ensure visual feedback is visible
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Visual debugging - show liff.state info
-  const liffStateDebug = searchParams.get('liff.state');
-  const showDebug = !!liffStateDebug;
-
-  if (isRedirecting) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-green-100 p-4">
-        <div className="text-center max-w-md bg-white p-6 rounded-lg shadow-lg">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-900 font-bold text-lg mb-4">✅ กำลังเปลี่ยนเส้นทาง...</p>
-          {showDebug && (
-            <div className="bg-green-50 p-4 rounded-lg text-left text-sm space-y-2">
-              <p className="text-gray-700"><strong>Redirecting to:</strong></p>
-              <p className="font-mono text-xs text-green-700 break-all bg-white p-2 rounded">
-                {liffStateDebug}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Show warning if liff.state is present but not redirecting
-  if (showDebug) {
-    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
-
-    const handleRetryRedirect = () => {
-      console.log('[Root] 🔄 User requested retry, clearing sessionStorage...');
-      sessionStorage.removeItem('last_liff_redirect');
-      sessionStorage.removeItem('last_liff_redirect_time');
-      console.log('[Root] Reloading page to retry redirect...');
-      window.location.reload();
-    };
-
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-red-100 p-4">
-        <div className="max-w-lg bg-white p-6 rounded-lg shadow-xl">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">⚠️ LIFF Redirect Failed!</h1>
-          <div className="space-y-3 text-sm bg-red-50 p-4 rounded-lg">
-            <div>
-              <strong className="text-gray-700">liff.state:</strong>
-              <p className="font-mono text-xs text-red-700 break-all bg-white p-2 rounded mt-1">
-                {liffStateDebug}
-              </p>
-            </div>
-            <div>
-              <strong className="text-gray-700">Current path:</strong>
-              <p className="font-mono text-xs bg-white p-2 rounded mt-1">{currentPath}</p>
-            </div>
-            <div>
-              <strong className="text-gray-700">sessionStorage check:</strong>
-              <p className="font-mono text-xs bg-white p-2 rounded mt-1">
-                {typeof window !== 'undefined' ? sessionStorage.getItem('last_liff_redirect') || '(empty)' : 'loading...'}
-              </p>
-            </div>
-            <p className="text-red-600 font-semibold mt-4 pt-4 border-t border-red-200">
-              ❌ หน้านี้ควรจะ redirect ไปที่ <span className="font-mono text-xs">{liffStateDebug}</span> แต่ไม่ redirect!
-            </p>
-            <p className="text-gray-600 text-xs mt-2">
-              มีปัญหา: sessionStorage บล็อก redirect เพราะเคยพยายาม redirect ไปที่นี่แล้ว
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleRetryRedirect}
-            className="w-full mt-4 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition"
-          >
-            🔄 ลองใหม่อีกครั้ง (Clear Cache & Retry)
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // NOTE: LIFF redirect now handled by middleware.ts for better performance
+  // If you reach this page with liff.state, middleware should have redirected you
+  // If you see this page, it means middleware redirect didn't work
 
   return (
     <div className="space-y-8">
