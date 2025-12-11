@@ -68,6 +68,7 @@ model Ticket {
 
   notes          Note[]
   statusHistory  StatusHistory[]
+  views          TicketView[]
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -194,4 +195,18 @@ enum UserRole {
   ADMINISTRATOR  // Full access to everything
   ADMIN          // User management + CEC, no test pages
   OPERATOR       // CEC only, no user management or test pages
+}
+
+// Ticket View History - Track who viewed the ticket and when
+model TicketView {
+  id              String   @id @default(cuid())
+  ticketId        String
+  ticket          Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  viewerName      String   // Name of the person who viewed (from LINE profile or User)
+  viewerLineId    String?  // LINE user ID if viewed from LIFF
+  viewerAvatar    String?  // LINE profile picture URL
+  viewedAt        DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([viewedAt])
 }

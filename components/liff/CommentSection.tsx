@@ -99,8 +99,10 @@ export default function CommentSection({
       // Upload images first if any
       let imageUrls: string[] = [];
       if (selectedImages.length > 0) {
+        console.log('[CommentSection] Uploading images:', selectedImages.length);
         const formData = new FormData();
-        selectedImages.forEach((file) => {
+        selectedImages.forEach((file, idx) => {
+          console.log(`[CommentSection] Adding image ${idx}:`, file.name, file.type, file.size);
           formData.append('images', file);
         });
 
@@ -109,15 +111,23 @@ export default function CommentSection({
           body: formData,
         });
 
-        if (!uploadRes.ok) {
-          throw new Error('Failed to upload images');
-        }
+        console.log('[CommentSection] Upload response status:', uploadRes.status);
 
         const uploadData = await uploadRes.json();
+        console.log('[CommentSection] Upload response data:', uploadData);
+
+        if (!uploadRes.ok) {
+          const errorMsg = uploadData.error || 'Failed to upload images';
+          console.error('[CommentSection] Upload failed:', errorMsg);
+          throw new Error(`อัปโหลดรูปล้มเหลว: ${errorMsg}`);
+        }
+
         imageUrls = uploadData.urls || [];
+        console.log('[CommentSection] Image URLs:', imageUrls);
       }
 
       // Add comment
+      console.log('[CommentSection] Adding comment with images:', imageUrls.length);
       const res = await fetch(`/api/liff/tickets/${ticketId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,6 +141,7 @@ export default function CommentSection({
       });
 
       const data = await res.json();
+      console.log('[CommentSection] Add note response:', data);
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to add comment');

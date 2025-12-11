@@ -53,6 +53,14 @@ interface StatusHistoryItem {
   createdAt: string;
 }
 
+interface TicketView {
+  id: string;
+  viewerName: string;
+  viewerLineId?: string;
+  viewerAvatar?: string;
+  viewedAt: string;
+}
+
 export default function LiffTicketDetailPage() {
   const params = useParams();
   const ticketId = params.id as string;
@@ -66,7 +74,9 @@ export default function LiffTicketDetailPage() {
   // New features state
   const [notes, setNotes] = useState<Note[]>([]);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);
+  const [viewHistory, setViewHistory] = useState<TicketView[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showViewHistory, setShowViewHistory] = useState(false);
 
   // Use ref instead of state to prevent re-renders triggering re-initialization
   const liffInitialized = useRef(false);
@@ -335,7 +345,7 @@ export default function LiffTicketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 pb-32">
       {/* Header with Gradient */}
       <div className="bg-gradient-to-br from-green-600 via-green-700 to-teal-600 text-white p-6 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
@@ -443,10 +453,42 @@ export default function LiffTicketDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Status History */}
+        <StatusHistory
+          history={statusHistory}
+          isOpen={showHistory}
+          onToggle={() => setShowHistory(!showHistory)}
+        />
+
+        {/* Comment Section */}
+        <CommentSection
+          ticketId={ticketId}
+          lineProfile={lineProfile}
+          notes={notes}
+          onCommentAdded={handleCommentAdded}
+        />
+
+        {/* User Info */}
+        {lineProfile && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 flex items-center gap-3 border border-blue-100">
+            {lineProfile.pictureUrl && (
+              <img
+                src={lineProfile.pictureUrl}
+                alt={lineProfile.displayName}
+                className="w-10 h-10 rounded-full ring-2 ring-blue-200"
+              />
+            )}
+            <div className="flex-1 text-sm">
+              <div className="font-medium text-gray-900">{lineProfile.displayName}</div>
+              <div className="text-blue-600 text-xs">กำลังดู Ticket นี้</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons (Fixed Bottom) */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 space-y-2 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 space-y-2 shadow-lg z-50">
         {/* Show action buttons only if LINE profile is available */}
         {lineProfile && ticket.status === 'NEW' && (
           <button
@@ -547,38 +589,6 @@ export default function LiffTicketDetailPage() {
             <p className="text-sm text-gray-600">
               📱 เปิดใน LINE เพื่ออัปเดตสถานะ Ticket
             </p>
-          </div>
-        )}
-
-        {/* Status History */}
-        <StatusHistory
-          history={statusHistory}
-          isOpen={showHistory}
-          onToggle={() => setShowHistory(!showHistory)}
-        />
-
-        {/* Comment Section */}
-        <CommentSection
-          ticketId={ticketId}
-          lineProfile={lineProfile}
-          notes={notes}
-          onCommentAdded={handleCommentAdded}
-        />
-
-        {/* User Info */}
-        {lineProfile && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 flex items-center gap-3 border border-blue-100">
-            {lineProfile.pictureUrl && (
-              <img
-                src={lineProfile.pictureUrl}
-                alt={lineProfile.displayName}
-                className="w-10 h-10 rounded-full ring-2 ring-blue-200"
-              />
-            )}
-            <div className="flex-1 text-sm">
-              <div className="font-medium text-gray-900">{lineProfile.displayName}</div>
-              <div className="text-blue-600 text-xs">กำลังดู Ticket นี้</div>
-            </div>
           </div>
         )}
       </div>
