@@ -12,6 +12,7 @@ import { Clock, Package, MapPin, Tag, AlertCircle, CheckCircle2, XCircle } from 
 import VConsole from '@/components/VConsole';
 import CommentSection from '@/components/liff/CommentSection';
 import StatusHistory from '@/components/liff/StatusHistory';
+import ViewHistory from '@/components/liff/ViewHistory';
 
 interface Ticket {
   id: string;
@@ -206,6 +207,12 @@ export default function LiffTicketDetailPage() {
 
         // Load notes separately
         loadNotes();
+
+        // Load view history
+        loadViewHistory();
+
+        // Record this view
+        recordView();
       } else {
         setError(data.error || 'ไม่พบข้อมูล Ticket');
       }
@@ -227,6 +234,42 @@ export default function LiffTicketDetailPage() {
       }
     } catch (err) {
       console.error('Failed to load notes:', err);
+    }
+  };
+
+  const loadViewHistory = async () => {
+    try {
+      const res = await fetch(`/api/liff/tickets/${ticketId}/views`);
+      const data = await res.json();
+
+      if (data.success) {
+        setViewHistory(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load view history:', err);
+    }
+  };
+
+  const recordView = async () => {
+    try {
+      const viewerName = lineProfile?.displayName || 'Anonymous';
+      const viewerLineId = lineProfile?.userId;
+      const viewerAvatar = lineProfile?.pictureUrl;
+
+      await fetch(`/api/liff/tickets/${ticketId}/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viewerName,
+          viewerLineId,
+          viewerAvatar,
+        }),
+      });
+
+      // Reload view history after recording
+      loadViewHistory();
+    } catch (err) {
+      console.error('Failed to record view:', err);
     }
   };
 
@@ -469,22 +512,12 @@ export default function LiffTicketDetailPage() {
           onCommentAdded={handleCommentAdded}
         />
 
-        {/* User Info */}
-        {lineProfile && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 flex items-center gap-3 border border-blue-100">
-            {lineProfile.pictureUrl && (
-              <img
-                src={lineProfile.pictureUrl}
-                alt={lineProfile.displayName}
-                className="w-10 h-10 rounded-full ring-2 ring-blue-200"
-              />
-            )}
-            <div className="flex-1 text-sm">
-              <div className="font-medium text-gray-900">{lineProfile.displayName}</div>
-              <div className="text-blue-600 text-xs">กำลังดู Ticket นี้</div>
-            </div>
-          </div>
-        )}
+        {/* View History */}
+        <ViewHistory
+          views={viewHistory}
+          isOpen={showViewHistory}
+          onToggle={() => setShowViewHistory(!showViewHistory)}
+        />
       </div>
 
       {/* Action Buttons (Fixed Bottom) */}

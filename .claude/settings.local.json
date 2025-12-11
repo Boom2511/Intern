@@ -19,7 +19,9 @@
       "Bash(node scripts/check-env.js:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(git diff:*)",
+      "Bash($env:DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\")"
     ],
     "deny": [],
     "ask": []
