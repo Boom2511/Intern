@@ -10,20 +10,19 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import StatusBadge from './StatusBadge';
-import { TicketWithRelations, TicketStatus, Priority } from '@/types';
+import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel } from '@/lib/utils';
-import { STAFF_MEMBERS, TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
-import { ROLE_NAMES, ROLE_LABELS } from '@/config/roles';
-import { User, Phone, Mail, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, AlertTriangle, Upload, X, Package, MapPin, FileText, Tag } from 'lucide-react';
+import { ROLE_LABELS } from '@/config/roles';
+import { User, Clock, MessageSquare, Edit, UserCog, CheckCircle, Building2, Package, MapPin, FileText, Tag } from 'lucide-react';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -34,16 +33,9 @@ interface TicketDetailProps {
 export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: TicketDetailProps) {
   const { toast } = useToast();
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
-  const [assignedTo, setAssignedTo] = useState<string>(ticket.assignedTo || '');
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
   const [newNote, setNewNote] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // End user report state
-  const [reportContent, setReportContent] = useState('');
-  const [reportImages, setReportImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const departmentOptions = getDepartmentOptions();
 
@@ -88,47 +80,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         variant: 'error',
         title: 'เกิดข้อผิดพลาด',
         description: 'ไม่สามารถอัปเดตสถานะได้ กรุณาลองใหม่อีกครั้ง',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAssigneeUpdate = async (newAssignee: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/tickets/${ticket.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedTo: newAssignee === 'none' ? null : newAssignee }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setAssignedTo(newAssignee === 'none' ? '' : newAssignee);
-        toast({
-          variant: 'success',
-          title: 'สำเร็จ!',
-          description: 'มอบหมายงานเรียบร้อยแล้ว',
-        });
-        // Refresh data using SWR mutate
-        if (mutate) {
-          mutate();
-        }
-      } else {
-        toast({
-          variant: 'error',
-          title: 'เกิดข้อผิดพลาด',
-          description: data.error || 'ไม่สามารถมอบหมายงานได้',
-        });
-      }
-    } catch (error) {
-      console.error('Error updating assignee:', error);
-      toast({
-        variant: 'error',
-        title: 'เกิดข้อผิดพลาด',
-        description: 'ไม่สามารถมอบหมายงานได้ กรุณาลองใหม่อีกครั้ง',
       });
     } finally {
       setLoading(false);
@@ -235,112 +186,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
     }
   };
 
-  // Handle image selection for end user report
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const maxSize = 5 * 1024 * 1024; // 5MB per image
-
-    // Validate file sizes
-    for (const file of files) {
-      if (file.size > maxSize) {
-        toast({
-          variant: 'warning',
-          title: 'ไฟล์ขนาดใหญ่เกินไป',
-          description: `ไฟล์ ${file.name} มีขนาดใหญ่เกิน 5MB`,
-        });
-        return;
-      }
-    }
-
-    // Limit to 5 images
-    if (reportImages.length + files.length > 5) {
-      toast({
-        variant: 'warning',
-        title: 'จำนวนรูปเกินกำหนด',
-        description: 'สามารถอัปโหลดได้สูงสุด 5 รูปเท่านั้น',
-      });
-      return;
-    }
-
-    // Add new images
-    setReportImages([...reportImages, ...files]);
-
-    // Create previews
-    const newPreviews = files.map(file => URL.createObjectURL(file));
-    setImagePreviews([...imagePreviews, ...newPreviews]);
-  };
-
-  const handleRemoveImage = (index: number) => {
-    const newImages = reportImages.filter((_, i) => i !== index);
-    const newPreviews = imagePreviews.filter((_, i) => i !== index);
-
-    // Revoke old preview URL
-    URL.revokeObjectURL(imagePreviews[index]);
-
-    setReportImages(newImages);
-    setImagePreviews(newPreviews);
-  };
-
-  const handleSubmitReport = async () => {
-    if (!reportContent.trim()) {
-      toast({
-        variant: 'warning',
-        title: 'กรุณากรอกข้อมูล',
-        description: 'กรุณากรอกรายละเอียดปัญหา',
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('content', reportContent);
-      formData.append('createdBy', ticket.customer.name);
-
-      // Add images
-      reportImages.forEach(image => {
-        formData.append('images', image);
-      });
-
-      const response = await fetch(`/api/tickets/${ticket.id}/reports`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setReportContent('');
-        setReportImages([]);
-        imagePreviews.forEach(url => URL.revokeObjectURL(url));
-        setImagePreviews([]);
-        toast({
-          variant: 'success',
-          title: 'สำเร็จ!',
-          description: 'ส่งรายงานปัญหาเรียบร้อยแล้ว',
-        });
-        // Refresh data using SWR mutate
-        if (mutate) {
-          mutate();
-        }
-      } else {
-        toast({
-          variant: 'error',
-          title: 'เกิดข้อผิดพลาด',
-          description: data.error || 'ไม่สามารถส่งรายงานได้',
-        });
-      }
-    } catch (error) {
-      console.error('Error submitting report:', error);
-      toast({
-        variant: 'error',
-        title: 'เกิดข้อผิดพลาด',
-        description: 'ไม่สามารถส่งรายงานได้ กรุณาลองใหม่อีกครั้ง',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="space-y-4 md:space-y-6 p-2 md:p-0">
@@ -366,20 +211,27 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
       <div className={`grid grid-cols-1 ${isClientMode ? 'max-w-2xl mx-auto' : 'lg:grid-cols-3'} gap-4 md:gap-6`}>
         {/* Main Content */}
         <div className={`${!isClientMode && 'lg:col-span-2'} space-y-4 md:space-y-6`}>
-          {/* Ticket Information Card - Enhanced for Client Mode */}
-          <Card>
-            <CardHeader>
-              <CardTitle>ข้อมูล Ticket</CardTitle>
+          {/* Ticket Information Card - Enhanced Modern Design */}
+          <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+              <CardTitle className="flex items-center gap-2">
+                <div className="bg-blue-100 p-2 rounded-lg">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                </div>
+                ข้อมูล Ticket
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               {/* Issue Type and Tracking Number - Same Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-3 border-b">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
                 {/* Issue Type */}
                 <div className="flex items-start gap-3">
-                  <Tag className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="bg-blue-50 p-2 rounded-lg">
+                    <Tag className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                  </div>
                   <div className="flex-1">
                     <span className="text-sm font-medium text-gray-600 block mb-1">ประเภทปัญหา</span>
-                    <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+                    <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50 font-medium">
                       {getIssueTypeLabel(ticket.issueType)}
                     </Badge>
                     {ticket.issueTypeOther && (
@@ -391,10 +243,12 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 {/* Tracking Number */}
                 {ticket.trackingNo && (
                   <div className="flex items-start gap-3">
-                    <Package className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="bg-indigo-50 p-2 rounded-lg">
+                      <Package className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+                    </div>
                     <div className="flex-1">
                       <span className="text-sm font-medium text-gray-600 block mb-1">เลขพัสดุ</span>
-                      <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                      <span className="text-sm font-mono text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-1.5 rounded-md border border-gray-200 inline-block">
                         {ticket.trackingNo}
                       </span>
                     </div>
@@ -404,11 +258,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
               {/* Department - Show in client mode */}
               {isClientMode && ticket.department && (
-                <div className="flex items-start gap-3 pb-3 border-b">
-                  <Building2 className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 pb-4 border-b">
+                  <div className="bg-purple-50 p-2 rounded-lg">
+                    <Building2 className="h-5 w-5 text-purple-600 flex-shrink-0" />
+                  </div>
                   <div className="flex-1">
                     <span className="text-sm font-medium text-gray-600 block mb-1">แผนกรับผิดชอบ</span>
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900">
                       {departmentOptions.find(d => d.value === ticket.department)?.label}
                     </span>
                   </div>
@@ -416,25 +272,38 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               )}
 
               {/* Recipient Information */}
-              <div className="flex items-start gap-3 pb-3 border-b">
-                <MapPin className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 pb-4 border-b">
+                <div className="bg-red-50 p-2 rounded-lg">
+                  <MapPin className="h-5 w-5 text-red-600 flex-shrink-0" />
+                </div>
                 <div className="flex-1">
                   <span className="text-sm font-medium text-gray-600 block mb-2">ข้อมูลผู้รับ</span>
-                  <div className="space-y-1 text-sm text-gray-900">
-                    <div><strong>ชื่อ:</strong> {ticket.recipientName}</div>
-                    <div><strong>เบอร์โทร:</strong> {ticket.recipientPhone}</div>
-                    <div><strong>ที่อยู่:</strong> {ticket.recipientAddress}</div>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-gray-600 font-medium min-w-[70px]">ชื่อ:</span>
+                      <span className="text-gray-900 font-medium">{ticket.recipientName}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-gray-600 font-medium min-w-[70px]">เบอร์โทร:</span>
+                      <span className="text-gray-900 font-medium">{ticket.recipientPhone}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-gray-600 font-medium min-w-[70px]">ที่อยู่:</span>
+                      <span className="text-gray-900">{ticket.recipientAddress}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Salesforce ID - If available */}
               {isClientMode && ticket.salesforceId && (
-                <div className="flex items-start gap-3 pb-3 border-b">
-                  <FileText className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 pb-4 border-b">
+                  <div className="bg-purple-50 p-2 rounded-lg">
+                    <FileText className="h-5 w-5 text-purple-600 flex-shrink-0" />
+                  </div>
                   <div className="flex-1">
                     <span className="text-sm font-medium text-gray-600 block mb-1">Salesforce No.</span>
-                    <span className="text-sm font-mono text-gray-900">
+                    <span className="text-sm font-mono text-gray-900 bg-purple-50 px-2 py-1 rounded">
                       {ticket.salesforceId}
                     </span>
                   </div>
@@ -444,7 +313,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               {/* Description */}
               <div>
                 <span className="text-sm font-medium text-gray-600 block mb-2">รายละเอียดปัญหา</span>
-                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-md">
+                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200 leading-relaxed">
                   {ticket.description}
                 </p>
               </div>
@@ -469,99 +338,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
             </CardContent>
           </Card>
 
-          {/* End User Problem Report - Only show in client mode */}
-          {isClientMode && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg text-red-700">
-                  <AlertTriangle className="h-4 w-4 md:h-5 md:w-5" />
-                  {ROLE_LABELS.PROBLEM_REPORT_TITLE}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-gray-600">
-                  หากพบปัญหาหรือต้องการแจ้งข้อมูลเพิ่มเติม กรุณากรอกรายละเอียดด้านล่าง
-                </p>
-
-                {/* Report Form */}
-                <div className="space-y-4">
-                  <textarea
-                    value={reportContent}
-                    onChange={(e) => setReportContent(e.target.value)}
-                    placeholder="กรุณาอธิบายปัญหาที่พบ..."
-                    rows={4}
-                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  />
-
-                  {/* Image Upload */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={reportImages.length >= 5}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        อัปโหลดรูปภาพ
-                      </Button>
-                      <span className="text-xs text-gray-500">
-                        ({reportImages.length}/5 รูป, สูงสุด 5MB/รูป)
-                      </span>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImageSelect}
-                      className="hidden"
-                      aria-label="อัปโหลดรูปภาพ"
-                    />
-
-                    {/* Image Previews */}
-                    {imagePreviews.length > 0 && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {imagePreviews.map((preview, index) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={preview}
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-24 object-cover rounded-md border"
-                            />
-                            <button
-                              type="button"
-                              aria-label={`ลบรูปภาพที่ ${index + 1}`}
-                              onClick={() => handleRemoveImage(index)}
-                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <Button
-                    onClick={handleSubmitReport}
-                    disabled={loading || !reportContent.trim()}
-                    className="w-full bg-red-600 hover:bg-red-700"
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    ส่งรายงานปัญหา
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Notes/Comments - Show in both modes */}
-          <Card>
-            <CardHeader>
+          <Card className="shadow-md hover:shadow-lg transition-shadow">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
               <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
+                <div className="bg-green-100 p-2 rounded-lg">
+                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
+                </div>
                 {ROLE_LABELS.STAFF_NOTES} ({
                   isClientMode
                     ? ticket.notes.filter((note: any) => note.createdBy !== 'System').length
@@ -611,22 +394,24 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       <div
                         key={note.id}
                         className={`border-l-2 pl-4 py-2 ${note.isFromEndUser
-                            ? 'border-red-500 bg-red-50 rounded-r'
+                            ? 'border-green-500 bg-green-50 rounded-r'
                             : 'border-blue-500'
                           }`}
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">
-                            {note.isFromEndUser
-                              ? ROLE_NAMES.END_USER  // End user reports → "พนักงาน" for both
-                              : (isClientMode ? ROLE_NAMES.ADMIN : ROLE_NAMES.ADMIN)  // CEC notes → "Admin" for both
-                            }
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-medium text-sm text-gray-900">
+                            {note.createdBy}
                           </span>
                           <span className="text-xs text-gray-500">
                             {formatRelativeTime(note.createdAt)}
                           </span>
-                          {note.isFromEndUser && (
-                            <Badge variant="outline" className="text-xs bg-red-100 text-red-700 border-red-300">
+                          {note.isFromEndUser && note.createdBy.includes('(via LINE)') && (
+                            <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
+                              📱 LINE User
+                            </Badge>
+                          )}
+                          {note.isFromEndUser && !note.createdBy.includes('(via LINE)') && (
+                            <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
                               {ROLE_LABELS.END_USER_REPORTS}
                             </Badge>
                           )}
@@ -664,7 +449,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Status Management */}
-          <Card>
+          <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle className="text-lg">
                 {isClientMode ? 'ยืนยันการแก้ไข' : 'จัดการสถานะ'}
@@ -776,12 +561,32 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
           {/* Ticket Creator Info - Only show in staff mode */}
           {!isClientMode && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base md:text-lg">ผู้สร้าง Ticket</CardTitle>
+            <Card className="shadow-md hover:shadow-lg transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                  <div className="bg-blue-100 p-2 rounded-lg">
+                    <User className="h-5 w-5 text-blue-600" />
+                  </div>
+                  ผู้สร้าง Ticket
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-gray-600">
+              <CardContent className="space-y-3 pt-6">
+                <div className="space-y-2">
+                  <div className="text-base font-semibold text-gray-900">{ticket.customer.name}</div>
+                  {ticket.customer.phone && (
+                    <div className="text-sm text-gray-600 flex items-center gap-2">
+                      <span className="text-gray-400">📞</span>
+                      {ticket.customer.phone}
+                    </div>
+                  )}
+                  {ticket.customer.email && (
+                    <div className="text-sm text-gray-600 flex items-center gap-2">
+                      <span className="text-gray-400">✉️</span>
+                      {ticket.customer.email}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-gray-600 pt-3 border-t">
                   <Clock className="h-4 w-4 text-gray-400" />
                   <span className="text-sm">{formatThaiDate(ticket.createdAt)}</span>
                 </div>

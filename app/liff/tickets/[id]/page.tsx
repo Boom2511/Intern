@@ -338,16 +338,16 @@ export default function LiffTicketDetailPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 pb-20">
       {/* Header with Gradient */}
       <div className="bg-gradient-to-br from-green-600 via-green-700 to-teal-600 text-white p-6 shadow-xl">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-            <Package className="w-6 h-6" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-lg">
+            <Package className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold tracking-tight">{ticket.ticketNo}</h1>
-            <p className="text-sm text-green-100 mt-0.5">PostServe Help Desk</p>
+            <h1 className="text-xl font-bold tracking-tight text-white">{ticket.ticketNo}</h1>
+            <p className="text-sm text-white/90 mt-0.5">PostServe Help Desk</p>
           </div>
         </div>
-        <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-medium shadow-md ${getStatusColor(ticket.status)}`}>
+        <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-medium shadow-lg ${getStatusColor(ticket.status)}`}>
           {getStatusLabel(ticket.status)}
         </div>
       </div>
@@ -387,17 +387,19 @@ export default function LiffTicketDetailPage() {
         {/* Recipient Info */}
         <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
           <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-red-50 p-2 rounded-lg">
+              <MapPin className="w-5 h-5 text-red-600 flex-shrink-0" />
+            </div>
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-600 mb-2">ข้อมูลผู้รับ</h3>
               <div className="space-y-1.5 text-sm">
                 <div className="flex gap-2">
                   <span className="text-gray-600 font-medium min-w-[60px]">ชื่อ:</span>
-                  <span className="text-gray-900">{ticket.recipientName}</span>
+                  <span className="text-gray-900 font-medium">{ticket.recipientName}</span>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-gray-600 font-medium min-w-[60px]">เบอร์:</span>
-                  <span className="text-gray-900">{ticket.recipientPhone}</span>
+                  <span className="text-gray-900 font-medium">{ticket.recipientPhone}</span>
                 </div>
                 <div className="flex gap-2">
                   <span className="text-gray-600 font-medium min-w-[60px]">ที่อยู่:</span>
@@ -409,23 +411,27 @@ export default function LiffTicketDetailPage() {
         </div>
 
         {/* Description */}
-        <div className="bg-white rounded-lg p-4 shadow">
+        <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-orange-50 p-2 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+            </div>
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-600 mb-2">รายละเอียดปัญหา</h3>
-              <p className="text-sm text-gray-900 whitespace-pre-wrap">{ticket.description}</p>
+              <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
             </div>
           </div>
         </div>
 
         {/* Created Time */}
-        <div className="bg-white rounded-lg p-4 shadow">
+        <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow border border-gray-100">
           <div className="flex items-start gap-3">
-            <Clock className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-gray-50 p-2 rounded-lg">
+              <Clock className="w-5 h-5 text-gray-600 flex-shrink-0" />
+            </div>
             <div className="flex-1">
               <h3 className="text-sm font-medium text-gray-600 mb-1">สร้างเมื่อ</h3>
-              <p className="text-sm text-gray-900">
+              <p className="text-sm text-gray-900 font-medium">
                 {new Date(ticket.createdAt).toLocaleString('th-TH', {
                   year: 'numeric',
                   month: 'long',
