@@ -49,6 +49,7 @@ interface Ticket {
   recipientPhone: string;
   recipientAddress: string;
   department?: string;
+  assignedTo?: string;
   createdAt: string;
   updatedAt: string;
 }
