@@ -211,27 +211,23 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
       <div className={`grid grid-cols-1 ${isClientMode ? 'max-w-2xl mx-auto' : 'lg:grid-cols-3'} gap-4 md:gap-6`}>
         {/* Main Content */}
         <div className={`${!isClientMode && 'lg:col-span-2'} space-y-4 md:space-y-6`}>
-          {/* Ticket Information Card - Enhanced Modern Design */}
-          <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
-              <CardTitle className="flex items-center gap-2">
-                <div className="bg-blue-100 p-2 rounded-lg">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                </div>
+          {/* Ticket Information Card - Clean Design */}
+          <Card className="border border-gray-200">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="flex items-center gap-2 text-gray-900">
+                <FileText className="h-5 w-5 text-blue-600" />
                 ข้อมูล Ticket
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 pt-6">
-              {/* Issue Type, Tracking Number, and Coordinator - Grid Layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
+            <CardContent className="space-y-4 pt-6 bg-gray-50">
+              {/* Issue Type and Tracking Number */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Issue Type */}
                 <div className="flex items-start gap-3">
-                  <div className="bg-blue-50 p-2 rounded-lg">
-                    <Tag className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                  </div>
+                  <Tag className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-600 block mb-1">ประเภทปัญหา</span>
-                    <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50 font-medium">
+                    <span className="text-sm text-gray-600 block mb-1">ประเภทปัญหา</span>
+                    <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
                       {getIssueTypeLabel(ticket.issueType)}
                     </Badge>
                     {ticket.issueTypeOther && (
@@ -240,28 +236,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   </div>
                 </div>
 
-                {/* Coordinator - Show customer as coordinator */}
-                <div className="flex items-start gap-3">
-                  <div className="bg-green-50 p-2 rounded-lg">
-                    <User className="h-5 w-5 text-green-600 flex-shrink-0" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-600 block mb-1">ผู้ประสานงาน</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {ticket.customer.name}
-                    </span>
-                  </div>
-                </div>
-
                 {/* Tracking Number */}
                 {ticket.trackingNo && (
                   <div className="flex items-start gap-3">
-                    <div className="bg-indigo-50 p-2 rounded-lg">
-                      <Package className="h-5 w-5 text-indigo-600 flex-shrink-0" />
-                    </div>
+                    <Package className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <span className="text-sm font-medium text-gray-600 block mb-1">เลขพัสดุ</span>
-                      <span className="text-sm font-mono text-gray-900 bg-gradient-to-r from-gray-50 to-gray-100 px-3 py-1.5 rounded-md border border-gray-200 inline-block">
+                      <span className="text-sm text-gray-600 block mb-1">เลขพัสดุ</span>
+                      <span className="text-sm font-mono text-gray-900 bg-white px-2 py-1 rounded border">
                         {ticket.trackingNo}
                       </span>
                     </div>
@@ -271,13 +252,11 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
               {/* Department - Show in client mode */}
               {isClientMode && ticket.department && (
-                <div className="flex items-start gap-3 pb-4 border-b">
-                  <div className="bg-purple-50 p-2 rounded-lg">
-                    <Building2 className="h-5 w-5 text-purple-600 flex-shrink-0" />
-                  </div>
+                <div className="flex items-start gap-3 pt-4 border-t">
+                  <Building2 className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-600 block mb-1">แผนกรับผิดชอบ</span>
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm text-gray-600 block mb-1">แผนกรับผิดชอบ</span>
+                    <span className="text-sm font-medium text-gray-900">
                       {departmentOptions.find(d => d.value === ticket.department)?.label}
                     </span>
                   </div>
@@ -285,54 +264,37 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               )}
 
               {/* Recipient Information */}
-              <div className="flex items-start gap-3 pb-4 border-b">
-                <div className="bg-red-50 p-2 rounded-lg">
-                  <MapPin className="h-5 w-5 text-red-600 flex-shrink-0" />
-                </div>
+              <div className="flex items-start gap-3 pt-4 border-t">
+                <MapPin className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-gray-600 block mb-2">ข้อมูลผู้รับ</span>
+                  <span className="text-sm text-gray-600 block mb-2">ข้อมูลผู้รับ</span>
                   <div className="space-y-1.5 text-sm">
                     <div className="flex gap-2">
-                      <span className="text-gray-600 font-medium min-w-[70px]">ชื่อ:</span>
-                      <span className="text-gray-900 font-medium">{ticket.recipientName}</span>
+                      <span className="text-gray-600 min-w-[70px]">ชื่อ:</span>
+                      <span className="text-gray-900">{ticket.recipientName}</span>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-gray-600 font-medium min-w-[70px]">เบอร์โทร:</span>
-                      <span className="text-gray-900 font-medium">{ticket.recipientPhone}</span>
+                      <span className="text-gray-600 min-w-[70px]">เบอร์โทร:</span>
+                      <span className="text-gray-900">{ticket.recipientPhone}</span>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-gray-600 font-medium min-w-[70px]">ที่อยู่:</span>
+                      <span className="text-gray-600 min-w-[70px]">ที่อยู่:</span>
                       <span className="text-gray-900">{ticket.recipientAddress}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Salesforce ID - If available */}
-              {isClientMode && ticket.salesforceId && (
-                <div className="flex items-start gap-3 pb-4 border-b">
-                  <div className="bg-purple-50 p-2 rounded-lg">
-                    <FileText className="h-5 w-5 text-purple-600 flex-shrink-0" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-600 block mb-1">Salesforce No.</span>
-                    <span className="text-sm font-mono text-gray-900 bg-purple-50 px-2 py-1 rounded">
-                      {ticket.salesforceId}
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Description */}
-              <div>
-                <span className="text-sm font-medium text-gray-600 block mb-2">รายละเอียดปัญหา</span>
-                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200 leading-relaxed">
+              <div className="pt-4 border-t">
+                <span className="text-sm text-gray-600 block mb-2">รายละเอียดปัญหา</span>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap bg-white p-4 rounded border leading-relaxed">
                   {ticket.description}
                 </p>
               </div>
 
               {/* Creator and Timestamp */}
-              <div className="pt-3 border-t">
+              <div className="pt-4 border-t">
                 <div className="flex items-start gap-3">
                   <UserCog className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 space-y-1">
@@ -351,65 +313,28 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
             </CardContent>
           </Card>
 
-          {/* Notes/Comments - Show in both modes */}
-          <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
-              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                <div className="bg-green-100 p-2 rounded-lg">
-                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
-                </div>
-                {ROLE_LABELS.STAFF_NOTES} ({
-                  isClientMode
-                    ? ticket.notes.filter((note: any) => note.createdBy !== 'System').length
-                    : ticket.notes.length
-                })
+          {/* User Reports from LINE - Show in both modes */}
+          <Card className="border border-gray-200">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="flex items-center gap-2 text-gray-900">
+                <MessageSquare className="h-5 w-5 text-green-600" />
+                รายงานจาก LINE User ({ticket.notes.filter((note: any) => note.isFromEndUser).length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Add Note - Only in staff mode */}
-              {!isClientMode && (
-                <div className="space-y-2">
-                  <textarea
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
-                    rows={3}
-                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <Button onClick={handleAddNote} disabled={loading || !newNote.trim()}>
-                    เพิ่มบันทึก
-                  </Button>
-                </div>
-              )}
-
-              {/* Notes Timeline - Show all notes */}
-              <div className="space-y-4 mt-6">
-                {ticket.notes.filter((note: any) => {
-                  // Hide system notes from end users
-                  if (isClientMode && note.createdBy === 'System') {
-                    return false;
-                  }
-                  return true;
-                }).length === 0 ? (
+            <CardContent className="space-y-4 pt-6 bg-white">
+              {/* Notes Timeline - Show only user reports */}
+              <div className="space-y-4">
+                {ticket.notes.filter((note: any) => note.isFromEndUser).length === 0 ? (
                   <p className="text-gray-500 text-sm text-center py-4">
-                    ยังไม่มีบันทึก
+                    ยังไม่มีรายงานจากผู้ใช้
                   </p>
                 ) : (
                   ticket.notes
-                    .filter((note: any) => {
-                      // Hide system notes from end users
-                      if (isClientMode && note.createdBy === 'System') {
-                        return false;
-                      }
-                      return true;
-                    })
+                    .filter((note: any) => note.isFromEndUser)
                     .map((note: any) => (
                       <div
                         key={note.id}
-                        className={`border-l-2 pl-4 py-2 ${note.isFromEndUser
-                            ? 'border-green-500 bg-green-50 rounded-r'
-                            : 'border-blue-500'
-                          }`}
+                        className="border-l-2 border-green-500 bg-green-50 pl-4 py-2 rounded-r"
                       >
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-medium text-sm text-gray-900">
@@ -418,14 +343,9 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                           <span className="text-xs text-gray-500">
                             {formatRelativeTime(note.createdAt)}
                           </span>
-                          {note.isFromEndUser && note.createdBy.includes('(via LINE)') && (
+                          {note.createdBy.includes('(via LINE)') && (
                             <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
                               📱 LINE User
-                            </Badge>
-                          )}
-                          {note.isFromEndUser && !note.createdBy.includes('(via LINE)') && (
-                            <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300">
-                              {ROLE_LABELS.END_USER_REPORTS}
                             </Badge>
                           )}
                         </div>
@@ -457,18 +377,75 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               </div>
             </CardContent>
           </Card>
+
+          {/* Internal Notes - Only for staff */}
+          {!isClientMode && (
+            <Card className="border border-gray-200">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="flex items-center gap-2 text-gray-900">
+                  <MessageSquare className="h-5 w-5 text-blue-600" />
+                  บันทึกภายใน ({ticket.notes.filter((note: any) => !note.isFromEndUser && note.createdBy !== 'System').length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6 bg-white">
+                {/* Add Note */}
+                <div className="space-y-2">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
+                    rows={3}
+                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <Button onClick={handleAddNote} disabled={loading || !newNote.trim()}>
+                    เพิ่มบันทึก
+                  </Button>
+                </div>
+
+                {/* Notes List */}
+                <div className="space-y-3 mt-4">
+                  {ticket.notes.filter((note: any) => !note.isFromEndUser && note.createdBy !== 'System').length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">
+                      ยังไม่มีบันทึก
+                    </p>
+                  ) : (
+                    ticket.notes
+                      .filter((note: any) => !note.isFromEndUser && note.createdBy !== 'System')
+                      .map((note: any) => (
+                        <div
+                          key={note.id}
+                          className="border-l-2 border-blue-500 pl-4 py-2"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-sm text-gray-900">
+                              {note.createdBy}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {formatRelativeTime(note.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            {note.content}
+                          </p>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Status Management */}
-          <Card className="shadow-md hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="text-lg">
+          <Card className="border border-gray-200">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="text-base">
                 {isClientMode ? 'ยืนยันการแก้ไข' : 'จัดการสถานะ'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6 bg-white">
               {isClientMode ? (
                 /* Client View - Simple Resolved Button */
                 <div className="space-y-3">
@@ -509,7 +486,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       สถานะปัจจุบัน
                     </label>
-                    <div className="p-3 bg-gray-50 rounded-lg mb-3">
+                    <div className="p-3 bg-gray-50 rounded-lg mb-3 border">
                       <StatusBadge status={status} />
                     </div>
                     <p className="text-xs text-gray-500 mb-3">
@@ -552,21 +529,20 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       </SelectContent>
                     </Select>
                     {department && (
-                      <div className="mt-2 p-2 bg-green-50 rounded-md">
+                      <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200">
                         <p className="text-xs text-green-700">
                           แผนกที่รับผิดชอบ: <strong>{departmentOptions.find(d => d.value === department)?.label}</strong>
                         </p>
                       </div>
                     )}
                     {!department && (
-                      <div className="mt-2 p-2 bg-amber-50 rounded-md">
+                      <div className="mt-2 p-2 bg-amber-50 rounded-md border border-amber-200">
                         <p className="text-xs text-amber-700">
                           ⚠️ กรุณาเลือกแผนกที่รับผิดชอบเพื่อดำเนินการต่อ
                         </p>
                       </div>
                     )}
                   </div>
-
                 </>
               )}
             </CardContent>
@@ -574,16 +550,14 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
           {/* View History - Show in staff mode */}
           {!isClientMode && (
-            <Card className="shadow-md hover:shadow-lg transition-shadow">
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <div className="bg-purple-100 p-2 rounded-lg">
-                    <User className="h-5 w-5 text-purple-600" />
-                  </div>
+            <Card className="border border-gray-200">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <User className="h-5 w-5 text-purple-600" />
                   ผู้เข้าชม ({ticket.views?.length || 0})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 bg-white">
                 {ticket.views && ticket.views.length > 0 ? (
                   <>
                     {/* Avatar Stack */}
@@ -602,7 +576,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                               className="w-10 h-10 rounded-full"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center">
                               <span className="text-white text-sm font-medium">
                                 {view.viewerName.charAt(0).toUpperCase()}
                               </span>
@@ -643,18 +617,16 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
             </Card>
           )}
 
-          {/* Ticket Creator Info - Only show in staff mode */}
+          {/* Ticket Creator Info - Only show in staff mode - Show CEC User */}
           {!isClientMode && (
-            <Card className="shadow-md hover:shadow-lg transition-shadow">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <div className="bg-blue-100 p-2 rounded-lg">
-                    <User className="h-5 w-5 text-blue-600" />
-                  </div>
+            <Card className="border border-gray-200">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <User className="h-5 w-5 text-blue-600" />
                   ผู้สร้าง Ticket
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 pt-6">
+              <CardContent className="space-y-3 pt-6 bg-white">
                 <div className="space-y-2">
                   <div className="text-base font-semibold text-gray-900">{ticket.customer.name}</div>
                   {ticket.customer.phone && (
