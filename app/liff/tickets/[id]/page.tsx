@@ -10,7 +10,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, Send } from 'lucide-react';
 import VConsole from '@/components/VConsole';
 import StatusHistory from '@/components/liff/StatusHistory';
-import ViewHistory from '@/components/liff/ViewHistory';
 import { useLiff } from '@/hooks/useLiff';
 import { useTicketDetail } from '@/hooks/useTicketDetail';
 import { convertImagesToWebP } from '@/lib/image-utils';
@@ -361,12 +360,103 @@ export default function LiffTicketDetailPage() {
           </div>
         )}
 
-        {/* View History - ผู้เข้าดู */}
-        <ViewHistory
-          views={views}
-          isOpen={showViewHistory}
-          onToggle={() => setShowViewHistory(!showViewHistory)}
-        />
+        {/* View History - ผู้เข้าชม */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowViewHistory(!showViewHistory)}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition"
+          >
+            <div className="flex items-center gap-3">
+              <User className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-semibold text-gray-900 text-sm">ผู้เข้าชม</h3>
+              <span className="text-xs text-gray-500">({views.length})</span>
+            </div>
+
+            {/* Avatar Stack - Always show if there are unique viewers */}
+            {!showViewHistory && views.length > 0 && (
+              <div className="flex -space-x-2 mr-2">
+                {views.slice(0, 4).map((view, idx) => (
+                  <div key={idx} className={`relative inline-block z-${10 - idx}`}>
+                    {view.viewerAvatar ? (
+                      <img
+                        src={view.viewerAvatar}
+                        alt={view.viewerName}
+                        className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 ring-2 ring-white flex items-center justify-center">
+                        <span className="text-white text-xs font-medium">
+                          {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {views.length > 4 && (
+                  <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center">
+                    <span className="text-gray-600 text-xs font-medium">+{views.length - 4}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <svg
+              className={`w-5 h-5 text-gray-400 transition-transform ${showViewHistory ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showViewHistory && (
+            <div className="border-t border-gray-200 p-4">
+              {views.length === 0 ? (
+                <p className="text-center text-gray-500 text-sm py-4">ยังไม่มีผู้เข้าชม</p>
+              ) : (
+                <div className="space-y-3">
+                  {views.map((view, idx) => (
+                    <div key={idx} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                      {view.viewerAvatar ? (
+                        <img
+                          src={view.viewerAvatar}
+                          alt={view.viewerName}
+                          className="w-10 h-10 rounded-full flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
+                          <span className="text-white text-sm font-medium">
+                            {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 text-sm">{view.viewerName}</span>
+                          {view.viewerLineId && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                              📱 LINE
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(view.viewedAt).toLocaleString('th-TH', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Fixed Bottom Action Field */}
@@ -399,7 +489,7 @@ export default function LiffTicketDetailPage() {
             <textarea
               value={actionNote}
               onChange={(e) => setActionNote(e.target.value)}
-              placeholder="วิธีดำเนินการ (ขั้นต่ำ 20 ตัวอักษร)"
+              placeholder="กรุณาระบุวิธีดำเนินการ (ขั้นต่ำ 20 ตัวอักษร)"
               className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-2"
               rows={3}
               disabled={submitting}
