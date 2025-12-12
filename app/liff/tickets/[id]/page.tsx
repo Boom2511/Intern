@@ -180,6 +180,13 @@ export default function LiffTicketDetailPage() {
     );
   }
 
+  // Debug: Log views data
+  console.log('[LIFF Page] Views data:', {
+    viewsLength: views.length,
+    viewsArray: views,
+    firstView: views[0],
+  });
+
   if (!ticket) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

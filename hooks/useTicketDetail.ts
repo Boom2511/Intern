@@ -94,6 +94,11 @@ export function useTicketDetail(ticketId: string) {
         throw new Error(result.error || 'ไม่สามารถโหลดข้อมูลได้');
       }
 
+      console.log('[useTicketDetail] Received data:', {
+        viewsCount: result.data.views?.length || 0,
+        sampleView: result.data.views?.[0] || null,
+      });
+
       setData({
         ticket: result.data.ticket,
         notes: result.data.notes || [],

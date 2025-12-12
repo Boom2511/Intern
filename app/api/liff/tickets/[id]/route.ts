@@ -96,6 +96,17 @@ export async function GET(
     }
 
     // 3. Return all data in one response
+    console.log('[LIFF] Returning data:', {
+      ticketId: ticket.id,
+      viewsCount: views.length,
+      sampleView: views[0] ? {
+        viewerName: views[0].viewerName,
+        viewerLineId: views[0].viewerLineId,
+        viewedAt: views[0].viewedAt,
+        viewedAtType: typeof views[0].viewedAt,
+      } : null,
+    });
+
     return NextResponse.json({
       success: true,
       data: {
