@@ -21,7 +21,10 @@
       "Bash(grep:*)",
       "Bash(git restore:*)",
       "Bash(git diff:*)",
-      "Bash($env:DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\")"
+      "Bash($env:DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\")",
+      "Bash(DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\" npx prisma migrate:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\" npx prisma migrate resolve:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\" npx prisma db execute:*)"
     ],
     "deny": [],
     "ask": []

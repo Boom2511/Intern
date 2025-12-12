@@ -373,33 +373,53 @@ export default function LiffTicketDetailPage() {
               <span className="text-xs text-gray-500">({views.length})</span>
             </div>
 
-            {/* Avatar Stack - Always show if there are unique viewers */}
-            {!showViewHistory && views.length > 0 && (
-              <div className="flex -space-x-2 mr-2">
-                {views.slice(0, 4).map((view, idx) => (
-                  <div key={idx} className={`relative inline-block z-${10 - idx}`}>
-                    {view.viewerAvatar ? (
-                      <img
-                        src={view.viewerAvatar}
-                        alt={view.viewerName}
-                        className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 ring-2 ring-white flex items-center justify-center">
-                        <span className="text-white text-xs font-medium">
-                          {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {views.length > 4 && (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center">
-                    <span className="text-gray-600 text-xs font-medium">+{views.length - 4}</span>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Avatar Stack - Show unique viewers only */}
+            {!showViewHistory && (() => {
+              // Get unique viewers by LineId or Name (latest view per viewer)
+              const uniqueViewers = views.reduce((acc: any[], view: any) => {
+                const existing = acc.find(v =>
+                  (view.viewerLineId && v.viewerLineId === view.viewerLineId) ||
+                  (!view.viewerLineId && v.viewerName === view.viewerName)
+                );
+                if (!existing) {
+                  acc.push(view);
+                }
+                return acc;
+              }, []);
+
+              if (uniqueViewers.length === 0) return null;
+
+              return (
+                <div className="flex -space-x-2 mr-2">
+                  {uniqueViewers.slice(0, 4).map((view, idx) => (
+                    <div
+                      key={view.viewerLineId || view.viewerName || idx}
+                      className="relative inline-block"
+                      style={{ zIndex: 10 - idx }}
+                    >
+                      {view.viewerAvatar ? (
+                        <img
+                          src={view.viewerAvatar}
+                          alt={view.viewerName}
+                          className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 ring-2 ring-white flex items-center justify-center">
+                          <span className="text-white text-xs font-medium">
+                            {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {uniqueViewers.length > 4 && (
+                    <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center" style={{ zIndex: 5 }}>
+                      <span className="text-gray-600 text-xs font-medium">+{uniqueViewers.length - 4}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <svg
               className={`w-5 h-5 text-gray-400 transition-transform ${showViewHistory ? 'rotate-180' : ''}`}
@@ -417,41 +437,48 @@ export default function LiffTicketDetailPage() {
                 <p className="text-center text-gray-500 text-sm py-4">ยังไม่มีผู้เข้าชม</p>
               ) : (
                 <div className="space-y-3">
-                  {views.map((view, idx) => (
-                    <div key={idx} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
-                      {view.viewerAvatar ? (
-                        <img
-                          src={view.viewerAvatar}
-                          alt={view.viewerName}
-                          className="w-10 h-10 rounded-full flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-                          <span className="text-white text-sm font-medium">
-                            {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 text-sm">{view.viewerName}</span>
-                          {view.viewerLineId && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                              📱 LINE
+                  {views.map((view: any, idx: number) => {
+                    // viewedAt is already a Date object from Prisma
+                    const viewDate = typeof view.viewedAt === 'string'
+                      ? new Date(view.viewedAt)
+                      : view.viewedAt;
+
+                    return (
+                      <div key={view.id || idx} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                        {view.viewerAvatar ? (
+                          <img
+                            src={view.viewerAvatar}
+                            alt={view.viewerName}
+                            className="w-10 h-10 rounded-full flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white text-sm font-medium">
+                              {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
                             </span>
-                          )}
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900 text-sm">{view.viewerName}</span>
+                            {view.viewerLineId && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                📱 LINE
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {viewDate.toLocaleString('th-TH', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(view.viewedAt).toLocaleString('th-TH', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
