@@ -25,7 +25,7 @@ export async function GET(
 
     // 1. Fetch ticket with relations (handle missing TicketView table gracefully)
     let ticket;
-    let views = [];
+    let views: any[] = [];
 
     try {
       ticket = await prisma.ticket.findUnique({
