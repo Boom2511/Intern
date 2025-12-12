@@ -18,7 +18,27 @@ export type CustomerWithTickets = Customer & {
 export type TicketWithRelations = Ticket & {
   customer: Customer;
   notes: Note[];
+  statusHistory?: StatusHistory[];
+  views?: TicketView[];
 };
+
+export interface StatusHistory {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  changedBy: string;
+  changedByLineName?: string;
+  changedByLineAvatar?: string;
+  createdAt: string;
+}
+
+export interface TicketView {
+  id: string;
+  viewerName: string;
+  viewerLineId?: string;
+  viewerAvatar?: string;
+  viewedAt: string;
+}
 
 // Form data types
 export interface CreateTicketFormData {

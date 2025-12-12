@@ -30,6 +30,10 @@ export async function GET(
         statusHistory: {
           orderBy: { createdAt: 'desc' },
         },
+        views: {
+          orderBy: { viewedAt: 'desc' },
+          take: 50,
+        },
       },
     });
 
@@ -183,6 +187,10 @@ export async function PATCH(
         },
         statusHistory: {
           orderBy: { createdAt: 'desc' },
+        },
+        views: {
+          orderBy: { viewedAt: 'desc' },
+          take: 50,
         },
       },
     });

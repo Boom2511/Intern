@@ -574,6 +574,71 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
             </CardContent>
           </Card>
 
+          {/* View History - Only show in staff mode */}
+          {!isClientMode && ticket.views && ticket.views.length > 0 && (
+            <Card className="shadow-md hover:shadow-lg transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                  <div className="bg-purple-100 p-2 rounded-lg">
+                    <User className="h-5 w-5 text-purple-600" />
+                  </div>
+                  ผู้เข้าชม ({ticket.views.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {/* Avatar Stack */}
+                <div className="flex -space-x-3 mb-4">
+                  {ticket.views.slice(0, 5).map((view, idx) => (
+                    <div
+                      key={view.id}
+                      className="relative inline-block ring-2 ring-white rounded-full"
+                      style={{ zIndex: 10 - idx }}
+                      title={`${view.viewerName} - ${new Date(view.viewedAt).toLocaleString('th-TH')}`}
+                    >
+                      {view.viewerAvatar ? (
+                        <img
+                          src={view.viewerAvatar}
+                          alt={view.viewerName}
+                          className="w-10 h-10 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">
+                            {view.viewerName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {ticket.views.length > 5 && (
+                    <div
+                      className="w-10 h-10 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center"
+                      style={{ zIndex: 5 }}
+                    >
+                      <span className="text-gray-600 text-xs font-medium">
+                        +{ticket.views.length - 5}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Latest Viewers List */}
+                <div className="space-y-2">
+                  {ticket.views.slice(0, 3).map((view) => (
+                    <div key={view.id} className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-900">{view.viewerName}</span>
+                      {view.viewerLineId && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          LINE
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Ticket Creator Info - Only show in staff mode */}
           {!isClientMode && (
             <Card className="shadow-md hover:shadow-lg transition-shadow">
