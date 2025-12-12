@@ -78,21 +78,33 @@ export async function GET(
       );
     }
 
-    // 2. Record view (async, don't wait) - skip if table doesn't exist
+    // 2. Record view (WAIT for it to complete) - then re-fetch views
     if (viewerName !== 'Anonymous') {
-      prisma.ticketView.create({
-        data: {
-          ticketId: params.id,
-          viewerName,
-          viewerLineId: viewerLineId || null,
-          viewerAvatar: viewerAvatar || null,
-        },
-      }).catch(err => {
+      try {
+        await prisma.ticketView.create({
+          data: {
+            ticketId: params.id,
+            viewerName,
+            viewerLineId: viewerLineId || null,
+            viewerAvatar: viewerAvatar || null,
+          },
+        });
+
+        // Re-fetch views to include the new one
+        const updatedViews = await prisma.ticketView.findMany({
+          where: { ticketId: params.id },
+          orderBy: { viewedAt: 'desc' },
+          take: 100,
+        });
+        views = updatedViews;
+
+        console.log('[LIFF] View recorded successfully, total views:', views.length);
+      } catch (err: any) {
         // Silently fail if TicketView table doesn't exist yet
         if (err.code !== 'P2021') {
           console.error('[LIFF] Failed to record view:', err);
         }
-      });
+      }
     }
 
     // 3. Return all data in one response
