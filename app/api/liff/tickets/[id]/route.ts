@@ -78,19 +78,30 @@ export async function GET(
       );
     }
 
-    // 2. Record view (WAIT for it to complete) - then re-fetch views
-    if (viewerName !== 'Anonymous') {
+    // 2. Record/update view (upsert: create if new, update viewedAt if exists)
+    if (viewerName !== 'Anonymous' && viewerLineId) {
       try {
-        await prisma.ticketView.create({
-          data: {
+        await prisma.ticketView.upsert({
+          where: {
+            ticketId_viewerLineId: {
+              ticketId: params.id,
+              viewerLineId: viewerLineId,
+            },
+          },
+          update: {
+            viewedAt: new Date(),
+            viewerName,
+            viewerAvatar: viewerAvatar || null,
+          },
+          create: {
             ticketId: params.id,
             viewerName,
-            viewerLineId: viewerLineId || null,
+            viewerLineId,
             viewerAvatar: viewerAvatar || null,
           },
         });
 
-        // Re-fetch views to include the new one
+        // Re-fetch views to include the updated one
         const updatedViews = await prisma.ticketView.findMany({
           where: { ticketId: params.id },
           orderBy: { viewedAt: 'desc' },
@@ -98,7 +109,7 @@ export async function GET(
         });
         views = updatedViews;
 
-        console.log('[LIFF] View recorded successfully, total views:', views.length);
+        console.log('[LIFF] View recorded/updated, unique viewers:', views.length);
       } catch (err: any) {
         // Silently fail if TicketView table doesn't exist yet
         if (err.code !== 'P2021') {

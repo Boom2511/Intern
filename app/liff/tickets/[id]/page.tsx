@@ -180,11 +180,13 @@ export default function LiffTicketDetailPage() {
     );
   }
 
-  // Debug: Log views data
-  console.log('[LIFF Page] Views data:', {
+  // Debug: Log views data and ticket info
+  console.log('[LIFF Page] Debug:', {
     viewsLength: views.length,
     viewsArray: views,
     firstView: views[0],
+    assignedTo: ticket?.assignedTo,
+    department: ticket?.department,
   });
 
   if (!ticket) {
@@ -213,7 +215,7 @@ export default function LiffTicketDetailPage() {
         >
           <ChevronLeft size={24} className="text-gray-700" />
         </button>
-        <h1 className="text-lg font-semibold text-gray-800">รายละเอียดตั๋ว</h1>
+        <h1 className="text-lg font-semibold text-gray-800">รายละเอียด</h1>
         <button
           type="button"
           className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -380,53 +382,37 @@ export default function LiffTicketDetailPage() {
               <span className="text-xs text-gray-500">({views.length})</span>
             </div>
 
-            {/* Avatar Stack - Show unique viewers only */}
-            {!showViewHistory && (() => {
-              // Get unique viewers by LineId or Name (latest view per viewer)
-              const uniqueViewers = views.reduce((acc: any[], view: any) => {
-                const existing = acc.find(v =>
-                  (view.viewerLineId && v.viewerLineId === view.viewerLineId) ||
-                  (!view.viewerLineId && v.viewerName === view.viewerName)
-                );
-                if (!existing) {
-                  acc.push(view);
-                }
-                return acc;
-              }, []);
-
-              if (uniqueViewers.length === 0) return null;
-
-              return (
-                <div className="flex -space-x-2 mr-2">
-                  {uniqueViewers.slice(0, 4).map((view, idx) => (
-                    <div
-                      key={view.viewerLineId || view.viewerName || idx}
-                      className="relative inline-block"
-                      style={{ zIndex: 10 - idx }}
-                    >
-                      {view.viewerAvatar ? (
-                        <img
-                          src={view.viewerAvatar}
-                          alt={view.viewerName}
-                          className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 ring-2 ring-white flex items-center justify-center">
-                          <span className="text-white text-xs font-medium">
-                            {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {uniqueViewers.length > 4 && (
-                    <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center" style={{ zIndex: 5 }}>
-                      <span className="text-gray-600 text-xs font-medium">+{uniqueViewers.length - 4}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Avatar Stack - Backend ensures unique viewers via upsert */}
+            {!showViewHistory && views.length > 0 && (
+              <div className="flex -space-x-2 mr-2">
+                {views.slice(0, 4).map((view, idx) => (
+                  <div
+                    key={view.id || idx}
+                    className="relative inline-block"
+                    style={{ zIndex: 10 - idx }}
+                  >
+                    {view.viewerAvatar ? (
+                      <img
+                        src={view.viewerAvatar}
+                        alt={view.viewerName}
+                        className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 ring-2 ring-white flex items-center justify-center">
+                        <span className="text-white text-xs font-medium">
+                          {view.viewerName?.charAt(0)?.toUpperCase() || '?'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {views.length > 4 && (
+                  <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center" style={{ zIndex: 5 }}>
+                    <span className="text-gray-600 text-xs font-medium">+{views.length - 4}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <svg
               className={`w-5 h-5 text-gray-400 transition-transform ${showViewHistory ? 'rotate-180' : ''}`}
@@ -470,7 +456,7 @@ export default function LiffTicketDetailPage() {
                             <span className="font-medium text-gray-900 text-sm">{view.viewerName}</span>
                             {view.viewerLineId && (
                               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                📱 LINE
+                                LINE
                               </span>
                             )}
                           </div>

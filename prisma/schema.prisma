@@ -207,6 +207,7 @@ model TicketView {
   viewerAvatar    String?  // LINE profile picture URL
   viewedAt        DateTime @default(now())
 
+  @@unique([ticketId, viewerLineId])  // One view per person per ticket
   @@index([ticketId])
   @@index([viewedAt])
 }
