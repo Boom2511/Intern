@@ -222,7 +222,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
-              {/* Issue Type and Tracking Number - Same Row */}
+              {/* Issue Type, Tracking Number, and Coordinator - Grid Layout */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
                 {/* Issue Type */}
                 <div className="flex items-start gap-3">
@@ -239,6 +239,21 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     )}
                   </div>
                 </div>
+
+                {/* Coordinator (assignedTo) */}
+                {ticket.assignedTo && (
+                  <div className="flex items-start gap-3">
+                    <div className="bg-green-50 p-2 rounded-lg">
+                      <User className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-gray-600 block mb-1">ผู้ประสานงาน</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {ticket.assignedTo}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Tracking Number */}
                 {ticket.trackingNo && (
