@@ -490,7 +490,8 @@ export default function LiffTicketDetailPage() {
               value={actionNote}
               onChange={(e) => setActionNote(e.target.value)}
               placeholder="กรุณาระบุวิธีดำเนินการ (ขั้นต่ำ 20 ตัวอักษร)"
-              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-2"
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-2"
+              style={{ fontSize: '16px' }}
               rows={3}
               disabled={submitting}
             />
