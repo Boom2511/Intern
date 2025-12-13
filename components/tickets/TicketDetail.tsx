@@ -11,6 +11,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -369,12 +370,14 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                                   href={img}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="block"
+                                  className="block relative h-24"
+                                  aria-label={`View image ${idx + 1}`}
                                 >
-                                  <img
+                                  <Image
                                     src={img}
                                     alt={`Image ${idx + 1}`}
-                                    className="w-full h-24 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer"
+                                    fill
+                                    className="object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer"
                                   />
                                 </a>
                               ))}
@@ -544,9 +547,11 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     {ticket.views.slice(0, 5).map((view) => (
                       <div key={view.id} className="flex items-center gap-3">
                         {view.viewerAvatar ? (
-                          <img
+                          <Image
                             src={view.viewerAvatar}
                             alt={view.viewerName}
+                            width={32}
+                            height={32}
                             className="w-8 h-8 rounded-full"
                           />
                         ) : (

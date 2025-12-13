@@ -7,6 +7,7 @@
 
 import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, Send } from 'lucide-react';
 import VConsole from '@/components/VConsole';
 import StatusHistory from '@/components/liff/StatusHistory';
@@ -339,10 +340,12 @@ export default function LiffTicketDetailPage() {
                   {note.images && note.images.length > 0 && (
                     <div className="flex gap-2 flex-wrap mt-2">
                       {note.images.map((img, idx) => (
-                        <img
+                        <Image
                           key={idx}
                           src={img}
                           alt={`หมายเหตุ ${idx + 1}`}
+                          width={80}
+                          height={80}
                           className="w-20 h-20 object-cover rounded border"
                         />
                       ))}
@@ -389,9 +392,11 @@ export default function LiffTicketDetailPage() {
                     style={{ zIndex: 10 - idx }}
                   >
                     {view.viewerAvatar ? (
-                      <img
+                      <Image
                         src={view.viewerAvatar}
                         alt={view.viewerName}
+                        width={32}
+                        height={32}
                         className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
                       />
                     ) : (
@@ -436,9 +441,11 @@ export default function LiffTicketDetailPage() {
                     return (
                       <div key={view.id || idx} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
                         {view.viewerAvatar ? (
-                          <img
+                          <Image
                             src={view.viewerAvatar}
                             alt={view.viewerName}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 rounded-full flex-shrink-0"
                           />
                         ) : (
@@ -485,6 +492,7 @@ export default function LiffTicketDetailPage() {
               <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
                 {selectedImages.map((file, idx) => (
                   <div key={idx} className="relative flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={URL.createObjectURL(file)}
                       alt={`Preview ${idx + 1}`}

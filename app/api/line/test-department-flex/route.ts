@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       createdAt: now,
       updatedAt: now,
       department: 'DB1' as const,
+      createdBy: 'Test Admin',
       assignedTo: null,
       resolvedAt: null,
       resolvedBy: null,
