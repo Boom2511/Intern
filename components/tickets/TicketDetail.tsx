@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,11 +37,26 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
   const [newNote, setNewNote] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentStaffName, setCurrentStaffName] = useState<string>('Staff');
 
   const departmentOptions = getDepartmentOptions();
 
   // Client can only mark as RESOLVED
   const isClientMode = viewMode === 'client';
+
+  // Fetch current staff user info
+  useEffect(() => {
+    if (!isClientMode) {
+      fetch('/api/auth/me')
+        .then(res => res.json())
+        .then(data => {
+          if (data.user?.name) {
+            setCurrentStaffName(data.user.name);
+          }
+        })
+        .catch(err => console.error('Failed to fetch current user:', err));
+    }
+  }, [isClientMode]);
 
   const handleStatusUpdate = async (newStatus: TicketStatus) => {
     setLoading(true);
@@ -51,7 +66,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          resolvedBy: isClientMode ? ticket.customer.name : 'Staff', // Track who resolved it
+          resolvedBy: isClientMode ? ticket.customer.name : currentStaffName,
+          changedByStaffName: !isClientMode ? currentStaffName : undefined,
         }),
       });
 
@@ -150,7 +166,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         body: JSON.stringify({
           addNote: {
             content: newNote,
-            createdBy: 'พนักงาน', // TODO: Get from auth session
+            createdBy: currentStaffName,
           }
         }),
       });
@@ -332,20 +348,30 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   ) : (
                     allNotes.map((note: any) => (
                       <div key={note.id} className="flex gap-3">
-                        {/* Avatar */}
+                        {/* Avatar - LINE user or Staff initial */}
                         <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-sm font-medium text-gray-600">
-                              {note.createdBy.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
+                          {note.createdByLineAvatar ? (
+                            <Image
+                              src={note.createdByLineAvatar}
+                              alt={note.createdByLineName || note.createdBy}
+                              width={40}
+                              height={40}
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                              <span className="text-sm font-medium text-gray-600">
+                                {note.createdBy.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-semibold text-gray-900">
-                              {note.createdBy}
+                              {note.createdByLineName || note.createdBy}
                             </span>
                             <span className="text-xs text-gray-500">
                               • {formatRelativeTime(note.createdAt)}
@@ -488,16 +514,29 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   {statusHistory.map((history: any, idx: number) => (
                     <div key={history.id} className="flex gap-3">
                       <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <div className="w-2 h-2 rounded-full bg-blue-600" />
-                        </div>
+                        {/* Avatar - LINE user or Staff initial */}
+                        {history.changedByLineAvatar ? (
+                          <Image
+                            src={history.changedByLineAvatar}
+                            alt={history.changedByLineName || history.changedBy}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-semibold text-blue-600">
+                              {history.changedBy.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                         {idx < statusHistory.length && (
                           <div className="w-0.5 h-full bg-gray-200 mt-1 min-h-[20px]" />
                         )}
                       </div>
                       <div className="flex-1 pb-4">
                         <p className="text-sm text-gray-900 font-medium mb-1">
-                          {history.changedBy} เปลี่ยนสถานะจาก{' '}
+                          {history.changedByLineName || history.changedBy} เปลี่ยนสถานะจาก{' '}
                           <span className="font-semibold">{getStatusLabel(history.fromStatus)}</span>
                           {' '}เป็น{' '}
                           <span className="font-semibold">{getStatusLabel(history.toStatus)}</span>

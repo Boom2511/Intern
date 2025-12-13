@@ -95,10 +95,17 @@ model Note {
   createdBy     String   // Name or ID of person who created the note
   isFromEndUser Boolean  @default(false) // True if reported by end user
   images        String[] // Array of image URLs (stored in Supabase storage)
+
+  // LINE user information (for notes from LIFF)
+  createdByLineUserId   String?  // LINE User ID
+  createdByLineName     String?  // Display name from LINE
+  createdByLineAvatar   String?  // Profile picture URL from LINE
+
   createdAt     DateTime @default(now())
 
   @@index([ticketId])
   @@index([isFromEndUser])
+  @@index([createdByLineUserId])
 }
 
 // StatusHistory model - tracks all status changes for audit trail

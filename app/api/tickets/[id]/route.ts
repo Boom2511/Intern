@@ -64,7 +64,17 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { status, department, assignedTo, addNote, resolvedBy } = body;
+    const {
+      status,
+      department,
+      assignedTo,
+      addNote,
+      resolvedBy,
+      changedByLineUserId,
+      changedByLineName,
+      changedByLineAvatar,
+      changedByStaffName, // For CEC staff updates
+    } = body;
 
     // Verify ticket exists
     const ticket = await prisma.ticket.findUnique({
@@ -112,7 +122,10 @@ export async function PATCH(
           ticketId: ticket.id,
           fromStatus: ticket.status,
           toStatus: status,
-          changedBy: resolvedBy || 'Staff',
+          changedBy: changedByStaffName || resolvedBy || 'Staff',
+          changedByLineUserId: changedByLineUserId || null,
+          changedByLineName: changedByLineName || null,
+          changedByLineAvatar: changedByLineAvatar || null,
           note: null,
         },
       });
@@ -203,6 +216,9 @@ export async function PATCH(
           content: addNote.content,
           createdBy: addNote.createdBy || 'Staff',
           isFromEndUser: false,
+          createdByLineUserId: addNote.createdByLineUserId || null,
+          createdByLineName: addNote.createdByLineName || null,
+          createdByLineAvatar: addNote.createdByLineAvatar || null,
         },
       });
     }

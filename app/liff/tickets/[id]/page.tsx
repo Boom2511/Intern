@@ -489,7 +489,7 @@ export default function LiffTicketDetailPage() {
           <div className="p-4">
             {/* Image Preview */}
             {selectedImages.length > 0 && (
-              <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-2 pt-2 px-1">
                 {selectedImages.map((file, idx) => (
                   <div key={idx} className="relative flex-shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -501,7 +501,8 @@ export default function LiffTicketDetailPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveImage(idx)}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold shadow-md hover:bg-red-600 transition-colors"
+                      aria-label="ลบรูปภาพ"
                     >
                       ×
                     </button>
