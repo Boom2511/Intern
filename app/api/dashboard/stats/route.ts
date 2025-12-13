@@ -205,6 +205,46 @@ export async function GET() {
         count: dept._count,
       }));
 
+    // Get department status breakdown for stacked chart
+    const departmentStatusData = await prisma.ticket.groupBy({
+      by: ['department', 'status'],
+      _count: true,
+      where: {
+        department: {
+          not: null,
+        },
+      },
+    });
+
+    // Transform to format needed for stacked bar chart
+    const departmentStatusMap: Record<string, { department: string; open: number; inProgress: number; resolved: number }> = {};
+
+    departmentStatusData.forEach((item) => {
+      if (!item.department || item.department.toLowerCase().includes('test')) {
+        return; // Skip null departments and test groups
+      }
+
+      if (!departmentStatusMap[item.department]) {
+        departmentStatusMap[item.department] = {
+          department: item.department,
+          open: 0,
+          inProgress: 0,
+          resolved: 0,
+        };
+      }
+
+      // Categorize statuses
+      if (item.status === 'NEW' || item.status === 'PENDING') {
+        departmentStatusMap[item.department].open += item._count;
+      } else if (item.status === 'IN_PROGRESS') {
+        departmentStatusMap[item.department].inProgress += item._count;
+      } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
+        departmentStatusMap[item.department].resolved += item._count;
+      }
+    });
+
+    const departmentStatusBreakdown = Object.values(departmentStatusMap);
+
     // Calculate trends (percentage of tickets created in last 30 days)
     const totalTrend = totalTickets > 0
       ? Math.round((totalTicketsLast30Days / totalTickets) * 100)
@@ -234,6 +274,7 @@ export async function GET() {
       recentTickets,
       recentActivities,
       departmentStats,
+      departmentStatusBreakdown,
       resolutionTrends,
     };
 
