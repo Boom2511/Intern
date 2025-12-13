@@ -331,37 +331,60 @@ export default function LiffTicketDetailPage() {
         {notes.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <h3 className="text-sm font-bold text-gray-800 mb-3">บันทึกการดำเนินการ</h3>
-            <div className="space-y-3">
-              {notes.map((note) => (
-                <div key={note.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                  <div className="text-sm text-gray-900 mb-1 whitespace-pre-wrap leading-relaxed">
-                    {note.content}
+            <div className="space-y-4">
+              {notes.map((note: any) => (
+                <div key={note.id} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                  {/* Avatar - LINE user or Staff initial */}
+                  <div className="flex-shrink-0">
+                    {note.createdByLineAvatar ? (
+                      <Image
+                        src={note.createdByLineAvatar}
+                        alt={note.createdByLineName || note.createdBy}
+                        width={40}
+                        height={40}
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-600">
+                          {note.createdBy.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {note.images && note.images.length > 0 && (
-                    <div className="flex gap-2 flex-wrap mt-2">
-                      {note.images.map((img, idx) => (
-                        <Image
-                          key={idx}
-                          src={img}
-                          alt={`หมายเหตุ ${idx + 1}`}
-                          width={80}
-                          height={80}
-                          className="w-20 h-20 object-cover rounded border"
-                        />
-                      ))}
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {note.createdByLineName || note.createdBy}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        • {new Date(note.createdAt).toLocaleDateString('th-TH', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                    <span>{note.createdBy}</span>
-                    <span>•</span>
-                    <span>
-                      {new Date(note.createdAt).toLocaleDateString('th-TH', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
+                    <div className="text-sm text-gray-700 mb-1 whitespace-pre-wrap leading-relaxed">
+                      {note.content}
+                    </div>
+                    {note.images && note.images.length > 0 && (
+                      <div className="flex gap-2 flex-wrap mt-2">
+                        {note.images.map((img: string, idx: number) => (
+                          <Image
+                            key={idx}
+                            src={img}
+                            alt={`หมายเหตุ ${idx + 1}`}
+                            width={80}
+                            height={80}
+                            className="w-20 h-20 object-cover rounded border"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

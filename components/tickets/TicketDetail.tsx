@@ -281,6 +281,21 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   )}
                 </div>
 
+                {/* Salesforce ID Row */}
+                {ticket.salesforceId && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <FileText className="h-4 w-4" />
+                      <span>Salesforce ID</span>
+                    </div>
+                    <div className="pl-6">
+                      <span className="text-sm font-mono text-gray-900 bg-purple-50 px-3 py-1.5 rounded border border-purple-200">
+                        {ticket.salesforceId}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Recipient Information */}
                 <div className="border-t pt-5">
                   <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
