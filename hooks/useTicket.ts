@@ -1,6 +1,6 @@
 /**
  * SWR Hook for fetching single ticket details
- * Includes automatic polling for real-time updates
+ * Uses event-based updates via mutate instead of polling
  */
 
 import useSWR from 'swr';
@@ -12,13 +12,13 @@ export interface UseTicketOptions {
 }
 
 export function useTicket(ticketId: string | null, options: UseTicketOptions = {}) {
-  const { refreshInterval = 30000 } = options;
+  const { refreshInterval = 0 } = options; // Disabled by default
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     ticketId ? `/api/tickets/${ticketId}` : null,
     fetcher,
     {
-      refreshInterval, // Auto-refresh every 30 seconds
+      refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
       dedupingInterval: 5000,

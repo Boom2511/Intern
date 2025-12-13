@@ -31,7 +31,7 @@ export function useTickets(options: UseTicketsOptions = {}) {
     endDate,
     page = 1,
     limit = 20,
-    refreshInterval = 30000
+    refreshInterval = 0 // Disabled by default - use event-based mutate instead
   } = options;
 
   // Build URL with query params
@@ -52,7 +52,7 @@ export function useTickets(options: UseTicketsOptions = {}) {
     url,
     fetcher,
     {
-      refreshInterval, // Auto-refresh every 30 seconds
+      refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true, // Refresh when user returns to tab
       revalidateOnReconnect: true, // Refresh when network reconnects
       dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds

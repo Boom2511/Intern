@@ -20,6 +20,7 @@ import { getIssueTypeOptions } from '@/config/issue-types';
 import { getDepartmentOptions } from '@/config/departments';
 import { CircleAlert, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { invalidateTicketsList } from '@/lib/swr-utils';
 
 interface TicketFormData {
   customerName: string;
@@ -263,6 +264,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       const data = await response.json();
 
       if (data.success) {
+        // Invalidate tickets list cache to show new ticket
+        invalidateTicketsList();
+
         // Redirect to ticket detail page on success
         router.push(`/tickets/${data.data.id}`);
       } else {

@@ -1,6 +1,6 @@
 /**
  * SWR Hook for fetching dashboard statistics
- * Includes automatic polling for real-time stats
+ * Uses event-based updates via mutate instead of polling
  */
 
 import useSWR from 'swr';
@@ -12,13 +12,13 @@ export interface UseDashboardStatsOptions {
 }
 
 export function useDashboardStats(options: UseDashboardStatsOptions = {}) {
-  const { refreshInterval = 60000 } = options; // Dashboard updates every 60 seconds
+  const { refreshInterval = 0 } = options; // Disabled by default
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     '/api/dashboard/stats',
     fetcher,
     {
-      refreshInterval,
+      refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
       dedupingInterval: 10000,

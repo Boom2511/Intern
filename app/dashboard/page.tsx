@@ -17,10 +17,8 @@ import { useDashboardStats } from '@/hooks/useDashboardStats';
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Use SWR hook with 60-second polling for dashboard
-  const { stats, isLoading, isError, isValidating, mutate } = useDashboardStats({
-    refreshInterval: 60000, // 60 seconds
-  });
+  // Use SWR hook without polling - updates on events only
+  const { stats, isLoading, isError, isValidating, mutate } = useDashboardStats();
 
   // Manual refresh
   const handleRefresh = () => {

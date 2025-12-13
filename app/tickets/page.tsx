@@ -33,7 +33,7 @@ function TicketsContent() {
   const pageParam = searchParams.get('page');
   const [currentPage, setCurrentPage] = useState(pageParam ? parseInt(pageParam, 10) : 1);
 
-  // Use SWR hook with 30-second polling
+  // Use SWR hook without polling - updates on events only
   const { tickets, pagination, isLoading, isError, isValidating, mutate } = useTickets({
     status,
     priority,
@@ -44,7 +44,7 @@ function TicketsContent() {
     endDate,
     page: currentPage,
     limit: 20,
-    refreshInterval: 30000,
+    // No refreshInterval - will update via mutate() on ticket creation/update events
   });
 
   // Handle page change

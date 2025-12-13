@@ -21,10 +21,8 @@ function TicketDetailContent() {
   // Determine view mode based on query parameter (default is staff)
   const viewMode = searchParams.get('mode') === 'client' ? 'client' : 'staff';
 
-  // Use SWR hook with 30-second polling
-  const { ticket, isLoading, isError, isValidating, mutate } = useTicket(ticketId, {
-    refreshInterval: 30000,
-  });
+  // Use SWR hook without polling - updates on events only
+  const { ticket, isLoading, isError, isValidating, mutate } = useTicket(ticketId);
 
   // Loading state
   if (isLoading) {

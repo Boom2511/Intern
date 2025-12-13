@@ -24,6 +24,7 @@ import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { ROLE_LABELS } from '@/config/roles';
 import { User, MessageSquare, Edit, CheckCircle, Package, MapPin, FileText, Tag, TrendingUp, History } from 'lucide-react';
+import { invalidateTicketsList } from '@/lib/swr-utils';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -84,6 +85,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         if (mutate) {
           mutate();
         }
+        // Invalidate tickets list to show updated status
+        invalidateTicketsList();
       } else {
         toast({
           variant: 'error',
@@ -135,6 +138,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         if (mutate) {
           mutate();
         }
+        // Invalidate tickets list to show updated department
+        invalidateTicketsList();
       } else {
         toast({
           variant: 'error',
