@@ -24,7 +24,7 @@ import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { ROLE_LABELS } from '@/config/roles';
 import { User, MessageSquare, Edit, CheckCircle, Package, MapPin, FileText, Tag, TrendingUp, History } from 'lucide-react';
-import { invalidateTicketsList } from '@/lib/swr-utils';
+import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -44,6 +44,12 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
   // Client can only mark as RESOLVED
   const isClientMode = viewMode === 'client';
+
+  // Update local state when ticket prop changes (real-time updates)
+  useEffect(() => {
+    setStatus(ticket.status);
+    setDepartment(ticket.department || null);
+  }, [ticket.status, ticket.department]);
 
   // Fetch current staff user info
   useEffect(() => {
@@ -85,8 +91,9 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         if (mutate) {
           mutate();
         }
-        // Invalidate tickets list to show updated status
+        // Invalidate tickets list and dashboard to show updated status
         invalidateTicketsList();
+        invalidateDashboardStats();
       } else {
         toast({
           variant: 'error',
@@ -138,8 +145,9 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         if (mutate) {
           mutate();
         }
-        // Invalidate tickets list to show updated department
+        // Invalidate tickets list and dashboard to show updated department
         invalidateTicketsList();
+        invalidateDashboardStats();
       } else {
         toast({
           variant: 'error',
@@ -275,7 +283,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <Package className="h-4 w-4" />
-                        <span>เลขพัสดุ</span>
+                        <span>หมายเลขสิ่งของ</span>
                       </div>
                       <div className="pl-6">
                         <span className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-1.5 rounded border border-gray-200">

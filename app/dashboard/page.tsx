@@ -229,6 +229,39 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Department Chart */}
+        {stats.departmentStats && stats.departmentStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Tickets ตามแผนก</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats.departmentStats
+                  .sort((a: any, b: any) => b.count - a.count)
+                  .map((dept: any, index: number) => {
+                    const maxCount = Math.max(...stats.departmentStats.map((d: any) => d.count));
+                    const percentage = (dept.count / maxCount) * 100;
+                    return (
+                      <div key={index} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-gray-700">{dept.department}</span>
+                          <span className="text-gray-900 font-semibold">{dept.count}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div
+                            className="bg-blue-600 h-2.5 rounded-full transition-all"
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recent Tickets - Takes 2 columns */}
@@ -251,7 +284,7 @@ export default function DashboardPage() {
                         <div className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-2">
                                 <span className="font-semibold text-gray-900">
                                   {ticket.ticketNo}
                                 </span>
@@ -268,19 +301,40 @@ export default function DashboardPage() {
                                 >
                                   {getPriorityLabel(ticket.priority)}
                                 </Badge>
+                                <Badge
+                                  className={
+                                    ticket.status === 'NEW'
+                                      ? 'bg-blue-100 text-blue-800 border-0'
+                                      : ticket.status === 'IN_PROGRESS'
+                                      ? 'bg-yellow-100 text-yellow-800 border-0'
+                                      : ticket.status === 'PENDING'
+                                      ? 'bg-orange-100 text-orange-800 border-0'
+                                      : ticket.status === 'RESOLVED'
+                                      ? 'bg-green-100 text-green-800 border-0'
+                                      : 'bg-gray-100 text-gray-800 border-0'
+                                  }
+                                >
+                                  {getStatusLabel(ticket.status)}
+                                </Badge>
                               </div>
-                              <p className="text-sm text-gray-600 line-clamp-1">
+                              <p className="text-sm text-gray-600 line-clamp-1 mb-1">
                                 {ticket.description}
                               </p>
+                              {ticket.department && (
+                                <p className="text-xs text-gray-500">
+                                  แผนก: {ticket.department}
+                                </p>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>{getStatusLabel(ticket.status)}</span>
+                          <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
                             <span>
                               {new Date(ticket.createdAt).toLocaleDateString('th-TH', {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
                               })}
                             </span>
                           </div>

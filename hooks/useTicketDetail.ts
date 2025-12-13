@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { invalidateTicketsList } from '@/lib/swr-utils';
+import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 
 interface LineProfile {
   userId: string;
@@ -131,8 +131,9 @@ export function useTicketDetail(ticketId: string) {
               statusHistory: reloadResult.data.statusHistory || [],
               views: reloadResult.data.views || [],
             });
-            // Invalidate tickets list to show updated status
+            // Invalidate tickets list and dashboard to show updated status
             invalidateTicketsList();
+            invalidateDashboardStats();
           }
         } catch (autoUpdateErr) {
           console.error('[useTicketDetail] Failed to auto-update status:', autoUpdateErr);

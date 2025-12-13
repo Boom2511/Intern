@@ -52,6 +52,7 @@ export async function GET() {
         description: true,
         priority: true,
         status: true,
+        department: true,
         createdAt: true,
       },
     });
@@ -75,6 +76,25 @@ export async function GET() {
       },
     });
 
+    // Get department statistics (exclude test groups)
+    const departmentCounts = await prisma.ticket.groupBy({
+      by: ['department'],
+      _count: true,
+      where: {
+        department: {
+          not: null,
+        },
+      },
+    });
+
+    // Filter out test groups manually and format department data for chart
+    const departmentStats = departmentCounts
+      .filter((dept) => dept.department && !dept.department.toLowerCase().includes('test'))
+      .map((dept) => ({
+        department: dept.department || 'ไม่ระบุ',
+        count: dept._count,
+      }));
+
     // Calculate trends (percentage of tickets created in last 30 days)
     const totalTrend = totalTickets > 0
       ? Math.round((totalTicketsLast30Days / totalTickets) * 100)
@@ -96,6 +116,7 @@ export async function GET() {
       },
       recentTickets,
       recentActivities,
+      departmentStats,
     };
 
     return NextResponse.json({ success: true, stats });
