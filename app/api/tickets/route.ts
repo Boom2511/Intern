@@ -15,6 +15,7 @@ import { getSLAHours, getSLAPriority } from '@/config/issue-types';
 import { lineService } from '@/lib/line';
 import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
+import { getCurrentUser } from '@/lib/auth';
 
 /**
  * GET /api/tickets
@@ -139,6 +140,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Get current user for createdBy field
+    const currentUser = await getCurrentUser();
+
     const body = await request.json();
     const {
       customerName,
@@ -256,6 +260,7 @@ export async function POST(request: NextRequest) {
         slaHours,
         slaDeadline,
         slaStatus,
+        createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
       },
       include: {
         customer: true,

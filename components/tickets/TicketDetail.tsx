@@ -516,13 +516,13 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-gray-900 font-medium mb-1">
-                        Ticket ถูกสร้างโดย {ticket.customer.name}
+                        Ticket ถูกสร้างโดย {(ticket as any).createdBy || 'CEC Staff'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {formatThaiDate(ticket.createdAt)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        โดย {ticket.customer.name} (CEC)
+                        ผู้ประสานงาน: {ticket.customer.name} (CEC)
                       </p>
                     </div>
                   </div>

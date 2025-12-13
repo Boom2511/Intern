@@ -23,14 +23,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 const ISSUE_TYPE_LABELS: Record<string, string> = {
-  DAMAGED: 'สินค้าชำรุด',
-  WRONG_ITEM: 'ส่งสินค้าผิด',
-  MISSING_ITEM: 'สินค้าไม่ครบ',
-  DELIVERY_ISSUE: 'ปัญหาการจัดส่ง',
-  QUALITY_ISSUE: 'คุณภาพสินค้า',
-  NEW_DELIVERY: 'จัดส่งใหม่',
-  CHANGE_ADDRESS: 'เปลี่ยนที่อยู่',
-  CANCEL_ORDER: 'ยกเลิกคำสั่งซื้อ',
+  NEW_DELIVERY: 'นำจ่ายใหม่',
+  CHECK_DELIVERY: 'ตรวจสอบการนำจ่าย',
+  RETURN_TO_SENDER: 'ร้องเรียนบริการ',
+  DAMAGED_PARCEL: 'ขอถอนเงิน',
+  LOST_PARCEL: 'สอบถามข้อมูล',
   OTHER: 'อื่นๆ',
 };
 
@@ -252,10 +249,10 @@ export default function LiffTicketDetailPage() {
               <FileText size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
               <span>ประเภท: {ISSUE_TYPE_LABELS[ticket.issueType] || ticket.issueType}</span>
             </div>
-            {ticket.assignedTo && (
+            {(ticket as any).createdBy && (
               <div className="flex items-start text-sm text-gray-600">
                 <User size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
-                <span>ผู้ประสานงาน: {ticket.assignedTo}</span>
+                <span>ผู้สร้าง: {(ticket as any).createdBy}</span>
               </div>
             )}
             {ticket.department && (

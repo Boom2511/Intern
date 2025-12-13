@@ -60,6 +60,7 @@ model Ticket {
   slaStatus    SLAStatus    @default(ON_TRACK)
 
   // Assignment & Resolution
+  createdBy    String?      // Staff member who created this ticket
   assignedTo   String?      // Staff member assigned to this ticket
   resolvedBy   String?      // Staff member who resolved this ticket
   resolvedAt   DateTime?    // Timestamp when ticket was resolved
