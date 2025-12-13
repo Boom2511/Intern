@@ -1,7 +1,7 @@
 /**
  * Dashboard Page
- * Overview of ticket statistics and recent activity
- * Uses SWR for auto-refresh every 60 seconds
+ * Modern dashboard with welcome banner, statistics, trends chart, and activity feed
+ * Uses SWR with event-based updates
  */
 
 'use client';
@@ -9,41 +9,79 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Ticket, Clock, CheckCircle, AlertCircle, TrendingUp, CheckCheck, AlertTriangle, Loader2, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
+import { useEffect, useState } from 'react';
+import { getStatusLabel, getPriorityLabel } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Use SWR hook without polling - updates on events only
-  const { stats, isLoading, isError, isValidating, mutate } = useDashboardStats();
+  const { stats, isLoading, isError, isValidating } = useDashboardStats();
 
-  // Manual refresh
-  const handleRefresh = () => {
-    mutate();
+  // Fetch current user
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) {
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(err => console.error('Failed to fetch user:', err));
+  }, []);
+
+  // Update time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format time
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Get greeting based on time
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'สวัสดีตอนเช้า';
+    if (hour < 18) return 'สวัสดีตอนบ่าย';
+    return 'สวัสดีตอนเย็น';
   };
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader className="pb-2">
-                <div className="h-4 bg-gray-200 rounded w-20"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-gray-200 rounded w-12"></div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Card className="animate-pulse">
+            <CardContent className="py-12">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 bg-gray-200 rounded-full"></div>
+                <div className="flex-1">
+                  <div className="h-6 bg-gray-200 rounded w-48 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-32"></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="py-6">
+                  <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-16"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -52,31 +90,26 @@ export default function DashboardPage() {
   // Error state
   if (isError || !stats) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk</p>
-        </div>
-
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-red-900">ไม่สามารถโหลดข้อมูลได้</h3>
-                <p className="text-sm text-red-700 mt-1">
-                  กรุณาตรวจสอบการเชื่อมต่อฐานข้อมูล
-                </p>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-red-900">ไม่สามารถโหลดข้อมูลได้</h3>
+                  <p className="text-sm text-red-700 mt-1">กรุณาตรวจสอบการเชื่อมต่อฐานข้อมูล</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="min-h-screen bg-gray-50">
       {/* Updating indicator */}
       {isValidating && !isLoading && (
         <div className="fixed top-4 right-4 z-50 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
@@ -85,210 +118,243 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            กลับ
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-gray-600 mt-2">ภาพรวมและสถิติระบบ Help Desk (อัพเดตอัตโนมัติทุก 60 วินาที)</p>
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={handleRefresh}
-          disabled={isValidating}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isValidating ? 'animate-spin' : ''}`} />
-          รีเฟรช
-        </Button>
-      </div>
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        <Link href="/tickets" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tickets ทั้งหมด</CardTitle>
-              <Ticket className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">รวมทุกสถานะ</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/tickets?status=NEW" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Tickets ใหม่</CardTitle>
-              <AlertCircle className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.newTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">รอรับเรื่อง</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/tickets?status=IN_PROGRESS" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">กำลังดำเนินการ</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.inProgressTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">อยู่ระหว่างแก้ไข</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/tickets?status=PENDING" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">รอดำเนินการ</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">เกิน SLA/มีรายงาน</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/tickets?status=RESOLVED" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">แก้ไขแล้ว</CardTitle>
-              <CheckCheck className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.resolvedTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">รอยืนยันปิด</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/tickets?status=CLOSED" className="block">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">ปิดแล้ว</CardTitle>
-              <CheckCircle className="h-4 w-4 text-gray-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.closedTickets}</div>
-              <p className="text-xs text-gray-500 mt-1">เสร็จสมบูรณ์</p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>สรุปตามสถานะ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-blue-100 text-blue-800 border-0">ใหม่</Badge>
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        {/* Welcome Banner */}
+        <Card className="bg-gradient-to-r from-blue-600 to-blue-700 border-0 text-white">
+          <CardContent className="py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="bg-white/20 p-3 rounded-full">
+                  <Ticket className="h-8 w-8 text-white" />
                 </div>
-                <span className="text-lg font-bold text-blue-700">{stats.newTickets}</span>
+                <div>
+                  <h1 className="text-2xl font-bold">
+                    {getGreeting()}, {currentUser?.name || 'User'}! 👋
+                  </h1>
+                  <p className="text-blue-100 mt-1">
+                    คุณมี {stats.openTickets} Tickets ที่กำลังดำเนินการ
+                  </p>
+                </div>
               </div>
-
-              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-yellow-100 text-yellow-800 border-0">กำลังดำเนินการ</Badge>
-                </div>
-                <span className="text-lg font-bold text-yellow-700">{stats.inProgressTickets}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-orange-100 text-orange-800 border-0">รอดำเนินการ</Badge>
-                </div>
-                <span className="text-lg font-bold text-orange-700">{stats.pendingTickets}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-green-100 text-green-800 border-0">แก้ไขแล้ว</Badge>
-                </div>
-                <span className="text-lg font-bold text-green-700">{stats.resolvedTickets}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-gray-100 text-gray-800 border-0">ปิด</Badge>
-                </div>
-                <span className="text-lg font-bold text-gray-700">{stats.closedTickets}</span>
+              <div className="text-right">
+                <div className="text-3xl font-bold">{formatTime(currentTime)}</div>
+                <p className="text-blue-100 text-sm mt-1">
+                  {currentTime.toLocaleDateString('th-TH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Summary Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>สรุปภาพรวม</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Tickets */}
+          <Link href="/tickets">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <Ticket className="h-6 w-6 text-blue-600" />
+                  </div>
+                  {stats.trends?.total > 0 && (
+                    <div className="flex items-center gap-1 text-green-600 text-sm">
+                      <TrendingUp className="h-4 w-4" />
+                      <span>+{stats.trends.total}%</span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Tickets ที่เปิดอยู่</p>
-                  <p className="text-2xl font-bold mt-1">{stats.openTickets}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    รวม NEW, IN_PROGRESS, PENDING
-                  </p>
+                <p className="text-sm text-gray-600 mb-1">Total Tickets</p>
+                <p className="text-3xl font-bold">{stats.totalTickets.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Pending */}
+          <Link href="/tickets?status=PENDING">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-orange-100 p-3 rounded-lg">
+                    <AlertTriangle className="h-6 w-6 text-orange-600" />
+                  </div>
+                  {stats.trends?.pending > 0 && (
+                    <div className="flex items-center gap-1 text-orange-600 text-sm">
+                      <TrendingUp className="h-4 w-4" />
+                      <span>+{stats.trends.pending}%</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Pending</p>
+                <p className="text-3xl font-bold">{stats.pendingTickets}</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Resolved */}
+          <Link href="/tickets?status=RESOLVED">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                  {stats.trends?.resolved > 0 && (
+                    <div className="flex items-center gap-1 text-green-600 text-sm">
+                      <TrendingUp className="h-4 w-4" />
+                      <span>+{stats.trends.resolved}%</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Resolved</p>
+                <p className="text-3xl font-bold">{stats.resolvedTickets}</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Team Members */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardContent className="py-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-purple-100 p-3 rounded-lg">
+                  <Users className="h-6 w-6 text-purple-600" />
                 </div>
               </div>
+              <p className="text-sm text-gray-600 mb-1">Team Members</p>
+              <p className="text-3xl font-bold">{stats.totalUsers || 0}</p>
+            </CardContent>
+          </Card>
+        </div>
 
-              <div className="border-t pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">อัตราการปิด</p>
-                    <p className="text-xl font-bold mt-1">
-                      {stats.totalTickets > 0
-                        ? Math.round((stats.closedTickets / stats.totalTickets) * 100)
-                        : 0}%
-                    </p>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Tickets - Takes 2 columns */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Recent Tickets */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Recent Tickets</CardTitle>
+                <Link href="/tickets">
+                  <Button variant="ghost" size="sm">
+                    ดูทั้งหมด
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {stats.recentTickets && stats.recentTickets.length > 0 ? (
+                  <div className="space-y-3">
+                    {stats.recentTickets.map((ticket: any) => (
+                      <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
+                        <div className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-semibold text-gray-900">
+                                  {ticket.ticketNo}
+                                </span>
+                                <Badge
+                                  className={
+                                    ticket.priority === 'URGENT'
+                                      ? 'bg-red-100 text-red-800 border-0'
+                                      : ticket.priority === 'HIGH'
+                                      ? 'bg-orange-100 text-orange-800 border-0'
+                                      : ticket.priority === 'MEDIUM'
+                                      ? 'bg-yellow-100 text-yellow-800 border-0'
+                                      : 'bg-blue-100 text-blue-800 border-0'
+                                  }
+                                >
+                                  {getPriorityLabel(ticket.priority)}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-600 line-clamp-1">
+                                {ticket.description}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>{getStatusLabel(ticket.status)}</span>
+                            <span>
+                              {new Date(ticket.createdAt).toLocaleDateString('th-TH', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">อัตราการแก้ไข</p>
-                    <p className="text-xl font-bold mt-1">
-                      {stats.totalTickets > 0
-                        ? Math.round(((stats.resolvedTickets + stats.closedTickets) / stats.totalTickets) * 100)
-                        : 0}%
-                    </p>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>ไม่มี Tickets ล่าสุด</p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Team Activity - Takes 1 column */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stats.recentActivities && stats.recentActivities.length > 0 ? (
+                <div className="space-y-4">
+                  {stats.recentActivities.map((activity: any) => (
+                    <div key={activity.id} className="flex gap-3">
+                      <div className="flex-shrink-0">
+                        {activity.changedByLineAvatar ? (
+                          <Image
+                            src={activity.changedByLineAvatar}
+                            alt={activity.changedByLineName || activity.changedBy}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-xs font-semibold text-blue-600">
+                              {activity.changedBy.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-medium">
+                            {activity.changedByLineName || activity.changedBy}
+                          </span>
+                          {' '}อัปเดต{' '}
+                          <span className="font-medium">{activity.ticket.ticketNo}</span>
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {getStatusLabel(activity.fromStatus)} → {getStatusLabel(activity.toStatus)}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(activity.createdAt).toLocaleDateString('th-TH', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              {stats.totalTickets === 0 && (
-                <div className="bg-gray-50 p-4 rounded-lg text-center">
-                  <p className="text-sm text-gray-600">
-                    ยังไม่มีข้อมูล Tickets ในระบบ
-                  </p>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>ไม่มีกิจกรรมล่าสุด</p>
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
