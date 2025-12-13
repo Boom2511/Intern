@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
-import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel } from '@/lib/utils';
+import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { ROLE_LABELS } from '@/config/roles';
@@ -189,7 +189,9 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
   // Get all notes (both user reports and internal)
   const allNotes = ticket.notes || [];
-  const systemNotes = allNotes.filter((note: any) => note.createdBy === 'System');
+
+  // Get status history for timeline (separate from notes)
+  const statusHistory = ticket.statusHistory || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -428,12 +430,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                         {ticket.views?.length || 0}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-600">ผู้ประสานงาน</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {ticket.customer.name}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Department Select */}
@@ -488,33 +484,33 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  {/* Timeline Items */}
-                  {systemNotes.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-sm text-gray-500">ยังไม่มีประวัติการดำเนินการ</p>
-                    </div>
-                  ) : (
-                    systemNotes.map((note: any, idx: number) => (
-                      <div key={note.id} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-blue-600" />
-                          </div>
-                          {idx < systemNotes.length - 1 && (
-                            <div className="w-0.5 h-full bg-gray-200 mt-1" />
-                          )}
+                  {/* Status History Timeline Items */}
+                  {statusHistory.map((history: any, idx: number) => (
+                    <div key={history.id} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-2 h-2 rounded-full bg-blue-600" />
                         </div>
-                        <div className="flex-1 pb-4">
-                          <p className="text-sm text-gray-900 font-medium mb-1">
-                            {note.content}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatRelativeTime(note.createdAt)}
-                          </p>
-                        </div>
+                        {idx < statusHistory.length && (
+                          <div className="w-0.5 h-full bg-gray-200 mt-1 min-h-[20px]" />
+                        )}
                       </div>
-                    ))
-                  )}
+                      <div className="flex-1 pb-4">
+                        <p className="text-sm text-gray-900 font-medium mb-1">
+                          {history.changedBy} เปลี่ยนสถานะจาก{' '}
+                          <span className="font-semibold">{getStatusLabel(history.fromStatus)}</span>
+                          {' '}เป็น{' '}
+                          <span className="font-semibold">{getStatusLabel(history.toStatus)}</span>
+                        </p>
+                        {history.note && (
+                          <p className="text-xs text-gray-600 mb-1">{history.note}</p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          {formatRelativeTime(history.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Created Event - Always show */}
                   <div className="flex gap-3">
