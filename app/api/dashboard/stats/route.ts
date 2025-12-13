@@ -9,6 +9,116 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Helper function to generate 7-day trends
+async function generate7DayTrends() {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const today = new Date();
+  const trends = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    date.setHours(0, 0, 0, 0);
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const [solved, unresolved] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: date, lt: nextDate },
+          status: { in: ['RESOLVED', 'CLOSED'] },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: date, lt: nextDate },
+          status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
+        },
+      }),
+    ]);
+
+    trends.push({
+      day: days[date.getDay()],
+      solved,
+      unresolved,
+    });
+  }
+
+  return trends;
+}
+
+// Helper function to generate 30-day trends (weekly)
+async function generate30DayTrends() {
+  const today = new Date();
+  const trends = [];
+
+  for (let week = 3; week >= 0; week--) {
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - (week + 1) * 7);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 7);
+
+    const [solved, unresolved] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startDate, lt: endDate },
+          status: { in: ['RESOLVED', 'CLOSED'] },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startDate, lt: endDate },
+          status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
+        },
+      }),
+    ]);
+
+    trends.push({
+      day: `W${4 - week}`,
+      solved,
+      unresolved,
+    });
+  }
+
+  return trends;
+}
+
+// Helper function to generate 90-day trends (monthly)
+async function generate90DayTrends() {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const today = new Date();
+  const trends = [];
+
+  for (let month = 2; month >= 0; month--) {
+    const startDate = new Date(today.getFullYear(), today.getMonth() - month, 1);
+    const endDate = new Date(today.getFullYear(), today.getMonth() - month + 1, 1);
+
+    const [solved, unresolved] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startDate, lt: endDate },
+          status: { in: ['RESOLVED', 'CLOSED'] },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startDate, lt: endDate },
+          status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
+        },
+      }),
+    ]);
+
+    trends.push({
+      day: months[startDate.getMonth()],
+      solved,
+      unresolved,
+    });
+  }
+
+  return trends;
+}
+
 export async function GET() {
   try {
     // Get current date ranges
@@ -100,6 +210,13 @@ export async function GET() {
       ? Math.round((totalTicketsLast30Days / totalTickets) * 100)
       : 0;
 
+    // Generate resolution trends data
+    const resolutionTrends = {
+      '7d': await generate7DayTrends(),
+      '30d': await generate30DayTrends(),
+      '90d': await generate90DayTrends(),
+    };
+
     const stats = {
       totalTickets,
       newTickets,
@@ -117,6 +234,7 @@ export async function GET() {
       recentTickets,
       recentActivities,
       departmentStats,
+      resolutionTrends,
     };
 
     return NextResponse.json({ success: true, stats });

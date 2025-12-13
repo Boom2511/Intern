@@ -15,6 +15,7 @@ import Image from 'next/image';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useEffect, useState } from 'react';
 import { getStatusLabel, getPriorityLabel } from '@/lib/utils';
+import TicketResolutionChart from '@/components/dashboard/TicketResolutionChart';
 
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -229,38 +230,44 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Department Chart */}
-        {stats.departmentStats && stats.departmentStats.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Tickets ตามแผนก</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {stats.departmentStats
-                  .sort((a: any, b: any) => b.count - a.count)
-                  .map((dept: any, index: number) => {
-                    const maxCount = Math.max(...stats.departmentStats.map((d: any) => d.count));
-                    const percentage = (dept.count / maxCount) * 100;
-                    return (
-                      <div key={index} className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-gray-700">{dept.department}</span>
-                          <span className="text-gray-900 font-semibold">{dept.count}</span>
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Ticket Resolution Trends Chart */}
+          <TicketResolutionChart data={stats.resolutionTrends} />
+
+          {/* Department Chart */}
+          {stats.departmentStats && stats.departmentStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Tickets ตามแผนก</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {stats.departmentStats
+                    .sort((a: any, b: any) => b.count - a.count)
+                    .map((dept: any, index: number) => {
+                      const maxCount = Math.max(...stats.departmentStats.map((d: any) => d.count));
+                      const percentage = (dept.count / maxCount) * 100;
+                      return (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-gray-700">{dept.department}</span>
+                            <span className="text-gray-900 font-semibold">{dept.count}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className="bg-blue-600 h-2.5 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div
-                            className="bg-blue-600 h-2.5 rounded-full transition-all"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
