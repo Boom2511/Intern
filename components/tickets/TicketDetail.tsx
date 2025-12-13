@@ -417,6 +417,12 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">ผู้สร้าง</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {(ticket as any).createdBy || 'CEC Staff'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
                       <span className="text-sm text-gray-600">ผู้เข้าชม</span>
                       <span className="text-sm font-semibold text-gray-900">
                         {ticket.views?.length || 0}
@@ -523,9 +529,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       </p>
                       <p className="text-xs text-gray-500">
                         {formatThaiDate(ticket.createdAt)}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        ผู้ประสานงาน: {ticket.customer.name} (CEC)
                       </p>
                     </div>
                   </div>
