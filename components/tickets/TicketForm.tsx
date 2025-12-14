@@ -419,7 +419,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                เลขพัสดุ (Tracking Number)
+                หมายเลขสิ่งของ (Tracking Number)
               </label>
               <Input
                 value={formData.trackingNo || ''}
@@ -447,7 +447,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                รหัสเขต (Zone ID)
+              Zone ID
               </label>
               <Input
                 value={formData.zoneId || ''}

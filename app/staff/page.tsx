@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, LogOut, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Toaster } from '@/components/ui/toaster';
 
 interface User {
   id: string;
@@ -28,11 +30,14 @@ interface CurrentUser {
 
 export default function StaffPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [lineQuota, setLineQuota] = useState<{ used: number; quota: number; percentage: number } | null>(null);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -45,6 +50,18 @@ export default function StaffPage() {
   useEffect(() => {
     loadCurrentUser();
     loadUsers();
+    loadOnlineStatus();
+    loadLineQuota();
+
+    // Poll online status every 30 seconds
+    const onlineInterval = setInterval(loadOnlineStatus, 30000);
+    // Poll LINE quota every 60 seconds
+    const quotaInterval = setInterval(loadLineQuota, 60000);
+
+    return () => {
+      clearInterval(onlineInterval);
+      clearInterval(quotaInterval);
+    };
   }, []);
 
   const loadCurrentUser = async () => {
@@ -87,6 +104,34 @@ export default function StaffPage() {
     }
   };
 
+  const loadOnlineStatus = async () => {
+    try {
+      const response = await fetch('/api/users/online-status');
+      if (response.ok) {
+        const data = await response.json();
+        setOnlineUserIds(data.onlineUserIds || []);
+      }
+    } catch (error) {
+      console.error('Failed to load online status:', error);
+    }
+  };
+
+  const loadLineQuota = async () => {
+    try {
+      const response = await fetch('/api/line/quota');
+      if (response.ok) {
+        const data = await response.json();
+        setLineQuota({
+          used: data.used,
+          quota: data.quota,
+          percentage: data.percentage,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load LINE quota:', error);
+    }
+  };
+
   const validatePassword = (password: string): boolean => {
     if (password.length < 8) {
       setPasswordError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
@@ -119,10 +164,6 @@ export default function StaffPage() {
       return;
     }
 
-    // Build email with @Postserve.ac.th
-    const emailUsername = formData.email.split('@')[0];
-    const fullEmail = `${emailUsername}@postserve.ac.th`;
-
     try {
       const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
       const method = editingUser ? 'PATCH' : 'POST';
@@ -132,11 +173,11 @@ export default function StaffPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingUser ? {
           ...formData,
-          email: fullEmail,
+          email: formData.email, // Use username directly
           password: formData.password || undefined, // Only send password if changed
         } : {
           ...formData,
-          email: fullEmail,
+          email: formData.email, // Use username directly
         }),
       });
 
@@ -144,13 +185,25 @@ export default function StaffPage() {
         setIsDialogOpen(false);
         resetForm();
         loadUsers();
+        toast({
+          title: editingUser ? 'อัปเดตผู้ใช้สำเร็จ' : 'เพิ่มผู้ใช้สำเร็จ',
+          description: editingUser ? `อัปเดตข้อมูล ${formData.name} เรียบร้อยแล้ว` : `เพิ่ม ${formData.name} เป็นผู้ใช้ใหม่แล้ว`,
+        });
       } else {
         const data = await response.json();
-        alert(data.error || 'Operation failed');
+        toast({
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถบันทึกข้อมูลได้',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Failed to save user:', error);
-      alert('Failed to save user');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถบันทึกข้อมูลได้',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -166,28 +219,42 @@ export default function StaffPage() {
 
       if (response.ok) {
         loadUsers();
+        toast({
+          title: 'ลบผู้ใช้สำเร็จ',
+          description: 'ลบผู้ใช้ออกจากระบบเรียบร้อยแล้ว',
+        });
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to delete user');
+        toast({
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถลบผู้ใช้ได้',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Failed to delete user:', error);
-      alert('Failed to delete user');
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถลบผู้ใช้ได้',
+        variant: 'destructive',
+      });
     }
   };
 
   const handleEdit = (user: User) => {
     // Admin cannot edit Administrator users
     if (currentUser?.role === 'ADMIN' && user.role === 'ADMINISTRATOR') {
-      alert('Admin ไม่สามารถแก้ไข Administrator ได้');
+      toast({
+        title: 'ไม่มีสิทธิ์',
+        description: 'Admin ไม่สามารถแก้ไข Administrator ได้',
+        variant: 'destructive',
+      });
       return;
     }
 
     setEditingUser(user);
-    // Extract username from email
-    const emailUsername = user.email.split('@')[0];
     setFormData({
-      email: emailUsername,
+      email: user.email, // Use full email/username directly
       password: '',
       name: user.name,
       role: user.role,
@@ -244,6 +311,41 @@ export default function StaffPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
+      {/* LINE API Quota Bar */}
+      {lineQuota && (
+        <Card className="mb-6">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">LINE API Quota</h3>
+                  <p className="text-xs text-gray-500">{lineQuota.used} / {lineQuota.quota} messages</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold">{lineQuota.used}/{lineQuota.quota}</div>
+                <div className="text-xs text-gray-500">{lineQuota.percentage}% ใช้ไปแล้ว</div>
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 rounded-full ${
+                  lineQuota.percentage >= 90 ? 'bg-red-500' :
+                  lineQuota.percentage >= 70 ? 'bg-yellow-500' :
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(lineQuota.percentage, 100)}%` }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')}>
@@ -274,22 +376,17 @@ export default function StaffPage() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">อีเมล</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="email"
-                      type="text"
-                      placeholder="username"
-                      value={formData.email}
-                      onChange={(e) => {
-                        const value = e.target.value.split('@')[0];
-                        setFormData({...formData, email: value});
-                      }}
-                      required
-                      className="flex-1"
-                    />
-                    <span className="text-gray-500">@Postserve.ac.th</span>
-                  </div>
+                  <Label htmlFor="email">ชื่อผู้ใช้</Label>
+                  <Input
+                    id="email"
+                    type="text"
+                    placeholder="username"
+                    value={formData.email}
+                    onChange={(e) => {
+                      setFormData({...formData, email: e.target.value});
+                    }}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -385,11 +482,14 @@ export default function StaffPage() {
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         {user.name}
+                        {onlineUserIds.includes(user.id) && (
+                          <Badge className="text-xs bg-green-100 text-green-800 border-0">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                            Online
+                          </Badge>
+                        )}
                         {user.id === currentUser?.id && (
-                          <>
-                            <Badge className="text-xs bg-green-100 text-green-800">Online</Badge>
-                            <Badge className="text-xs" variant="outline">You</Badge>
-                          </>
+                          <Badge className="text-xs" variant="outline">You</Badge>
                         )}
                       </div>
                     </td>
@@ -446,6 +546,7 @@ export default function StaffPage() {
           <li><strong>Operator:</strong> ใช้งาน CEC เท่านั้น (ไม่เห็นการจัดการผู้ใช้และหน้าทดสอบ)</li>
         </ul>
       </div>
+      <Toaster />
     </div>
   );
 }
