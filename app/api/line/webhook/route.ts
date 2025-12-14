@@ -11,12 +11,16 @@ import crypto from 'crypto';
 export const dynamic = 'force-dynamic';
 
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
+const DEBUG_MODE = process.env.LINE_WEBHOOK_DEBUG === 'true';
 
-// Store recent events in memory (max 50)
+// Store recent events in memory (max 50) - only if debug mode is enabled
 const recentEvents: any[] = [];
 const MAX_EVENTS = 50;
 
 function addRecentEvent(event: any) {
+  // Only store events if debug mode is enabled
+  if (!DEBUG_MODE) return;
+
   recentEvents.unshift({
     ...event,
     timestamp: new Date().toISOString(),
@@ -43,6 +47,21 @@ function verifySignature(body: string, signature: string): boolean {
 
 // GET endpoint - Show webhook info and recent events
 export async function GET() {
+  // Return warning if debug mode is disabled
+  if (!DEBUG_MODE) {
+    return NextResponse.json({
+      success: false,
+      message: 'Debug mode is disabled',
+      info: 'Set LINE_WEBHOOK_DEBUG=true in environment variables to enable event logging',
+      webhook: {
+        url: `${process.env.NEXTAUTH_URL}/api/line/webhook`,
+        configured: !!LINE_CHANNEL_SECRET,
+        status: 'active',
+        debugMode: false,
+      },
+    });
+  }
+
   const groupEvents = recentEvents.filter(e => e.source?.type === 'group');
   const userEvents = recentEvents.filter(e => e.source?.type === 'user');
 
@@ -57,6 +76,7 @@ export async function GET() {
       url: `${process.env.NEXTAUTH_URL}/api/line/webhook`,
       configured: !!LINE_CHANNEL_SECRET,
       status: 'active',
+      debugMode: true,
     },
     statistics: {
       totalEvents: recentEvents.length,
@@ -103,32 +123,35 @@ export async function POST(request: NextRequest) {
     const data = JSON.parse(body);
     const events = data.events || [];
 
-    console.log('\n📨 Received LINE webhook events:', events.length);
+    // Only log if debug mode is enabled
+    if (DEBUG_MODE) {
+      console.log('\n📨 Received LINE webhook events:', events.length);
 
-    for (const event of events) {
-      // Log event details
-      console.log('\n--- Event Details ---');
-      console.log('Type:', event.type);
-      console.log('Source Type:', event.source?.type);
+      for (const event of events) {
+        // Log event details
+        console.log('\n--- Event Details ---');
+        console.log('Type:', event.type);
+        console.log('Source Type:', event.source?.type);
 
-      if (event.source?.type === 'group') {
-        console.log('🆔 Group ID:', event.source.groupId);
-        console.log('👤 User ID:', event.source.userId);
-      } else if (event.source?.type === 'user') {
-        console.log('👤 User ID:', event.source.userId);
-      }
-
-      if (event.type === 'message') {
-        console.log('💬 Message Type:', event.message?.type);
-        if (event.message?.type === 'text') {
-          console.log('📝 Text:', event.message.text);
+        if (event.source?.type === 'group') {
+          console.log('🆔 Group ID:', event.source.groupId);
+          console.log('👤 User ID:', event.source.userId);
+        } else if (event.source?.type === 'user') {
+          console.log('👤 User ID:', event.source.userId);
         }
+
+        if (event.type === 'message') {
+          console.log('💬 Message Type:', event.message?.type);
+          if (event.message?.type === 'text') {
+            console.log('📝 Text:', event.message.text);
+          }
+        }
+
+        console.log('-------------------\n');
+
+        // Store event in memory
+        addRecentEvent(event);
       }
-
-      console.log('-------------------\n');
-
-      // Store event in memory
-      addRecentEvent(event);
     }
 
     // IMPORTANT: Return 200 status explicitly (LINE requires 200)
