@@ -121,6 +121,11 @@ async function generate90DayTrends() {
 
 export async function GET() {
   try {
+    // Get excluded departments from environment variable
+    const excludedDepartments = (process.env.EXCLUDED_DEPARTMENTS || 'TEST')
+      .split(',')
+      .map(d => d.trim());
+
     // Get current date ranges
     const now = new Date();
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -197,9 +202,9 @@ export async function GET() {
       },
     });
 
-    // Filter out test groups manually and format department data for chart
+    // Filter out excluded departments and format department data for chart
     const departmentStats = departmentCounts
-      .filter((dept) => dept.department && !dept.department.toLowerCase().includes('test'))
+      .filter((dept) => dept.department && !excludedDepartments.includes(dept.department))
       .map((dept) => ({
         department: dept.department || 'ไม่ระบุ',
         count: dept._count,
@@ -216,30 +221,38 @@ export async function GET() {
       },
     });
 
-    // Transform to format needed for stacked bar chart
+    // Get all departments from enum (excluding test departments)
+    const allDepartments = ['DB1', 'DB2', 'DB3', 'DB4', 'DB5', 'DB6']
+      .filter(dept => !excludedDepartments.includes(dept));
+
+    // Initialize all departments with zero counts
     const departmentStatusMap: Record<string, { department: string; open: number; inProgress: number; resolved: number }> = {};
 
+    allDepartments.forEach(dept => {
+      departmentStatusMap[dept] = {
+        department: dept,
+        open: 0,
+        inProgress: 0,
+        resolved: 0,
+      };
+    });
+
+    // Fill in actual data
     departmentStatusData.forEach((item) => {
-      if (!item.department || item.department.toLowerCase().includes('test')) {
-        return; // Skip null departments and test groups
+      if (!item.department || excludedDepartments.includes(item.department)) {
+        return; // Skip null departments and excluded departments
       }
 
-      if (!departmentStatusMap[item.department]) {
-        departmentStatusMap[item.department] = {
-          department: item.department,
-          open: 0,
-          inProgress: 0,
-          resolved: 0,
-        };
-      }
-
-      // Categorize statuses
-      if (item.status === 'NEW' || item.status === 'PENDING') {
-        departmentStatusMap[item.department].open += item._count;
-      } else if (item.status === 'IN_PROGRESS') {
-        departmentStatusMap[item.department].inProgress += item._count;
-      } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
-        departmentStatusMap[item.department].resolved += item._count;
+      // Only process if department is in our list
+      if (departmentStatusMap[item.department]) {
+        // Categorize statuses
+        if (item.status === 'NEW' || item.status === 'PENDING') {
+          departmentStatusMap[item.department].open += item._count;
+        } else if (item.status === 'IN_PROGRESS') {
+          departmentStatusMap[item.department].inProgress += item._count;
+        } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
+          departmentStatusMap[item.department].resolved += item._count;
+        }
       }
     });
 
