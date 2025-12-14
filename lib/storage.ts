@@ -5,7 +5,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const BUCKET_NAME = process.env.SUPABASE_BUCKET_NAME || 'helpdesk-images';
+const BUCKET_NAME = process.env.SUPABASE_BUCKET_NAME || 'ticket-images';
 
 // Lazy initialization
 let supabaseClient: SupabaseClient | null = null;
