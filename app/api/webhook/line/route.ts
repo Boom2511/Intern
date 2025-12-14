@@ -1,8 +1,7 @@
 /**
- * LINE Webhook Endpoint
- * Receives events from LINE Messaging API
- * GET /api/line/webhook - Shows webhook info and recent events
- * POST /api/line/webhook - Receives LINE webhook events
+ * LINE Webhook Endpoint (Original Path)
+ * POST /api/webhook/line - Receives LINE webhook events
+ * Redirects to /api/line/webhook for processing
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -39,50 +38,6 @@ function verifySignature(body: string, signature: string): boolean {
     .digest('base64');
 
   return hash === signature;
-}
-
-// GET endpoint - Show webhook info and recent events
-export async function GET() {
-  const groupEvents = recentEvents.filter(e => e.source?.type === 'group');
-  const userEvents = recentEvents.filter(e => e.source?.type === 'user');
-
-  // Extract unique group IDs
-  const groupIds = Array.from(
-    new Set(groupEvents.map(e => e.source?.groupId).filter(Boolean))
-  );
-
-  return NextResponse.json({
-    success: true,
-    webhook: {
-      url: `${process.env.NEXTAUTH_URL}/api/line/webhook`,
-      configured: !!LINE_CHANNEL_SECRET,
-      status: 'active',
-    },
-    statistics: {
-      totalEvents: recentEvents.length,
-      groupEvents: groupEvents.length,
-      userEvents: userEvents.length,
-      uniqueGroups: groupIds.length,
-    },
-    groupIds: groupIds.map((id: any) => {
-      const events = groupEvents.filter(e => e.source?.groupId === id);
-      const firstEvent = events[events.length - 1];
-      return {
-        groupId: id,
-        eventCount: events.length,
-        lastEvent: events[0]?.timestamp,
-        firstSeen: firstEvent?.timestamp,
-        sample: firstEvent,
-      };
-    }),
-    recentEvents: recentEvents.slice(0, 10), // Last 10 events
-    instructions: {
-      1: 'Send a message in any LINE group where the bot is added',
-      2: 'Refresh this page to see the group ID',
-      3: 'Copy the groupId and update your .env file',
-      4: 'Set LINE_GROUP_TEST="<your_group_id>"',
-    },
-  });
 }
 
 // POST endpoint - Receive webhook events
@@ -131,7 +86,7 @@ export async function POST(request: NextRequest) {
       addRecentEvent(event);
     }
 
-    // IMPORTANT: Return 200 status explicitly (LINE requires 200)
+    // IMPORTANT: Return 200 status (not 307 redirect)
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
     console.error('❌ Webhook error:', error);
@@ -140,4 +95,41 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// GET endpoint - Show recent events (for debugging)
+export async function GET() {
+  const groupEvents = recentEvents.filter(e => e.source?.type === 'group');
+  const userEvents = recentEvents.filter(e => e.source?.type === 'user');
+
+  // Extract unique group IDs
+  const groupIds = Array.from(
+    new Set(groupEvents.map(e => e.source?.groupId).filter(Boolean))
+  );
+
+  return NextResponse.json({
+    success: true,
+    webhook: {
+      url: `${process.env.NEXTAUTH_URL}/api/webhook/line`,
+      configured: !!LINE_CHANNEL_SECRET,
+      status: 'active',
+    },
+    statistics: {
+      totalEvents: recentEvents.length,
+      groupEvents: groupEvents.length,
+      userEvents: userEvents.length,
+      uniqueGroups: groupIds.length,
+    },
+    groupIds: groupIds.map((id: any) => {
+      const events = groupEvents.filter(e => e.source?.groupId === id);
+      const firstEvent = events[events.length - 1];
+      return {
+        groupId: id,
+        eventCount: events.length,
+        lastEvent: events[0]?.timestamp,
+        firstSeen: firstEvent?.timestamp,
+      };
+    }),
+    recentEvents: recentEvents.slice(0, 10),
+  });
 }
