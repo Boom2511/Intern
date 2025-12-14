@@ -60,7 +60,6 @@ export default function LiffTicketDetailPage() {
     error: ticketError,
     loadTicket,
     updateStatus,
-    addNote,
   } = useTicketDetail(ticketId);
 
   const error = liffError || ticketError;
@@ -137,14 +136,13 @@ export default function LiffTicketDetailPage() {
         throw new Error(noteData.error || 'Failed to add note');
       }
 
-      // 3. Update status to RESOLVED
+      // 3. Update status to RESOLVED (this will reload all data including the new note)
       const result = await updateStatus('RESOLVED', profile);
       if (!result.success) {
         throw new Error(result.error || 'Failed to update status');
       }
 
-      // 4. Add note to list and clear form
-      addNote(noteData.data);
+      // 4. Clear form (note: updateStatus already reloaded notes from server)
       setActionNote('');
       setSelectedImages([]);
 

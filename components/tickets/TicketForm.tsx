@@ -21,6 +21,12 @@ import { getDepartmentOptions } from '@/config/departments';
 import { CircleAlert, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
+import {
+  validatePhone,
+  validateEmail,
+  validateSalesforceId,
+  validateTrackingNumber,
+} from '@/lib/validations';
 
 interface TicketFormData {
   customerName: string;
@@ -98,20 +104,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     ? allDepartmentOptions
     : allDepartmentOptions.filter(option => option.value !== 'TEST');
 
-  // Real-time validation functions
-  const validatePhone = (phone: string): string | null => {
-    if (!phone) return null;
-    if (phone.length < 10) return 'หมายเลขโทรศัพท์ต้องมี 10 หลัก';
-    if (!/^0\d{9}$/.test(phone)) return 'หมายเลขโทรศัพท์ต้องขึ้นต้นด้วย 0 และมี 10 หลัก';
-    return null;
-  };
-
-  const validateEmail = (email: string): string | null => {
-    if (!email) return null;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'รูปแบบอีเมลไม่ถูกต้อง';
-    return null;
-  };
-
   // Real-time field validation on blur
   const validateField = (field: string, value: any) => {
     let error: string | null = null;
@@ -122,6 +114,12 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         break;
       case 'customerEmail':
         error = validateEmail(value);
+        break;
+      case 'salesforceId':
+        error = validateSalesforceId(value);
+        break;
+      case 'trackingNo':
+        error = validateTrackingNumber(value);
         break;
       case 'recipientName':
         if (!value) error = 'กรุณากรอกชื่อผู้รับ';
@@ -389,11 +387,74 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 </label>
                 <Input
                   value={formData.salesforceId || ''}
-                  onChange={(e) => setFormData({ ...formData, salesforceId: e.target.value })}
-                  placeholder="กรอกหมายเลข Salesforce"
+                  onChange={(e) => {
+                    setFormData({ ...formData, salesforceId: e.target.value });
+                    // Clear error when typing
+                    if (fieldErrors.salesforceId) {
+                      setFieldErrors(prev => ({ ...prev, salesforceId: '' }));
+                    }
+                  }}
+                  onBlur={(e) => validateField('salesforceId', e.target.value)}
+                  placeholder="กรอกหมายเลข Salesforce (15 หรือ 18 ตัวอักษร)"
+                  className={fieldErrors.salesforceId ? 'border-red-500 focus:ring-red-500' : ''}
                 />
+                {fieldErrors.salesforceId && (
+                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {fieldErrors.salesforceId}
+                  </p>
+                )}
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tracking Information - Moved to top as requested */}
+      <Card>
+        <CardHeader>
+          <CardTitle>ข้อมูลพัสดุ</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                เลขพัสดุ (Tracking Number)
+              </label>
+              <Input
+                value={formData.trackingNo || ''}
+                onChange={(e) => {
+                  setFormData({ ...formData, trackingNo: e.target.value.toUpperCase() });
+                  // Clear error when typing
+                  if (fieldErrors.trackingNo) {
+                    setFieldErrors(prev => ({ ...prev, trackingNo: '' }));
+                  }
+                }}
+                onBlur={(e) => validateField('trackingNo', e.target.value)}
+                placeholder="เช่น EM123456789TH"
+                className={fieldErrors.trackingNo ? 'border-red-500 focus:ring-red-500' : ''}
+              />
+              {fieldErrors.trackingNo && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {fieldErrors.trackingNo}
+                </p>
+              )}
+              {checkingTracking && !fieldErrors.trackingNo && (
+                <p className="text-xs text-gray-500 mt-1">กำลังตรวจสอบเลขพัสดุ...</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                รหัสเขต (Zone ID)
+              </label>
+              <Input
+                value={formData.zoneId || ''}
+                onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
+                placeholder=""
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -468,41 +529,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               />
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Tracking Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>ข้อมูลพัสดุ</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                เลขพัสดุ (Tracking Number)
-              </label>
-              <Input
-                value={formData.trackingNo || ''}
-                onChange={(e) => setFormData({ ...formData, trackingNo: e.target.value })}
-                placeholder="เช่น EM123456789TH"
-              />
-              {checkingTracking && (
-                <p className="text-xs text-gray-500 mt-1">กำลังตรวจสอบเลขพัสดุ...</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รหัสเขต (Zone ID)
-              </label>
-              <Input
-                value={formData.zoneId || ''}
-                onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
-                placeholder=""
-              />
-            </div>
-          </div>
         </CardContent>
       </Card>
 

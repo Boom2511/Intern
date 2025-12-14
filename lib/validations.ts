@@ -125,3 +125,118 @@ export function validateCreateNote(data: any): { valid: boolean; errors: string[
 export function sanitizePhone(phone: string): string {
   return phone.replace(/[-\s]/g, '');
 }
+
+/**
+ * Validate Thai phone number
+ * Must be 10 digits starting with 0
+ */
+export function validatePhone(phone: string): string | null {
+  if (!phone) return null;
+  if (phone.length < 10) return 'หมายเลขโทรศัพท์ต้องมี 10 หลัก';
+  if (!/^0\d{9}$/.test(phone)) return 'หมายเลขโทรศัพท์ต้องขึ้นต้นด้วย 0 และมี 10 หลัก';
+  return null;
+}
+
+/**
+ * Validate email format
+ */
+export function validateEmail(email: string): string | null {
+  if (!email) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'รูปแบบอีเมลไม่ถูกต้อง';
+  return null;
+}
+
+/**
+ * Validate Salesforce ID format
+ * Salesforce ID is typically 15 or 18 characters alphanumeric
+ * Format: [0-9a-zA-Z]{15,18}
+ */
+export function validateSalesforceId(salesforceId: string): string | null {
+  if (!salesforceId) return null;
+
+  // Remove whitespace
+  const trimmed = salesforceId.trim();
+
+  // Check length (15 or 18 characters)
+  if (trimmed.length !== 15 && trimmed.length !== 18) {
+    return 'Salesforce ID ต้องมี 15 หรือ 18 ตัวอักษร';
+  }
+
+  // Check format (alphanumeric only)
+  if (!/^[0-9a-zA-Z]{15,18}$/.test(trimmed)) {
+    return 'Salesforce ID ต้องประกอบด้วยตัวอักษรและตัวเลขเท่านั้น';
+  }
+
+  return null;
+}
+
+/**
+ * Validate tracking number format
+ * Common Thai postal tracking formats:
+ * - EMS: EM123456789TH (13 chars)
+ * - Registered: RR123456789TH (13 chars)
+ * - Parcel: CP123456789TH (13 chars)
+ * - General format: 2 letters + 9 digits + 2 letters
+ * Also supports other courier formats (10-20 alphanumeric characters)
+ */
+export function validateTrackingNumber(trackingNo: string): string | null {
+  if (!trackingNo) return null;
+
+  // Remove whitespace
+  const trimmed = trackingNo.trim().toUpperCase();
+
+  // Check minimum length
+  if (trimmed.length < 8) {
+    return 'เลขพัสดุต้องมีอย่างน้อย 8 ตัวอักษร';
+  }
+
+  // Check maximum length
+  if (trimmed.length > 30) {
+    return 'เลขพัสดุต้องไม่เกิน 30 ตัวอักษร';
+  }
+
+  // Check for valid characters (alphanumeric and hyphens only)
+  if (!/^[A-Z0-9-]+$/.test(trimmed)) {
+    return 'เลขพัสดุต้องประกอบด้วยตัวอักษร A-Z, ตัวเลข 0-9 และเครื่องหมาย - เท่านั้น';
+  }
+
+  // Optional: Check for Thai postal format (2 letters + 9 digits + 2 letters)
+  const thaiPostalFormat = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
+  if (trimmed.length === 13 && !thaiPostalFormat.test(trimmed)) {
+    return 'เลขพัสดุไทย 13 ตัวอักษรต้องอยู่ในรูปแบบ: 2 ตัวอักษร + 9 ตัวเลข + 2 ตัวอักษร (เช่น EM123456789TH)';
+  }
+
+  return null;
+}
+
+/**
+ * Validate required field
+ */
+export function validateRequired(value: string, fieldName: string): string | null {
+  if (!value || !value.trim()) {
+    return `กรุณากรอก${fieldName}`;
+  }
+  return null;
+}
+
+/**
+ * Validate text length
+ */
+export function validateLength(
+  value: string,
+  min?: number,
+  max?: number,
+  fieldName?: string
+): string | null {
+  if (!value) return null;
+
+  if (min !== undefined && value.length < min) {
+    return `${fieldName || 'ข้อมูล'}ต้องมีอย่างน้อย ${min} ตัวอักษร`;
+  }
+
+  if (max !== undefined && value.length > max) {
+    return `${fieldName || 'ข้อมูล'}ต้องไม่เกิน ${max} ตัวอักษร`;
+  }
+
+  return null;
+}
