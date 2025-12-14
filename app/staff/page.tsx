@@ -194,7 +194,7 @@ export default function StaffPage() {
         toast({
           title: 'เกิดข้อผิดพลาด',
           description: data.error || 'ไม่สามารถบันทึกข้อมูลได้',
-          variant: 'destructive',
+          variant: 'error',
         });
       }
     } catch (error) {
@@ -202,7 +202,7 @@ export default function StaffPage() {
       toast({
         title: 'เกิดข้อผิดพลาด',
         description: 'ไม่สามารถบันทึกข้อมูลได้',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };
@@ -228,7 +228,7 @@ export default function StaffPage() {
         toast({
           title: 'เกิดข้อผิดพลาด',
           description: data.error || 'ไม่สามารถลบผู้ใช้ได้',
-          variant: 'destructive',
+          variant: 'error',
         });
       }
     } catch (error) {
@@ -236,7 +236,7 @@ export default function StaffPage() {
       toast({
         title: 'เกิดข้อผิดพลาด',
         description: 'ไม่สามารถลบผู้ใช้ได้',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };
@@ -247,7 +247,7 @@ export default function StaffPage() {
       toast({
         title: 'ไม่มีสิทธิ์',
         description: 'Admin ไม่สามารถแก้ไข Administrator ได้',
-        variant: 'destructive',
+        variant: 'error',
       });
       return;
     }

@@ -10,15 +10,59 @@ export async function GET() {
     if (!currentUser || !hasPermission(currentUser.role, Permission.VIEW_USERS)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    // Check for recent activity in the last 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const sessions = await prisma.session.findMany({
+
+    // Get users who have created tickets recently
+    const recentTickets = await prisma.ticket.findMany({
       where: {
-        expiresAt: { gt: new Date() },
+        createdAt: { gte: fiveMinutesAgo },
+        createdBy: { not: null },
+      },
+      select: { createdBy: true },
+    });
+
+    // Get users who have created notes recently
+    const recentNotes = await prisma.note.findMany({
+      where: {
         createdAt: { gte: fiveMinutesAgo },
       },
-      select: { userId: true },
+      select: { createdBy: true },
     });
-    const onlineUserIds = Array.from(new Set(sessions.map(s => s.userId)));
+
+    // Get users who have made status changes recently
+    const recentStatusChanges = await prisma.statusHistory.findMany({
+      where: {
+        createdAt: { gte: fiveMinutesAgo },
+      },
+      select: { changedBy: true },
+    });
+
+    // Combine all user IDs and remove duplicates
+    const activeUserNames = new Set<string>();
+    recentTickets.forEach(t => t.createdBy && activeUserNames.add(t.createdBy));
+    recentNotes.forEach(n => activeUserNames.add(n.createdBy));
+    recentStatusChanges.forEach(s => activeUserNames.add(s.changedBy));
+
+    // Get user IDs from names/emails
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { in: Array.from(activeUserNames) } },
+          { email: { in: Array.from(activeUserNames) } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    const onlineUserIds = users.map(u => u.id);
+
+    // Always include the current user as online
+    if (!onlineUserIds.includes(currentUser.id)) {
+      onlineUserIds.push(currentUser.id);
+    }
+
     return NextResponse.json({ success: true, onlineUserIds, count: onlineUserIds.length });
   } catch (error) {
     console.error('Online status error:', error);
