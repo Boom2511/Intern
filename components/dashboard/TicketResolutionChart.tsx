@@ -18,10 +18,11 @@ import {
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-type Range = '7d' | '30d' | '90d';
+type Range = '1d' | '7d' | '30d' | '90d';
 
 interface TicketResolutionChartProps {
   data?: {
+    '1d': Array<{ day: string; solved: number; unresolved: number }>;
     '7d': Array<{ day: string; solved: number; unresolved: number }>;
     '30d': Array<{ day: string; solved: number; unresolved: number }>;
     '90d': Array<{ day: string; solved: number; unresolved: number }>;
@@ -44,9 +45,10 @@ export default function TicketResolutionChart({ data }: TicketResolutionChartPro
 
           {/* Range Switch */}
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            {(['7d', '30d', '90d'] as Range[]).map((r) => (
+            {(['1d', '7d', '30d', '90d'] as Range[]).map((r) => (
               <button
                 key={r}
+                type="button"
                 onClick={() => setRange(r)}
                 className={`px-3 py-1 text-xs rounded-md transition ${
                   range === r
@@ -54,7 +56,7 @@ export default function TicketResolutionChart({ data }: TicketResolutionChartPro
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
+                {r === '1d' ? '1 Day' : r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
               </button>
             ))}
           </div>

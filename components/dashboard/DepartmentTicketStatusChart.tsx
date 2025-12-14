@@ -1,94 +1,117 @@
 /**
  * Department Ticket Status Chart Component
- * Shows stacked bar chart of ticket status by department
+ * Shows pie chart of tickets by department with date range selector
  */
 
 'use client';
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  PieChart,
+  Pie,
+  Cell,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid,
+  Legend,
 } from 'recharts';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface DepartmentStatus {
+type Range = '7d' | '30d' | '90d' | 'all';
+
+interface DepartmentData {
   department: string;
-  open: number;
-  inProgress: number;
-  resolved: number;
+  count: number;
+  [key: string]: any; // Allow additional properties for recharts
 }
 
 interface DepartmentTicketStatusChartProps {
-  data?: DepartmentStatus[];
+  data?: {
+    '7d': DepartmentData[];
+    '30d': DepartmentData[];
+    '90d': DepartmentData[];
+    'all': DepartmentData[];
+  };
 }
 
-export default function DepartmentTicketStatusChart({ data = [] }: DepartmentTicketStatusChartProps) {
+// Department colors (excluding TEST)
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+
+export default function DepartmentTicketStatusChart({ data }: DepartmentTicketStatusChartProps) {
+  const [range, setRange] = useState<Range>('all');
+
+  // Use provided data or fallback to empty
+  const chartData = data?.[range] || [];
+
+  // Custom label to show percentage
+  const renderCustomLabel = (entry: any) => {
+    const total = chartData.reduce((sum, item) => sum + item.count, 0);
+    const percent = ((entry.count / total) * 100).toFixed(0);
+    return `${percent}%`;
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Ticket Status by Department
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Legend */}
-        <div className="flex items-center gap-4 mb-3 text-xs flex-wrap">
-          <Legend color="#EF4444" label="ยังไม่ได้ปิด" />
-          <Legend color="#FACC15" label="กำลังดำเนินการ" />
-          <Legend color="#22C55E" label="แก้ไขแล้ว" />
-        </div>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold">
+            Tickets ตามแผนก
+          </CardTitle>
 
+          {/* Range Switch */}
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {(['7d', '30d', '90d', 'all'] as Range[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRange(r)}
+                className={`px-3 py-1 text-xs rounded-md transition ${
+                  range === r
+                    ? 'bg-white shadow text-gray-900 font-medium'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {r === '7d' ? '7d' : r === '30d' ? '30d' : r === '90d' ? '90d' : 'All'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
         {/* Chart */}
-        {data.length > 0 ? (
+        {chartData.length > 0 ? (
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data}
-                margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="department"
-                  tick={{ fontSize: 12, fill: '#6B7280' }}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: '#6B7280' }}
-                />
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomLabel}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="count"
+                >
+                  {chartData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
                   contentStyle={{
                     borderRadius: 8,
                     borderColor: '#E5E7EB',
                     fontSize: 12,
                   }}
+                  formatter={(value: number) => [`${value} tickets`, 'จำนวน']}
                 />
-
-                {/* Stacked Bars */}
-                <Bar
-                  dataKey="open"
-                  stackId="a"
-                  fill="#EF4444"
-                  radius={[0, 0, 0, 0]}
-                  name="ยังไม่ได้ปิด"
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  formatter={(value) => value}
+                  wrapperStyle={{ fontSize: '12px' }}
                 />
-                <Bar
-                  dataKey="inProgress"
-                  stackId="a"
-                  fill="#FACC15"
-                  name="กำลังดำเนินการ"
-                />
-                <Bar
-                  dataKey="resolved"
-                  stackId="a"
-                  fill="#22C55E"
-                  radius={[6, 6, 0, 0]}
-                  name="แก้ไขแล้ว"
-                />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           </div>
         ) : (
@@ -98,17 +121,5 @@ export default function DepartmentTicketStatusChart({ data = [] }: DepartmentTic
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className="w-3 h-3 rounded"
-        style={{ backgroundColor: color }}
-      />
-      <span className="text-gray-600">{label}</span>
-    </div>
   );
 }

@@ -5,9 +5,47 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Helper function to generate 1-day trends (hourly)
+async function generate1DayTrends() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const trends = [];
+
+  for (let hour = 0; hour < 24; hour++) {
+    const startHour = new Date(today);
+    startHour.setHours(hour);
+    const endHour = new Date(today);
+    endHour.setHours(hour + 1);
+
+    const [solved, unresolved] = await Promise.all([
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startHour, lt: endHour },
+          status: { in: ['RESOLVED', 'CLOSED'] },
+        },
+      }),
+      prisma.ticket.count({
+        where: {
+          createdAt: { gte: startHour, lt: endHour },
+          status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
+        },
+      }),
+    ]);
+
+    trends.push({
+      day: `${hour}:00`,
+      solved,
+      unresolved,
+    });
+  }
+
+  return trends;
+}
 
 // Helper function to generate 7-day trends
 async function generate7DayTrends() {
@@ -119,8 +157,41 @@ async function generate90DayTrends() {
   return trends;
 }
 
+// Helper function to get department stats by date range
+async function getDepartmentStatsByRange(daysAgo: number | null, excludedDepartments: string[]) {
+  const whereClause: any = {
+    department: {
+      not: null,
+      notIn: excludedDepartments,
+    },
+  };
+
+  if (daysAgo !== null) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+    startDate.setHours(0, 0, 0, 0);
+    whereClause.createdAt = { gte: startDate };
+  }
+
+  const departmentCounts = await prisma.ticket.groupBy({
+    by: ['department'],
+    _count: true,
+    where: whereClause,
+  });
+
+  return departmentCounts
+    .filter((dept) => dept.department && !excludedDepartments.includes(dept.department))
+    .map((dept) => ({
+      department: dept.department || 'ไม่ระบุ',
+      count: dept._count,
+    }));
+}
+
 export async function GET() {
   try {
+    // Get current user for filtering
+    const currentUser = await getCurrentUser();
+
     // Get excluded departments from environment variable
     const excludedDepartments = (process.env.EXCLUDED_DEPARTMENTS || 'TEST')
       .split(',')
@@ -265,10 +336,73 @@ export async function GET() {
 
     // Generate resolution trends data
     const resolutionTrends = {
+      '1d': await generate1DayTrends(),
       '7d': await generate7DayTrends(),
       '30d': await generate30DayTrends(),
       '90d': await generate90DayTrends(),
     };
+
+    // Get department stats by range (excluding TEST)
+    const departmentByRange = {
+      '7d': await getDepartmentStatsByRange(7, excludedDepartments),
+      '30d': await getDepartmentStatsByRange(30, excludedDepartments),
+      '90d': await getDepartmentStatsByRange(90, excludedDepartments),
+      'all': await getDepartmentStatsByRange(null, excludedDepartments),
+    };
+
+    // Get my tickets stats (filtered by createdBy)
+    let myTickets = null;
+    if (currentUser) {
+      const myStatusCounts = await prisma.ticket.groupBy({
+        by: ['status'],
+        _count: true,
+        where: {
+          createdBy: currentUser.email,
+        },
+      });
+
+      const myStatusMap: Record<string, number> = {};
+      let myTotalTickets = 0;
+      myStatusCounts.forEach((item) => {
+        myStatusMap[item.status] = item._count;
+        myTotalTickets += item._count;
+      });
+
+      const myNewTickets = myStatusMap['NEW'] || 0;
+      const myInProgressTickets = myStatusMap['IN_PROGRESS'] || 0;
+      const myPendingTickets = myStatusMap['PENDING'] || 0;
+      const myResolvedTickets = myStatusMap['RESOLVED'] || 0;
+      const myClosedTickets = myStatusMap['CLOSED'] || 0;
+
+      const myRecentTickets = await prisma.ticket.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        where: {
+          createdBy: currentUser.email,
+        },
+        select: {
+          id: true,
+          ticketNo: true,
+          issueType: true,
+          description: true,
+          priority: true,
+          status: true,
+          department: true,
+          createdAt: true,
+        },
+      });
+
+      myTickets = {
+        total: myTotalTickets,
+        new: myNewTickets,
+        inProgress: myInProgressTickets,
+        pending: myPendingTickets,
+        resolved: myResolvedTickets,
+        closed: myClosedTickets,
+        open: myNewTickets + myInProgressTickets + myPendingTickets,
+        recentTickets: myRecentTickets,
+      };
+    }
 
     const stats = {
       totalTickets,
@@ -288,7 +422,9 @@ export async function GET() {
       recentActivities,
       departmentStats,
       departmentStatusBreakdown,
+      departmentByRange, // New: Department stats by date range
       resolutionTrends,
+      myTickets, // New: Current user's ticket stats
     };
 
     return NextResponse.json({ success: true, stats });

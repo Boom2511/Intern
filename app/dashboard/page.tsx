@@ -9,7 +9,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2, Users } from 'lucide-react';
+import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
@@ -21,6 +21,7 @@ import DepartmentTicketStatusChart from '@/components/dashboard/DepartmentTicket
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'all' | 'mine'>('mine'); // Default to 'mine'
 
   // Use SWR hook without polling - updates on events only
   const { stats, isLoading, isError, isValidating } = useDashboardStats();
@@ -57,6 +58,19 @@ export default function DashboardPage() {
     if (hour < 18) return 'สวัสดีตอนบ่าย';
     return 'สวัสดีตอนเย็น';
   };
+
+  // Filter data based on view mode
+  const filteredStats = stats ? {
+    ...stats,
+    totalTickets: viewMode === 'mine' ? (stats.myTickets?.total || 0) : stats.totalTickets,
+    newTickets: viewMode === 'mine' ? (stats.myTickets?.new || 0) : stats.newTickets,
+    inProgressTickets: viewMode === 'mine' ? (stats.myTickets?.inProgress || 0) : stats.inProgressTickets,
+    pendingTickets: viewMode === 'mine' ? (stats.myTickets?.pending || 0) : stats.pendingTickets,
+    resolvedTickets: viewMode === 'mine' ? (stats.myTickets?.resolved || 0) : stats.resolvedTickets,
+    closedTickets: viewMode === 'mine' ? (stats.myTickets?.closed || 0) : stats.closedTickets,
+    openTickets: viewMode === 'mine' ? (stats.myTickets?.open || 0) : stats.openTickets,
+    recentTickets: viewMode === 'mine' ? (stats.myTickets?.recentTickets || []) : stats.recentTickets,
+  } : stats;
 
   // Loading state
   if (isLoading) {
@@ -134,8 +148,33 @@ export default function DashboardPage() {
                     {getGreeting()}, {currentUser?.name || 'User'}! 👋
                   </h1>
                   <p className="text-blue-100 mt-1">
-                    คุณมี {stats.openTickets} Tickets ที่กำลังดำเนินการ
+                    คุณมี {filteredStats.openTickets} Tickets ที่กำลังดำเนินการ
                   </p>
+                  {/* Toggle Button */}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('mine')}
+                      className={`px-4 py-1.5 text-sm rounded-md transition ${
+                        viewMode === 'mine'
+                          ? 'bg-white text-blue-600 font-medium shadow'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                    >
+                      งานของฉัน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('all')}
+                      className={`px-4 py-1.5 text-sm rounded-md transition ${
+                        viewMode === 'all'
+                          ? 'bg-white text-blue-600 font-medium shadow'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                    >
+                      ทั้งหมด
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="text-right">
@@ -170,65 +209,55 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <p className="text-sm text-gray-600 mb-1">Total Tickets</p>
-                <p className="text-3xl font-bold">{stats.totalTickets.toLocaleString()}</p>
+                <p className="text-3xl font-bold">{filteredStats.totalTickets.toLocaleString()}</p>
               </CardContent>
             </Card>
           </Link>
 
-          {/* Pending */}
-          <Link href="/tickets?status=PENDING">
+          {/* New Status */}
+          <Link href="/tickets?status=NEW">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardContent className="py-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="bg-orange-100 p-3 rounded-lg">
-                    <AlertTriangle className="h-6 w-6 text-orange-600" />
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <AlertCircle className="h-6 w-6 text-blue-600" />
                   </div>
-                  {stats.trends?.pending > 0 && (
-                    <div className="flex items-center gap-1 text-orange-600 text-sm">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>+{stats.trends.pending}%</span>
-                    </div>
-                  )}
                 </div>
-                <p className="text-sm text-gray-600 mb-1">Pending</p>
-                <p className="text-3xl font-bold">{stats.pendingTickets}</p>
+                <p className="text-sm text-gray-600 mb-1">สถานะ New</p>
+                <p className="text-3xl font-bold">{filteredStats.newTickets}</p>
               </CardContent>
             </Card>
           </Link>
 
-          {/* Resolved */}
-          <Link href="/tickets?status=RESOLVED">
+          {/* In Progress */}
+          <Link href="/tickets?status=IN_PROGRESS">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-yellow-100 p-3 rounded-lg">
+                    <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">กำลังดำเนินการ</p>
+                <p className="text-3xl font-bold">{filteredStats.inProgressTickets}</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Closed */}
+          <Link href="/tickets?status=CLOSED">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardContent className="py-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="bg-green-100 p-3 rounded-lg">
                     <CheckCircle className="h-6 w-6 text-green-600" />
                   </div>
-                  {stats.trends?.resolved > 0 && (
-                    <div className="flex items-center gap-1 text-green-600 text-sm">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>+{stats.trends.resolved}%</span>
-                    </div>
-                  )}
                 </div>
-                <p className="text-sm text-gray-600 mb-1">Resolved</p>
-                <p className="text-3xl font-bold">{stats.resolvedTickets}</p>
+                <p className="text-sm text-gray-600 mb-1">ปิดแล้ว / Total</p>
+                <p className="text-3xl font-bold">{filteredStats.closedTickets} / {filteredStats.totalTickets}</p>
               </CardContent>
             </Card>
           </Link>
-
-          {/* Team Members */}
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardContent className="py-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-purple-100 p-3 rounded-lg">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mb-1">Team Members</p>
-              <p className="text-3xl font-bold">{stats.totalUsers || 0}</p>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Charts Grid */}
@@ -236,8 +265,8 @@ export default function DashboardPage() {
           {/* Ticket Resolution Trends Chart */}
           <TicketResolutionChart data={stats.resolutionTrends} />
 
-          {/* Department Status Chart - Stacked bar chart with open/in-progress/resolved */}
-          <DepartmentTicketStatusChart data={stats.departmentStatusBreakdown} />
+          {/* Department Pie Chart with date range selector */}
+          <DepartmentTicketStatusChart data={stats.departmentByRange} />
         </div>
 
         {/* Main Content Grid */}
@@ -255,9 +284,9 @@ export default function DashboardPage() {
                 </Link>
               </CardHeader>
               <CardContent>
-                {stats.recentTickets && stats.recentTickets.length > 0 ? (
+                {filteredStats.recentTickets && filteredStats.recentTickets.length > 0 ? (
                   <div className="space-y-3">
-                    {stats.recentTickets.map((ticket: any) => (
+                    {filteredStats.recentTickets.map((ticket: any) => (
                       <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
                         <div className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-start justify-between mb-2">
