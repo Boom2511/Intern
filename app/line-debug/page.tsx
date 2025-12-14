@@ -186,12 +186,12 @@ export default function LineDebugPage() {
             <ol className="list-decimal list-inside space-y-2 text-gray-700">
               <li>เพิ่ม LINE Bot เข้ากลุ่มทดสอบของคุณ</li>
               <li>ส่งข้อความใดๆ ในกลุ่มนั้น</li>
-              <li>กดปุ่ม "Refresh" ด้านบน</li>
+              <li>กดปุ่ม &quot;Refresh&quot; ด้านบน</li>
               <li>คัดลอก Group ID ที่ปรากฏ</li>
               <li>อัปเดต <code className="bg-gray-100 px-2 py-1 rounded text-sm">.env</code> file:</li>
             </ol>
             <pre className="mt-4 bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto">
-              <code>LINE_GROUP_TEST="&lt;your_group_id&gt;"</code>
+              <code>LINE_GROUP_TEST=&quot;&lt;your_group_id&gt;&quot;</code>
             </pre>
           </CardContent>
         </Card>
