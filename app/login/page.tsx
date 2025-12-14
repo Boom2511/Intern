@@ -69,15 +69,15 @@ function LoginForm() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">อีเมล</Label>
+            <Label htmlFor="email">ชื่อผู้ใช้</Label>
             <Input
               id="email"
-              type="email"
-              placeholder="your.email@example.com"
+              type="text"
+              placeholder="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
               disabled={loading}
             />
           </div>

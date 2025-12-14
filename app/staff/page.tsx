@@ -470,7 +470,7 @@ export default function StaffPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-3 font-medium">ชื่อ</th>
-                  <th className="text-left p-3 font-medium">อีเมล</th>
+                  <th className="text-left p-3 font-medium">Username</th>
                   <th className="text-left p-3 font-medium">สิทธิ์</th>
                   <th className="text-left p-3 font-medium">สถานะ</th>
                   <th className="text-right p-3 font-medium">จัดการ</th>
@@ -482,12 +482,6 @@ export default function StaffPage() {
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         {user.name}
-                        {onlineUserIds.includes(user.id) && (
-                          <Badge className="text-xs bg-green-100 text-green-800 border-0">
-                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                            Online
-                          </Badge>
-                        )}
                         {user.id === currentUser?.id && (
                           <Badge className="text-xs" variant="outline">You</Badge>
                         )}
@@ -500,9 +494,18 @@ export default function StaffPage() {
                       </Badge>
                     </td>
                     <td className="p-3">
-                      <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {onlineUserIds.includes(user.id) ? (
+                          <Badge className="text-xs bg-green-100 text-green-800 border-0">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                            Online
+                          </Badge>
+                        ) : (
+                          <Badge className="text-xs bg-gray-100 text-gray-600 border-0">
+                            Offline
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex justify-end gap-2">
