@@ -11,6 +11,8 @@ export async function middleware(request: NextRequest) {
     '/api/auth/logout',
     '/liff',  // LIFF routes (LINE Front-end Framework) - authenticated by LINE
     '/api/liff',  // LIFF API routes
+    '/api/webhook',  // LINE webhook endpoints
+    '/api/line/webhook',  // Alternative LINE webhook endpoint
   ];
 
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));

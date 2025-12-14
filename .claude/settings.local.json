@@ -28,7 +28,8 @@
       "Bash(ls:*)",
       "Bash(DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\" npx prisma db push:*)",
       "Bash(npx next build:*)",
-      "Bash(npx next lint:*)"
+      "Bash(npx next lint:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
