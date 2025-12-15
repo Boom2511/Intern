@@ -30,14 +30,22 @@ export async function middleware(request: NextRequest) {
 
   // Handle LIFF redirect at root path - redirect to liff.state immediately
   // This prevents client-side redirect loops
-  if (pathname === '/' && searchParams.has('liff.state')) {
+  // Safety: Check for redirect header to prevent infinite loops
+  if (
+    pathname === '/' &&
+    searchParams.has('liff.state') &&
+    !request.headers.get('x-liff-redirected')
+  ) {
     const liffState = searchParams.get('liff.state');
     console.log('[Middleware] Root path with liff.state detected:', liffState);
     console.log('[Middleware] Redirecting to liff.state immediately (server-side)');
 
     // Redirect to liff.state path (preserving full URL including query params)
     const redirectUrl = new URL(liffState!, request.url);
-    return NextResponse.redirect(redirectUrl);
+    const response = NextResponse.redirect(redirectUrl);
+    // Set header to prevent redirect loops
+    response.headers.set('x-liff-redirected', 'true');
+    return response;
   }
 
   // Allow public access to client mode tickets (both page and API)

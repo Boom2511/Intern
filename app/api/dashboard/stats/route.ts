@@ -14,37 +14,38 @@ export const revalidate = 0;
 async function generate1DayTrends() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const trends = [];
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
 
-  for (let hour = 0; hour < 24; hour++) {
-    const startHour = new Date(today);
-    startHour.setHours(hour);
-    const endHour = new Date(today);
-    endHour.setHours(hour + 1);
+  // Single query with groupBy instead of 24 separate queries
+  const hourlyData = await prisma.ticket.groupBy({
+    by: ['status'],
+    _count: true,
+    where: {
+      createdAt: {
+        gte: today,
+        lt: tomorrow,
+      },
+    },
+  });
 
-    const [solved, unresolved] = await Promise.all([
-      prisma.ticket.count({
-        where: {
-          createdAt: { gte: startHour, lt: endHour },
-          status: { in: ['RESOLVED', 'CLOSED'] },
-        },
-      }),
-      prisma.ticket.count({
-        where: {
-          createdAt: { gte: startHour, lt: endHour },
-          status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
-        },
-      }),
-    ]);
+  // Aggregate counts by status
+  const statusCounts: Record<string, number> = {};
+  hourlyData.forEach((item) => {
+    statusCounts[item.status] = item._count;
+  });
 
-    trends.push({
-      day: `${hour}:00`,
+  const solved = (statusCounts['RESOLVED'] || 0) + (statusCounts['CLOSED'] || 0);
+  const unresolved = (statusCounts['NEW'] || 0) + (statusCounts['IN_PROGRESS'] || 0) + (statusCounts['PENDING'] || 0);
+
+  // Return simplified single-day aggregate instead of hourly breakdown
+  return [
+    {
+      day: 'Today',
       solved,
       unresolved,
-    });
-  }
-
-  return trends;
+    },
+  ];
 }
 
 // Helper function to generate 7-day trends
@@ -334,12 +335,14 @@ export async function GET() {
       ? Math.round((totalTicketsLast30Days / totalTickets) * 100)
       : 0;
 
-    // Parallelize all trend and department data generation for better performance
-    const [trends1d, trends7d, trends30d, trends90d, dept7d, dept30d, dept90d, deptAll] = await Promise.all([
-      generate1DayTrends(),
-      generate7DayTrends(),
-      generate30DayTrends(),
-      generate90DayTrends(),
+    // Run trend generation sequentially to avoid connection pool exhaustion
+    const trends1d = await generate1DayTrends();
+    const trends7d = await generate7DayTrends();
+    const trends30d = await generate30DayTrends();
+    const trends90d = await generate90DayTrends();
+
+    // Run department stats in parallel (these are simpler queries)
+    const [dept7d, dept30d, dept90d, deptAll] = await Promise.all([
       getDepartmentStatsByRange(7, excludedDepartments),
       getDepartmentStatsByRange(30, excludedDepartments),
       getDepartmentStatsByRange(90, excludedDepartments),

@@ -37,9 +37,21 @@ export async function POST(
       );
     }
 
-    // Record the view
-    const view = await prisma.ticketView.create({
-      data: {
+    // Record the view - use upsert to handle duplicate views
+    // Update viewedAt timestamp if already exists
+    const view = await prisma.ticketView.upsert({
+      where: {
+        ticketId_viewerLineId: {
+          ticketId: params.id,
+          viewerLineId: viewerLineId || '',
+        },
+      },
+      update: {
+        viewedAt: new Date(),
+        viewerName,
+        viewerAvatar: viewerAvatar || null,
+      },
+      create: {
         ticketId: params.id,
         viewerName,
         viewerLineId: viewerLineId || null,
