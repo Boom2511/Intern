@@ -1,12 +1,15 @@
 /**
  * Root Layout
  * Main layout wrapper for the entire application
+ * Fetches user once on server and provides via Context
  */
 
 import type { Metadata } from 'next';
 import './globals.css';
 import ConditionalNavbar from '@/components/ConditionalNavbar';
 import { Toaster } from '@/components/ui/toaster';
+import { UserProvider } from '@/providers/UserProvider';
+import { getCurrentUser } from '@/lib/auth';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -14,21 +17,26 @@ export const metadata: Metadata = {
   description: 'ระบบจัดการ Ticket สำหรับ PostServe',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Fetch user once on server side
+  const user = await getCurrentUser();
+
   return (
     <html lang="th">
       <body className="min-h-screen bg-gray-50">
-        <Suspense fallback={null}>
-          <ConditionalNavbar />
-        </Suspense>
-        <main className="container mx-auto px-4 py-8">
-          {children}
-        </main>
-        <Toaster />
+        <UserProvider user={user}>
+          <Suspense fallback={null}>
+            <ConditionalNavbar />
+          </Suspense>
+          <main className="container mx-auto px-4 py-8">
+            {children}
+          </main>
+          <Toaster />
+        </UserProvider>
       </body>
     </html>
   );

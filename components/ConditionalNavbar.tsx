@@ -1,22 +1,16 @@
 /**
  * Conditional Navbar Component
  * Shows or hides navbar based on URL parameters (mode=client) and pathname
+ * Server component that fetches user data and passes to client Navbar
  */
 
-'use client';
+import { headers } from 'next/headers';
+import { getCurrentUser } from '@/lib/auth';
+import NavbarClient from './NavbarClient';
 
-import { useSearchParams, usePathname } from 'next/navigation';
-import Navbar from './Navbar';
-
-export default function ConditionalNavbar() {
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const mode = searchParams.get('mode');
-
-  // Hide navbar for client mode
-  if (mode === 'client') {
-    return null;
-  }
+export default async function ConditionalNavbar() {
+  const headersList = await headers();
+  const pathname = headersList.get('x-pathname') || '';
 
   // Hide navbar on login page
   if (pathname === '/login') {
@@ -28,5 +22,8 @@ export default function ConditionalNavbar() {
     return null;
   }
 
-  return <Navbar />;
+  // Fetch user data on server side
+  const currentUser = await getCurrentUser();
+
+  return <NavbarClient currentUser={currentUser} />;
 }

@@ -334,20 +334,31 @@ export async function GET() {
       ? Math.round((totalTicketsLast30Days / totalTickets) * 100)
       : 0;
 
-    // Generate resolution trends data
+    // Parallelize all trend and department data generation for better performance
+    const [trends1d, trends7d, trends30d, trends90d, dept7d, dept30d, dept90d, deptAll] = await Promise.all([
+      generate1DayTrends(),
+      generate7DayTrends(),
+      generate30DayTrends(),
+      generate90DayTrends(),
+      getDepartmentStatsByRange(7, excludedDepartments),
+      getDepartmentStatsByRange(30, excludedDepartments),
+      getDepartmentStatsByRange(90, excludedDepartments),
+      getDepartmentStatsByRange(null, excludedDepartments),
+    ]);
+
     const resolutionTrends = {
-      '1d': await generate1DayTrends(),
-      '7d': await generate7DayTrends(),
-      '30d': await generate30DayTrends(),
-      '90d': await generate90DayTrends(),
+      '1d': trends1d,
+      '7d': trends7d,
+      '30d': trends30d,
+      '90d': trends90d,
     };
 
     // Get department stats by range (excluding TEST)
     const departmentByRange = {
-      '7d': await getDepartmentStatsByRange(7, excludedDepartments),
-      '30d': await getDepartmentStatsByRange(30, excludedDepartments),
-      '90d': await getDepartmentStatsByRange(90, excludedDepartments),
-      'all': await getDepartmentStatsByRange(null, excludedDepartments),
+      '7d': dept7d,
+      '30d': dept30d,
+      '90d': dept90d,
+      'all': deptAll,
     };
 
     // Get my tickets stats (filtered by createdBy)

@@ -18,22 +18,22 @@ const DEFAULT_LINE_GROUP = process.env.LINE_DEFAULT_GROUP_ID || '';
 
 export const DEPARTMENTS: Record<Department, DepartmentConfig> = {
   DB1: {
-    label: 'D1',
+    label: 'DB1',
     description: 'แผนก D1',
     lineGroupId: process.env.LINE_GROUP_DB1 || DEFAULT_LINE_GROUP,
   },
   DB2: {
-    label: 'D2',
+    label: 'DB2',
     description: 'แผนก D2',
     lineGroupId: process.env.LINE_GROUP_DB2 || DEFAULT_LINE_GROUP,
   },
   DB3: {
-    label: 'D3',
+    label: 'DB3',
     description: 'แผนก D3',
     lineGroupId: process.env.LINE_GROUP_DB3 || DEFAULT_LINE_GROUP,
   },
   DB4: {
-    label: 'D4',
+    label: 'DB4',
     description: 'แผนก D4',
     lineGroupId: process.env.LINE_GROUP_DB4 || DEFAULT_LINE_GROUP,
   },

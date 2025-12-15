@@ -5,10 +5,13 @@ import { useEffect } from 'react';
 /**
  * VConsole Component
  * Loads VConsole for mobile debugging in LINE app
- * Only loads in production when needed for LIFF debugging
+ * Only loads in development mode
  */
 export default function VConsole() {
   useEffect(() => {
+    // Only load VConsole in development mode
+    if (process.env.NODE_ENV !== 'development') return;
+
     // Only load VConsole in browser environment
     if (typeof window === 'undefined') return;
 
@@ -21,7 +24,7 @@ export default function VConsole() {
         maxLogNumber: 1000,
       });
 
-      console.log('[VConsole] ✅ VConsole initialized');
+      console.log('[VConsole] ✅ VConsole initialized (development mode)');
 
       // Cleanup on unmount
       return () => {

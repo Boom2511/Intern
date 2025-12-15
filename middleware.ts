@@ -23,7 +23,9 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublicRoute) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-pathname', pathname);
+    return response;
   }
 
   // Handle LIFF redirect at root path - redirect to liff.state immediately
@@ -40,13 +42,17 @@ export async function middleware(request: NextRequest) {
 
   // Allow public access to client mode tickets (both page and API)
   if (searchParams.get('mode') === 'client') {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-pathname', pathname);
+    return response;
   }
 
   // Allow public access to ticket detail API (used by client mode pages)
   // Pattern: /api/tickets/[id] (but not /api/tickets without ID)
   if (pathname.match(/^\/api\/tickets\/[^\/]+$/)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-pathname', pathname);
+    return response;
   }
 
   // Check if user is authenticated
@@ -74,7 +80,10 @@ export async function middleware(request: NextRequest) {
 
     // Token is valid - let the request through
     // Permission checks will be handled by the UI and API routes
-    return NextResponse.next();
+    // Add pathname to headers for server components
+    const response = NextResponse.next();
+    response.headers.set('x-pathname', pathname);
+    return response;
   } catch (error) {
     console.error('Middleware error:', error);
     // Invalid token - redirect to login

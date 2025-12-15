@@ -17,26 +17,15 @@ import { useEffect, useState } from 'react';
 import { getStatusLabel, getPriorityLabel } from '@/lib/utils';
 import TicketResolutionChart from '@/components/dashboard/TicketResolutionChart';
 import DepartmentTicketStatusChart from '@/components/dashboard/DepartmentTicketStatusChart';
+import { useUser } from '@/providers/UserProvider';
 
 export default function DashboardPage() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useUser(); // Use context instead of fetching
   const [currentTime, setCurrentTime] = useState(new Date());
   const [viewMode, setViewMode] = useState<'all' | 'mine'>('mine'); // Default to 'mine'
 
   // Use SWR hook without polling - updates on events only
   const { stats, isLoading, isError, isValidating } = useDashboardStats();
-
-  // Fetch current user
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setCurrentUser(data.user);
-        }
-      })
-      .catch(err => console.error('Failed to fetch user:', err));
-  }, []);
 
   // Update time every minute
   useEffect(() => {
@@ -208,7 +197,7 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
-                <p className="text-sm text-gray-600 mb-1">Total Tickets</p>
+                <p className="text-sm text-gray-600 mb-1">Tickets ทั้งหมด</p>
                 <p className="text-3xl font-bold">{filteredStats.totalTickets.toLocaleString()}</p>
               </CardContent>
             </Card>
@@ -223,7 +212,7 @@ export default function DashboardPage() {
                     <AlertCircle className="h-6 w-6 text-blue-600" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 mb-1">สถานะ New</p>
+                <p className="text-sm text-gray-600 mb-1">ยังไม่ดำเนินการ</p>
                 <p className="text-3xl font-bold">{filteredStats.newTickets}</p>
               </CardContent>
             </Card>

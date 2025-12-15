@@ -1,12 +1,13 @@
 /**
  * Ticket Detail Hook
  * Handles fetching and managing ticket data for LIFF
+ * Refactored with separated concerns: load, view tracking, auto-update
  */
 
 import { useState, useCallback } from 'react';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 
-interface LineProfile {
+export interface LineProfile {
   userId: string;
   displayName: string;
   pictureUrl?: string;
@@ -72,33 +73,19 @@ export function useTicketDetail(ticketId: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTicket = useCallback(async (profile: LineProfile | null) => {
+  // Pure function: Load ticket data (fast, no side effects)
+  const loadTicket = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Build query params
-      const params = new URLSearchParams();
-      if (profile) {
-        params.set('viewerName', profile.displayName);
-        params.set('viewerLineId', profile.userId);
-        if (profile.pictureUrl) {
-          params.set('viewerAvatar', profile.pictureUrl);
-        }
-      }
-
-      // Single API call to get everything
-      const res = await fetch(`/api/liff/tickets/${ticketId}?${params}`);
+      // Simple GET request without query params
+      const res = await fetch(`/api/liff/tickets/${ticketId}`);
       const result = await res.json();
 
       if (!res.ok || !result.success) {
         throw new Error(result.error || 'ไม่สามารถโหลดข้อมูลได้');
       }
-
-      console.log('[useTicketDetail] Received data:', {
-        viewsCount: result.data.views?.length || 0,
-        sampleView: result.data.views?.[0] || null,
-      });
 
       setData({
         ticket: result.data.ticket,
@@ -106,40 +93,6 @@ export function useTicketDetail(ticketId: string) {
         statusHistory: result.data.statusHistory || [],
         views: result.data.views || [],
       });
-
-      // Auto-update status to IN_PROGRESS when LINE user opens NEW ticket
-      if (result.data.ticket?.status === 'NEW' && profile) {
-        console.log('[useTicketDetail] Auto-updating status from NEW to IN_PROGRESS');
-        try {
-          await fetch(`/api/liff/tickets/${ticketId}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'IN_PROGRESS',
-              lineUserId: profile.userId,
-              lineName: profile.displayName,
-              lineAvatar: profile.pictureUrl,
-            }),
-          });
-          // Reload ticket to get updated status
-          const reloadRes = await fetch(`/api/liff/tickets/${ticketId}?${params}`);
-          const reloadResult = await reloadRes.json();
-          if (reloadRes.ok && reloadResult.success) {
-            setData({
-              ticket: reloadResult.data.ticket,
-              notes: reloadResult.data.notes || [],
-              statusHistory: reloadResult.data.statusHistory || [],
-              views: reloadResult.data.views || [],
-            });
-            // Invalidate tickets list and dashboard to show updated status
-            invalidateTicketsList();
-            invalidateDashboardStats();
-          }
-        } catch (autoUpdateErr) {
-          console.error('[useTicketDetail] Failed to auto-update status:', autoUpdateErr);
-          // Don't throw - ticket still loaded successfully
-        }
-      }
     } catch (err: any) {
       const errorMsg = err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
       setError(errorMsg);
@@ -148,6 +101,54 @@ export function useTicketDetail(ticketId: string) {
     }
   }, [ticketId]);
 
+  // Separate function: Record view (fire-and-forget, non-blocking)
+  const recordView = useCallback(async (profile: LineProfile) => {
+    try {
+      await fetch(`/api/liff/tickets/${ticketId}/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viewerName: profile.displayName,
+          viewerLineId: profile.userId,
+          viewerAvatar: profile.pictureUrl,
+        }),
+      });
+      // Reload views after recording
+      await loadTicket();
+    } catch (err) {
+      console.error('[recordView] Failed:', err);
+      // Non-critical, don't throw
+    }
+  }, [ticketId, loadTicket]);
+
+  // Separate function: Auto-update status from NEW to IN_PROGRESS
+  const autoUpdateStatus = useCallback(async (profile: LineProfile) => {
+    try {
+      const res = await fetch(`/api/liff/tickets/${ticketId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'IN_PROGRESS',
+          lineUserId: profile.userId,
+          lineName: profile.displayName,
+          lineAvatar: profile.pictureUrl,
+        }),
+      });
+
+      if (res.ok) {
+        // Reload ticket to get updated status
+        await loadTicket();
+        // Invalidate cache
+        invalidateTicketsList();
+        invalidateDashboardStats();
+      }
+    } catch (err) {
+      console.error('[autoUpdateStatus] Failed:', err);
+      // Non-critical, don't throw
+    }
+  }, [ticketId, loadTicket]);
+
+  // Manual status update (for user actions like marking as RESOLVED)
   const updateStatus = useCallback(async (
     newStatus: string,
     profile: LineProfile
@@ -171,7 +172,7 @@ export function useTicketDetail(ticketId: string) {
       }
 
       // Reload ticket data
-      await loadTicket(profile);
+      await loadTicket();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -190,6 +191,8 @@ export function useTicketDetail(ticketId: string) {
     loading,
     error,
     loadTicket,
+    recordView,
+    autoUpdateStatus,
     updateStatus,
     addNote,
   };

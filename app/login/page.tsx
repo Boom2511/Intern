@@ -54,7 +54,7 @@ function LoginForm() {
           </div>
         </div>
         <CardTitle className="text-2xl font-bold text-center">
-          PostServe Help Desk
+          PostServe 
         </CardTitle>
         <p className="text-sm text-gray-500 text-center">
           เข้าสู่ระบบเพื่อใช้งาน
@@ -106,7 +106,7 @@ function LoginForm() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>ระบบจัดการ Ticket สำหรับศูนย์บริการลูกค้า</p>
+          <p>ระบบ Help Desk สำหรับศูนย์บริการลูกค้า</p>
         </div>
       </CardContent>
     </Card>

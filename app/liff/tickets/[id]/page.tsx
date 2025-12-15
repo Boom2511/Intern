@@ -1,19 +1,22 @@
 /**
  * LIFF Ticket Detail Page
  * Modern card-based design with integrated action field
+ * Optimized for fast initial render with lazy loading
  */
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, Send } from 'lucide-react';
 import VConsole from '@/components/VConsole';
-import StatusHistory from '@/components/liff/StatusHistory';
+import TicketSkeleton from '@/components/liff/TicketSkeleton';
 import { useLiff } from '@/hooks/useLiff';
 import { useTicketDetail } from '@/hooks/useTicketDetail';
-import { convertImagesToWebP } from '@/lib/image-utils';
+
+// Dynamic imports for heavy components and utilities
+const StatusHistory = lazy(() => import('@/components/liff/StatusHistory'));
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   NEW: { label: 'รอดำเนินการ', color: 'text-blue-700', bg: 'bg-blue-50' },
@@ -45,12 +48,10 @@ export default function LiffTicketDetailPage() {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const { isReady, profile, error: liffError } = useLiff({
-    onReady: (profile) => {
-      loadTicket(profile);
-    },
-  });
+  // LIFF initialization - profile not required for initial render
+  const { profile, error: liffError } = useLiff();
 
+  // Ticket data - load immediately without waiting for profile
   const {
     ticket,
     notes,
@@ -59,8 +60,30 @@ export default function LiffTicketDetailPage() {
     loading,
     error: ticketError,
     loadTicket,
+    recordView,
+    autoUpdateStatus,
     updateStatus,
   } = useTicketDetail(ticketId);
+
+  // 1. Load ticket data immediately (fast, pure)
+  useEffect(() => {
+    loadTicket();
+  }, [loadTicket]);
+
+  // 2. Record view when profile becomes available (fire-and-forget)
+  useEffect(() => {
+    if (profile) {
+      recordView(profile);
+    }
+  }, [profile, recordView]);
+
+  // 3. Auto-update status NEW -> IN_PROGRESS (only once when both ready)
+  useEffect(() => {
+    if (!profile || !ticket) return;
+    if (ticket.status !== 'NEW') return;
+
+    autoUpdateStatus(profile);
+  }, [ticket, profile, autoUpdateStatus]);
 
   const error = liffError || ticketError;
 
@@ -70,6 +93,8 @@ export default function LiffTicketDetailPage() {
 
     setUploadingImages(true);
     try {
+      // Dynamic import for image conversion utility
+      const { convertImagesToWebP } = await import('@/lib/image-utils');
       const webpFiles = await convertImagesToWebP(files, 0.8);
       setSelectedImages((prev) => [...prev, ...webpFiles]);
     } catch (err) {
@@ -153,18 +178,17 @@ export default function LiffTicketDetailPage() {
     }
   };
 
-  if (!isReady || loading) {
+  // Show skeleton during initial load (non-blocking)
+  if (loading && !ticket) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <>
         <VConsole />
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 text-sm">กำลังโหลด...</p>
-        </div>
-      </div>
+        <TicketSkeleton />
+      </>
     );
   }
 
+  // Show error if failed to load
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -176,15 +200,7 @@ export default function LiffTicketDetailPage() {
     );
   }
 
-  // Debug: Log views data and ticket info
-  console.log('[LIFF Page] Debug:', {
-    viewsLength: views.length,
-    viewsArray: views,
-    firstView: views[0],
-    assignedTo: ticket?.assignedTo,
-    department: ticket?.department,
-  });
-
+  // Show empty state if no ticket found
   if (!ticket) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -318,12 +334,21 @@ export default function LiffTicketDetailPage() {
           </div>
         </div>
 
-        {/* Status History */}
-        <StatusHistory
-          history={statusHistory}
-          isOpen={showHistory}
-          onToggle={() => setShowHistory(!showHistory)}
-        />
+        {/* Status History - Lazy loaded */}
+        <Suspense fallback={
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-32" />
+              <div className="h-3 bg-gray-200 rounded w-48" />
+            </div>
+          </div>
+        }>
+          <StatusHistory
+            history={statusHistory}
+            isOpen={showHistory}
+            onToggle={() => setShowHistory(!showHistory)}
+          />
+        </Suspense>
 
         {/* Notes History */}
         {notes.length > 0 && (
@@ -340,6 +365,7 @@ export default function LiffTicketDetailPage() {
                         alt={note.createdByLineName || note.createdBy}
                         width={40}
                         height={40}
+                        loading="lazy"
                         className="w-10 h-10 rounded-full"
                       />
                     ) : (
@@ -378,6 +404,7 @@ export default function LiffTicketDetailPage() {
                             alt={`หมายเหตุ ${idx + 1}`}
                             width={80}
                             height={80}
+                            loading="lazy"
                             className="w-20 h-20 object-cover rounded border"
                           />
                         ))}
@@ -418,6 +445,7 @@ export default function LiffTicketDetailPage() {
                         alt={view.viewerName}
                         width={32}
                         height={32}
+                        loading="lazy"
                         className="w-8 h-8 rounded-full ring-2 ring-white border border-gray-200"
                       />
                     ) : (
@@ -467,6 +495,7 @@ export default function LiffTicketDetailPage() {
                             alt={view.viewerName}
                             width={40}
                             height={40}
+                            loading="lazy"
                             className="w-10 h-10 rounded-full flex-shrink-0"
                           />
                         ) : (

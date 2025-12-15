@@ -42,11 +42,11 @@ export default function DepartmentTicketStatusChart({ data }: DepartmentTicketSt
   // Use provided data or fallback to empty
   const chartData = data?.[range] || [];
 
-  // Custom label to show percentage
+  // Custom label to show department name and percentage
   const renderCustomLabel = (entry: any) => {
     const total = chartData.reduce((sum, item) => sum + item.count, 0);
     const percent = ((entry.count / total) * 100).toFixed(0);
-    return `${percent}%`;
+    return `${entry.department}: ${percent}%`;
   };
 
   return (

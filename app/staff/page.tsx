@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, LogOut, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
+import { useUser } from '@/providers/UserProvider';
 
 interface User {
   id: string;
@@ -21,18 +22,11 @@ interface User {
   createdAt: string;
 }
 
-interface CurrentUser {
-  id: string;
-  email: string;
-  name: string;
-  role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR';
-}
-
 export default function StaffPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user: currentUser } = useUser(); // Use context instead of fetching
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -47,8 +41,19 @@ export default function StaffPage() {
   });
   const [passwordError, setPasswordError] = useState('');
 
+  // Check permission on mount
   useEffect(() => {
-    loadCurrentUser();
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+
+    if (currentUser.role === 'OPERATOR') {
+      router.push('/dashboard');
+      return;
+    }
+
+    // Load initial data
     loadUsers();
     loadOnlineStatus();
     loadLineQuota();
@@ -62,28 +67,7 @@ export default function StaffPage() {
       clearInterval(onlineInterval);
       clearInterval(quotaInterval);
     };
-  }, []);
-
-  const loadCurrentUser = async () => {
-    try {
-      const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentUser(data.user);
-
-        // Check if user has permission to view this page
-        if (data.user.role === 'OPERATOR') {
-          router.push('/dashboard');
-          return;
-        }
-      } else {
-        router.push('/login');
-      }
-    } catch (error) {
-      console.error('Failed to load current user:', error);
-      router.push('/login');
-    }
-  };
+  }, [currentUser, router]);
 
   const loadUsers = async () => {
     try {
@@ -545,8 +529,8 @@ export default function StaffPage() {
         <h3 className="font-semibold mb-2">สิทธิ์การใช้งาน</h3>
         <ul className="space-y-1 text-sm text-gray-700">
           <li><strong>Administrator:</strong> เข้าถึงได้ทุกอย่าง รวมถึงหน้าทดสอบ</li>
-          <li><strong>Admin:</strong> จัดการผู้ใช้งาน + ใช้งาน CEC (ไม่เห็นหน้าทดสอบ)</li>
-          <li><strong>Operator:</strong> ใช้งาน CEC เท่านั้น (ไม่เห็นการจัดการผู้ใช้และหน้าทดสอบ)</li>
+          <li><strong>Admin:</strong> จัดการผู้ใช้งาน + ใช้งาน CEC </li>
+          <li><strong>Operator:</strong> ใช้งาน CEC เท่านั้น </li>
         </ul>
       </div>
       <Toaster />
