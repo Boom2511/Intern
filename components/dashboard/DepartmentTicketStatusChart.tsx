@@ -67,11 +67,10 @@ export default function DepartmentTicketStatusChart({
                 type="button"
                 onClick={() => onRangeChange(r)}
                 disabled={isLoading}
-                className={`px-3 py-1 text-xs rounded-md transition ${
-                  range === r
+                className={`px-3 py-1 text-xs rounded-md transition ${range === r
                     ? 'bg-white shadow text-gray-900 font-medium'
                     : 'text-gray-500 hover:text-gray-700'
-                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {r === '7d' ? '7d' : r === '30d' ? '30d' : r === '90d' ? '90d' : 'All'}
               </button>
@@ -84,11 +83,11 @@ export default function DepartmentTicketStatusChart({
         {/* Chart */}
         {isLoading ? (
           <div className="h-[280px] flex items-center justify-center">
-            <div className="animate-pulse text-gray-400">Loading...</div>
+            <div className="w-32 h-32 rounded-full bg-gray-100 animate-pulse" />
           </div>
         ) : chartData.length > 0 ? (
           <div className="h-[280px] min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+            <ResponsiveContainer width="100%" height="100%" >
               <PieChart>
                 <Pie
                   data={chartData}
