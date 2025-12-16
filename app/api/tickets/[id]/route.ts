@@ -98,6 +98,14 @@ export async function PATCH(
 
     // Handle status update
     if (status && status !== ticket.status) {
+      // Validate status transition: Ticket must be NEW before it can be IN_PROGRESS
+      if (status === 'IN_PROGRESS' && ticket.status !== 'NEW') {
+        return NextResponse.json(
+          { success: false, error: 'Ticket must be in NEW status before changing to IN_PROGRESS' },
+          { status: 400 }
+        );
+      }
+
       updateData.status = status;
 
       // If status is RESOLVED, set resolvedBy and resolvedAt

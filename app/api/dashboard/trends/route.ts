@@ -1,7 +1,11 @@
 /**
  * Dashboard Trends API
  * Optimized with single SQL query using DATE_TRUNC and FILTER
+ * ❌ ไม่ต้องรู้ user - ใช้ได้ทุกคน
  * Cached for 60 seconds
+ *
+ * Query params:
+ * - range: 1d | 7d | 30d | 90d (default: 7d)
  */
 
 import { NextResponse } from 'next/server';
@@ -17,33 +21,27 @@ export async function GET(request: Request) {
 
     let interval: string;
     let truncUnit: string;
-    let limit: number;
 
     switch (range) {
       case '1d':
         interval = '1 day';
         truncUnit = 'hour';
-        limit = 24;
         break;
       case '7d':
         interval = '7 days';
         truncUnit = 'day';
-        limit = 7;
         break;
       case '30d':
         interval = '30 days';
         truncUnit = 'day';
-        limit = 30;
         break;
       case '90d':
         interval = '90 days';
         truncUnit = 'day';
-        limit = 90;
         break;
       default:
         interval = '7 days';
         truncUnit = 'day';
-        limit = 7;
     }
 
     // Single optimized query with DATE_TRUNC and FILTER

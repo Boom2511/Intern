@@ -1,20 +1,18 @@
 /**
  * Dashboard Summary API
  * Fast endpoint for top-level statistics only
+ * ไม่ต้องรู้ user - ใช้ได้ทุกคน
  * Cached for 30 seconds
  */
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30; // Cache for 30 seconds
 
 export async function GET() {
   try {
-    const currentUser = await getCurrentUser();
-
     // Parallel query for all status counts
     const [statusCounts, last30DaysCount] = await Promise.all([
       prisma.ticket.groupBy({

@@ -1,7 +1,9 @@
 /**
  * Dashboard My Stats API
  * User-specific statistics loaded separately
+ * ต้องรู้ user - require auth
  * No cache (user-specific data)
+ * SWR: conditional fetch เมื่อ viewMode === 'mine'
  */
 
 import { NextResponse } from 'next/server';

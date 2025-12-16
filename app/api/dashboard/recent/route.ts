@@ -1,7 +1,9 @@
 /**
  * Dashboard Recent Activities API
  * Recent tickets and activities
+ * ไม่ต้องรู้ user - ใช้ได้ทุกคน
  * Cached for 30 seconds
+ * SWR: refreshOnFocus=true, refreshInterval=30s
  */
 
 import { NextResponse } from 'next/server';

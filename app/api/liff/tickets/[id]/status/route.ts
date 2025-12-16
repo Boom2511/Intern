@@ -47,6 +47,14 @@ export async function PATCH(
       );
     }
 
+    // Validate status transition: Ticket must be NEW before it can be IN_PROGRESS
+    if (status === 'IN_PROGRESS' && currentTicket.status !== 'NEW') {
+      return NextResponse.json(
+        { success: false, error: 'ต้องเป็นสถานะ "ยังไม่ดำเนินการ" ก่อนถึงจะเปลี่ยนเป็น "กำลังดำเนินการ" ได้' },
+        { status: 400 }
+      );
+    }
+
     // Update ticket and create status history
     const updatedTicket = await prisma.ticket.update({
       where: { id: params.id },

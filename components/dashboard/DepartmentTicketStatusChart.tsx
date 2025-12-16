@@ -1,6 +1,7 @@
 /**
  * Department Ticket Status Chart Component
- * Shows pie chart of tickets by department with date range selector
+ * Shows pie chart of tickets by department with range selector
+ * Controlled component - receives data and range from parent
  */
 
 'use client';
@@ -13,7 +14,6 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type Range = '7d' | '30d' | '90d' | 'all';
@@ -25,26 +25,27 @@ interface DepartmentData {
 }
 
 interface DepartmentTicketStatusChartProps {
-  data?: {
-    '7d': DepartmentData[];
-    '30d': DepartmentData[];
-    '90d': DepartmentData[];
-    'all': DepartmentData[];
-  };
+  data: DepartmentData[];
+  range: Range;
+  onRangeChange: (range: Range) => void;
+  isLoading?: boolean;
 }
 
 // Department colors (excluding TEST)
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
-export default function DepartmentTicketStatusChart({ data }: DepartmentTicketStatusChartProps) {
-  const [range, setRange] = useState<Range>('all');
-
-  // Use provided data or fallback to empty
-  const chartData = data?.[range] || [];
+export default function DepartmentTicketStatusChart({
+  data,
+  range,
+  onRangeChange,
+  isLoading = false
+}: DepartmentTicketStatusChartProps) {
+  const chartData = data || [];
 
   // Custom label to show department name and percentage
   const renderCustomLabel = (entry: any) => {
     const total = chartData.reduce((sum, item) => sum + item.count, 0);
+    if (total === 0) return '';
     const percent = ((entry.count / total) * 100).toFixed(0);
     return `${entry.department}: ${percent}%`;
   };
@@ -63,12 +64,13 @@ export default function DepartmentTicketStatusChart({ data }: DepartmentTicketSt
               <button
                 key={r}
                 type="button"
-                onClick={() => setRange(r)}
+                onClick={() => onRangeChange(r)}
+                disabled={isLoading}
                 className={`px-3 py-1 text-xs rounded-md transition ${
                   range === r
                     ? 'bg-white shadow text-gray-900 font-medium'
                     : 'text-gray-500 hover:text-gray-700'
-                }`}
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {r === '7d' ? '7d' : r === '30d' ? '30d' : r === '90d' ? '90d' : 'All'}
               </button>
@@ -79,7 +81,11 @@ export default function DepartmentTicketStatusChart({ data }: DepartmentTicketSt
 
       <CardContent>
         {/* Chart */}
-        {chartData.length > 0 ? (
+        {isLoading ? (
+          <div className="h-[280px] flex items-center justify-center">
+            <div className="animate-pulse text-gray-400">Loading...</div>
+          </div>
+        ) : chartData.length > 0 ? (
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
