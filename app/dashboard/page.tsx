@@ -210,7 +210,7 @@ export default function DashboardPage() {
               </Link>
 
               {/* Closed */}
-              <Link href="/tickets?status=CLOSED">
+              <Link href="/tickets?status=SOLVED">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                   <CardContent className="py-6">
                     <div className="flex items-center justify-between mb-4">

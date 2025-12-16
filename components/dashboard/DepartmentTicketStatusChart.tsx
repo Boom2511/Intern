@@ -20,6 +20,7 @@ type Range = '7d' | '30d' | '90d' | 'all';
 
 interface DepartmentData {
   department: string;
+  label: string;
   count: number;
   [key: string]: any; // Allow additional properties for recharts
 }
@@ -47,7 +48,7 @@ export default function DepartmentTicketStatusChart({
     const total = chartData.reduce((sum, item) => sum + item.count, 0);
     if (total === 0) return '';
     const percent = ((entry.count / total) * 100).toFixed(0);
-    return `${entry.department}: ${percent}%`;
+    return `${entry.label}: ${percent}%`;
   };
 
   return (
@@ -98,6 +99,7 @@ export default function DepartmentTicketStatusChart({
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="count"
+                  nameKey="label"
                 >
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

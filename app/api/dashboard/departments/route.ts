@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Department } from '@prisma/client';
+import { getDepartmentLabel } from '@/config/departments';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60; // Cache for 1 minute
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
     // Format department counts for pie chart
     const departments = departmentCounts.map((dept) => ({
       department: dept.department || 'Unknown',
+      label: getDepartmentLabel(dept.department as any),
       count: dept._count,
     }));
 
