@@ -17,11 +17,20 @@ interface StatusBreakdown {
   count: number;
 }
 
+interface DepartmentStatusChartData {
+  department: string;
+  label: string;
+  open: number;
+  inProgress: number;
+  resolved: number;
+}
+
 interface DepartmentsResponse {
   success: boolean;
   range: string;
   departments: DepartmentData[];
   statusBreakdown: StatusBreakdown[];
+  departmentStatusChart: DepartmentStatusChartData[];
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -39,6 +48,7 @@ export function useDashboardDepartments(range: '7d' | '30d' | '90d' | 'all' = 'a
   return {
     departments: data?.departments || [],
     statusBreakdown: data?.statusBreakdown || [],
+    departmentStatusChart: data?.departmentStatusChart || [],
     range: data?.range,
     isLoading,
     isError: error,

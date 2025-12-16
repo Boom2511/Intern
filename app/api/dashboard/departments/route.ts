@@ -86,11 +86,50 @@ export async function GET(request: Request) {
       count: stat._count,
     }));
 
+    // Format stacked bar chart data (status by department)
+    interface DeptStatusCount {
+      department: string;
+      label: string;
+      NEW: number;
+      PENDING: number;
+      IN_PROGRESS: number;
+      RESOLVED: number;
+      CLOSED: number;
+    }
+
+    const departmentStatusMap: Record<string, DeptStatusCount> = {};
+
+    departmentStatusData.forEach((stat) => {
+      const dept = stat.department || 'Unknown';
+      if (!departmentStatusMap[dept]) {
+        departmentStatusMap[dept] = {
+          department: dept,
+          label: getDepartmentLabel(dept as any),
+          NEW: 0,
+          PENDING: 0,
+          IN_PROGRESS: 0,
+          RESOLVED: 0,
+          CLOSED: 0,
+        };
+      }
+      const status = stat.status as keyof Omit<DeptStatusCount, 'department' | 'label'>;
+      departmentStatusMap[dept][status] = stat._count;
+    });
+
+    const departmentStatusChart = Object.values(departmentStatusMap).map((dept) => ({
+      department: dept.department,
+      label: dept.label,
+      open: dept.NEW + dept.PENDING,
+      inProgress: dept.IN_PROGRESS,
+      resolved: dept.RESOLVED + dept.CLOSED,
+    }));
+
     return NextResponse.json({
       success: true,
       range,
       departments,
       statusBreakdown,
+      departmentStatusChart,
     });
   } catch (error) {
     console.error('Error fetching department stats:', error);

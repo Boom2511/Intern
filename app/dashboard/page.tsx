@@ -13,7 +13,6 @@ import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2 } 
 import Link from 'next/link';
 import Image from 'next/image';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
-import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardDepartments } from '@/hooks/useDashboardDepartments';
 import { useDashboardRecent } from '@/hooks/useDashboardRecent';
 import { useDashboardMyStats } from '@/hooks/useDashboardMyStats';
@@ -30,18 +29,16 @@ export default function DashboardPage() {
   const { user: currentUser } = useUser(); // Use context instead of fetching
   const [currentTime, setCurrentTime] = useState(new Date());
   const [viewMode, setViewMode] = useState<'all' | 'mine'>('mine'); // Default to 'mine'
-  const [trendsRange, setTrendsRange] = useState<'1d' | '7d' | '30d' | '90d'>('7d');
   const [departmentRange, setDepartmentRange] = useState<'7d' | '30d' | '90d' | 'all'>('all');
 
   // Use separate hooks for each section (API separation)
   const { summary, isLoading: summaryLoading, isError: summaryError, isValidating: summaryValidating } = useDashboardSummary();
-  const { trends, isLoading: trendsLoading, isError: trendsError, isValidating: trendsValidating } = useDashboardTrends(trendsRange);
-  const { departments, statusBreakdown, isLoading: departmentsLoading, isError: departmentsError, isValidating: departmentsValidating } = useDashboardDepartments(departmentRange);
+  const { departments, statusBreakdown, departmentStatusChart, isLoading: departmentsLoading, isError: departmentsError, isValidating: departmentsValidating } = useDashboardDepartments(departmentRange);
   const { recentTickets, recentActivities, isLoading: recentLoading, isError: recentError, isValidating: recentValidating } = useDashboardRecent();
   const { myStats, isLoading: myStatsLoading, isError: myStatsError, isValidating: myStatsValidating } = useDashboardMyStats(viewMode === 'mine');
 
   // Overall loading/error states
-  const isAnyValidating = summaryValidating || trendsValidating || departmentsValidating || recentValidating || myStatsValidating;
+  const isAnyValidating = summaryValidating || departmentsValidating || recentValidating || myStatsValidating;
 
   // Update time every minute
   useEffect(() => {
@@ -229,15 +226,13 @@ export default function DashboardPage() {
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Ticket Resolution Trends Chart */}
-          {trendsLoading ? (
+          {/* Department Status Stacked Bar Chart */}
+          {departmentsLoading ? (
             <ChartSkeleton />
           ) : (
             <TicketResolutionChart
-              data={trends}
-              range={trendsRange}
-              onRangeChange={setTrendsRange}
-              isLoading={trendsLoading}
+              data={departmentStatusChart}
+              isLoading={departmentsLoading}
             />
           )}
 

@@ -1,7 +1,9 @@
 /**
- * Ticket Resolution Chart Component
- * Shows ticket resolution trends with solved/unresolved tickets
- * Supports 7d, 30d, 90d views
+ * Department Status Chart Component
+ * Shows ticket status breakdown by department as stacked bar chart
+ * X-axis: Department labels (แผนก 1, แผนก 2, etc.)
+ * Y-axis: Ticket count
+ * Stack: Open (NEW+PENDING), In Progress, Resolved/Closed
  */
 
 'use client';
@@ -14,24 +16,25 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Legend,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-type Range = '1d' | '7d' | '30d' | '90d';
-
-type TrendData = { day: string; solved: number; unresolved: number };
+interface DepartmentStatusData {
+  department: string;
+  label: string;
+  open: number;        // NEW + PENDING
+  inProgress: number;  // IN_PROGRESS
+  resolved: number;    // RESOLVED + CLOSED
+}
 
 interface TicketResolutionChartProps {
-  data: TrendData[];
-  range: Range;
-  onRangeChange: (range: Range) => void;
+  data: DepartmentStatusData[];
   isLoading?: boolean;
 }
 
 export default function TicketResolutionChart({
   data,
-  range,
-  onRangeChange,
   isLoading = false
 }: TicketResolutionChartProps) {
   const chartData = data || [];
@@ -39,30 +42,9 @@ export default function TicketResolutionChart({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold">
-            Ticket Resolution Trends
-          </CardTitle>
-
-          {/* Range Switch */}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            {(['1d', '7d', '30d', '90d'] as Range[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => onRangeChange(r)}
-                disabled={isLoading}
-                className={`px-3 py-1 text-xs rounded-md transition ${
-                  range === r
-                    ? 'bg-white shadow text-gray-900 font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
-                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {r === '1d' ? '1 Day' : r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
-              </button>
-            ))}
-          </div>
-        </div>
+        <CardTitle className="text-sm font-semibold">
+          สถานะงานแยกตามแผนก
+        </CardTitle>
       </CardHeader>
 
       <CardContent>
@@ -73,25 +55,29 @@ export default function TicketResolutionChart({
         ) : (
           <>
             {/* Legend */}
-            <div className="flex items-center gap-4 mb-3 text-xs">
+            <div className="flex items-center gap-4 mb-3 text-xs flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded bg-emerald-500" />
-                <span className="text-gray-600">Solved</span>
+                <span className="w-3 h-3 rounded bg-red-500" />
+                <span className="text-gray-600">Open (ยังไม่เริ่ม + รอ)</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded bg-orange-400" />
-                <span className="text-gray-600">Unresolved</span>
+                <span className="w-3 h-3 rounded bg-yellow-500" />
+                <span className="text-gray-600">In Progress (กำลังดำเนินการ)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-green-500" />
+                <span className="text-gray-600">Resolved (แก้ไขแล้ว/ปิด)</span>
               </div>
             </div>
 
             {/* Chart */}
             {chartData.length > 0 ? (
-              <div className="h-[260px] min-h-[260px]">
-                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+              <div className="h-[280px] min-h-[280px]">
+                <ResponsiveContainer width="100%" height="100%" minHeight={280}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis
-                      dataKey="day"
+                      dataKey="label"
                       tick={{ fontSize: 12, fill: '#6B7280' }}
                     />
                     <YAxis
@@ -103,22 +89,38 @@ export default function TicketResolutionChart({
                         borderColor: '#E5E7EB',
                         fontSize: 12,
                       }}
+                      formatter={(value: number, name: string) => {
+                        const labels: Record<string, string> = {
+                          open: 'Open',
+                          inProgress: 'In Progress',
+                          resolved: 'Resolved'
+                        };
+                        return [value, labels[name] || name];
+                      }}
                     />
                     <Bar
-                      dataKey="solved"
+                      dataKey="open"
+                      stackId="status"
+                      fill="#EF4444"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="inProgress"
+                      stackId="status"
+                      fill="#EAB308"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="resolved"
+                      stackId="status"
                       fill="#10B981"
-                      radius={[6, 6, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="unresolved"
-                      fill="#FB923C"
-                      radius={[6, 6, 0, 0]}
+                      radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-[260px] flex items-center justify-center text-gray-500">
+              <div className="h-[280px] flex items-center justify-center text-gray-500">
                 <p>ไม่มีข้อมูล</p>
               </div>
             )}
