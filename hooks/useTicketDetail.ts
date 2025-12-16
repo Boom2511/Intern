@@ -45,6 +45,7 @@ interface Ticket {
   status: string;
   priority: string;
   issueType: string;
+  issueTypeOther?: string;
   description: string;
   trackingNo?: string;
   recipientName: string;
