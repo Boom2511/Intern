@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, Send } from 'lucide-react';
+import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, CircleCheckBig } from 'lucide-react';
 import VConsole from '@/components/VConsole';
 import TicketSkeleton from '@/components/liff/TicketSkeleton';
 import { useLiff } from '@/hooks/useLiff';
@@ -603,17 +603,28 @@ export default function LiffTicketDetailPage() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={actionNote.trim().length < 20 || submitting}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="
+    flex-1
+    bg-emerald-600 hover:bg-emerald-700
+    text-white
+    py-3 rounded-lg
+    font-semibold text-sm
+    transition-colors
+    flex items-center justify-center gap-2
+    disabled:bg-gray-300
+    disabled:text-gray-500
+    disabled:cursor-not-allowed
+  "
               >
                 {submitting ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                     <span>กำลังส่ง...</span>
                   </>
                 ) : (
                   <>
-                    <Send size={18} />
-                    <span>แก้ไขเสร็จสิ้น</span>
+                    <CircleCheckBig size={18} className="text-white" />
+                    <span>ยืนยันการแก้ไข</span>
                   </>
                 )}
               </button>

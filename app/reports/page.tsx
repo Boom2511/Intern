@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { FileDown, Send, Loader2 } from 'lucide-react';
+import { FileDown, Send, Loader2, Info } from 'lucide-react';
 import { format } from 'date-fns';
+import { th } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,62 @@ export default function ReportsPage() {
   const [sourceSystem, setSourceSystem] = useState<SourceSystem>('ALL');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // Fetch preview count when filters change
+  useEffect(() => {
+    const fetchPreview = async () => {
+      setLoadingPreview(true);
+      try {
+        const response = await fetch('/api/reports/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startDate,
+            endDate: reportType === 'monthly' ? endDate : startDate,
+            department: department === 'ALL' ? undefined : department,
+            sourceSystem,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setPreviewCount(data.count);
+        }
+      } catch (error) {
+        console.error('Error fetching preview:', error);
+        setPreviewCount(null);
+      } finally {
+        setLoadingPreview(false);
+      }
+    };
+
+    fetchPreview();
+  }, [reportType, startDate, endDate, department, sourceSystem]);
+
+  // Helper function to get department label
+  const getDepartmentLabel = (dept: Department) => {
+    const labels: Record<Department, string> = {
+      ALL: 'ทั้งหมด',
+      DB1: 'D1',
+      DB2: 'D2',
+      DB3: 'D3',
+      DB4: 'D4',
+      DB5: 'นำจ่ายรถยนต์',
+      DB6: 'บริการประชาชน',
+    };
+    return labels[dept];
+  };
+
+  // Helper function to format date range
+  const getDateRangeText = () => {
+    if (reportType === 'daily') {
+      return format(new Date(startDate), 'd MMM yyyy', { locale: th });
+    } else {
+      return `${format(new Date(startDate), 'd', { locale: th })}–${format(new Date(endDate), 'd MMM yyyy', { locale: th })}`;
+    }
+  };
 
   const handleDownload = async () => {
     // Validate date range for monthly reports
@@ -203,11 +260,39 @@ export default function ReportsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">ทั้งหมด</SelectItem>
-                <SelectItem value="CEC">CEC Call Center</SelectItem>
+                <SelectItem value="CEC">CEC </SelectItem>
                 <SelectItem value="SALESFORCE">Salesforce</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Preview Section */}
+          {loadingPreview ? (
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">กำลังโหลดตัวอย่าง...</span>
+              </div>
+            </div>
+          ) : previewCount !== null ? (
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-900 mb-1">ตัวอย่างรายงาน</h4>
+                  <p className="text-sm text-blue-800">
+                    รายงานนี้มีทั้งหมด <span className="font-bold">{previewCount}</span> รายการ
+                    {', '}
+                    ช่วงวันที่: <span className="font-medium">{getDateRangeText()}</span>
+                    {', '}
+                    แผนก: <span className="font-medium">{getDepartmentLabel(department)}</span>
+                    {', '}
+                    แหล่งที่มา: <span className="font-medium">{sourceSystem === 'ALL' ? 'ทั้งหมด' : sourceSystem}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -243,7 +328,7 @@ export default function ReportsPage() {
               ) : (
                 <>
                   <Send className="mr-2 h-4 w-4" />
-                  ส่งไปยัง LINE Group
+                  {department === 'ALL' ? 'ส่งไปยัง LINE Group' : `ส่งไปยัง LINE ${getDepartmentLabel(department)}`}
                 </>
               )}
             </Button>
@@ -251,7 +336,7 @@ export default function ReportsPage() {
 
           {department === 'ALL' && (
             <p className="text-sm text-orange-600">
-              ⚠️ กรุณาเลือกแผนกเพื่อส่งรายงานไปยัง LINE Group
+              ⚠️ กรุณาเลือกแผนกเพื่อส่งรายงานไปยัง LINE Group ของแผนกนั้น
             </p>
           )}
 
@@ -259,9 +344,7 @@ export default function ReportsPage() {
           <div className="bg-blue-50 p-4 rounded-lg mt-6">
             <h3 className="font-semibold mb-2">คำแนะนำ</h3>
             <ul className="text-sm space-y-1 list-disc list-inside text-gray-700">
-              <li>รายงานประจำวัน: เลือกวันที่เดียว</li>
-              <li>รายงานประจำเดือน: เลือกช่วงวันที่ (Start - End)</li>
-              <li>ส่งไปยัง LINE Group: ต้องเลือกแผนกเฉพาะ (ไม่สามารถเลือก &quot;ทั้งหมด&quot; ได้)</li>
+              <li>เลือกแผนก :ถ้าเลือกแผนกไหนก็จะเป็น report แผนกนั้น ๆ (แต่ก็จะส่งไฟล์ไปแค่กลุ่มแค่กลุ่มไลน์นั้น ๆ)</li>
               <li>ขนาดไฟล์สูงสุดสำหรับ LINE: 10MB</li>
             </ul>
           </div>
