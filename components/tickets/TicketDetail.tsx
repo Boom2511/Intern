@@ -271,11 +271,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                     </div>
                     <div className="pl-6">
                       <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 font-medium">
-                        {getIssueTypeLabel(ticket.issueType)}
+                        {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
                       </Badge>
-                      {ticket.issueTypeOther && (
-                        <span className="text-sm text-gray-600 ml-2">({ticket.issueTypeOther})</span>
-                      )}
                     </div>
                   </div>
 

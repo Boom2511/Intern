@@ -237,8 +237,8 @@ export async function POST(request: NextRequest) {
     const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
 
     // Create ticket
-    // If department is assigned, status should be IN_PROGRESS, otherwise NEW
-    const initialStatus = department ? 'IN_PROGRESS' : 'NEW';
+    // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
+    const initialStatus = 'NEW';
 
     const ticket = await prisma.ticket.create({
       data: {

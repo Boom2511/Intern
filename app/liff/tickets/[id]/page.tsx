@@ -262,7 +262,7 @@ export default function LiffTicketDetailPage() {
             </div>
             <div className="flex items-start text-sm text-gray-600">
               <FileText size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
-              <span>ประเภท: {ISSUE_TYPE_LABELS[ticket.issueType] || ticket.issueType}</span>
+              <span>ประเภท: {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : (ISSUE_TYPE_LABELS[ticket.issueType] || ticket.issueType)}</span>
             </div>
             {(ticket as any).createdBy && (
               <div className="flex items-start text-sm text-gray-600">
