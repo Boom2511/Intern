@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60; // Cache for 1 minute
@@ -19,42 +20,48 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const range = searchParams.get('range') || '7d';
 
-    let interval: string;
+    let intervalDays: number;
     let truncUnit: string;
 
     switch (range) {
       case '1d':
-        interval = '1 day';
+        intervalDays = 1;
         truncUnit = 'hour';
         break;
       case '7d':
-        interval = '7 days';
+        intervalDays = 7;
         truncUnit = 'day';
         break;
       case '30d':
-        interval = '30 days';
+        intervalDays = 30;
         truncUnit = 'day';
         break;
       case '90d':
-        interval = '90 days';
+        intervalDays = 90;
         truncUnit = 'day';
         break;
       default:
-        interval = '7 days';
+        intervalDays = 7;
         truncUnit = 'day';
     }
 
+    // Calculate cutoff date
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - intervalDays);
+
     // Single optimized query with DATE_TRUNC and FILTER
-    const trends: any[] = await prisma.$queryRaw`
-      SELECT
-        DATE_TRUNC(${truncUnit}, "createdAt") as time,
-        COUNT(*) FILTER (WHERE status IN ('RESOLVED', 'CLOSED')) as solved,
-        COUNT(*) FILTER (WHERE status IN ('NEW', 'IN_PROGRESS', 'PENDING')) as unresolved
-      FROM "Ticket"
-      WHERE "createdAt" >= NOW() - INTERVAL ${interval}
-      GROUP BY time
-      ORDER BY time ASC
-    `;
+    const trends: any[] = await prisma.$queryRaw(
+      Prisma.sql`
+        SELECT
+          DATE_TRUNC(${Prisma.raw(`'${truncUnit}'`)}, "createdAt") as time,
+          COUNT(*) FILTER (WHERE status IN ('RESOLVED', 'CLOSED')) as solved,
+          COUNT(*) FILTER (WHERE status IN ('NEW', 'IN_PROGRESS', 'PENDING')) as unresolved
+        FROM "Ticket"
+        WHERE "createdAt" >= ${cutoffDate}
+        GROUP BY time
+        ORDER BY time ASC
+      `
+    );
 
     // Format results
     const formattedTrends = trends.map((row) => {

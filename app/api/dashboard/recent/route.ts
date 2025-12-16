@@ -49,17 +49,19 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       recentTickets,
-      recentActivities: recentActivities.map(activity => ({
-        id: activity.id,
-        ticketId: activity.ticketId,
-        ticketNo: activity.ticket.ticketNo,
-        fromStatus: activity.fromStatus,
-        toStatus: activity.toStatus,
-        changedBy: activity.changedBy,
-        changedByLineName: activity.changedByLineName,
-        changedByLineAvatar: activity.changedByLineAvatar,
-        createdAt: activity.createdAt,
-      })),
+      recentActivities: recentActivities
+        .filter(activity => activity.ticket) // Filter out activities with deleted tickets
+        .map(activity => ({
+          id: activity.id,
+          ticketId: activity.ticketId,
+          ticketNo: activity.ticket.ticketNo,
+          fromStatus: activity.fromStatus,
+          toStatus: activity.toStatus,
+          changedBy: activity.changedBy,
+          changedByLineName: activity.changedByLineName,
+          changedByLineAvatar: activity.changedByLineAvatar,
+          createdAt: activity.createdAt,
+        })),
     });
   } catch (error) {
     console.error('Error fetching recent activities:', error);
