@@ -86,8 +86,8 @@ export default function DepartmentTicketStatusChart({
             <div className="animate-pulse text-gray-400">Loading...</div>
           </div>
         ) : chartData.length > 0 ? (
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[280px] min-h-[280px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
               <PieChart>
                 <Pie
                   data={chartData}

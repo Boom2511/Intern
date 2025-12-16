@@ -86,8 +86,8 @@ export default function TicketResolutionChart({
 
             {/* Chart */}
             {chartData.length > 0 ? (
-              <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-[260px] min-h-[260px]">
+                <ResponsiveContainer width="100%" height="100%" minHeight={260}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis

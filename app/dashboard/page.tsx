@@ -380,7 +380,7 @@ export default function DashboardPage() {
                             {activity.changedByLineName || activity.changedBy}
                           </span>
                           {' '}อัปเดต{' '}
-                          <span className="font-medium">{activity.ticket.ticketNo}</span>
+                          <span className="font-medium">{activity.ticketNo}</span>
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           {getStatusLabel(activity.fromStatus)} → {getStatusLabel(activity.toStatus)}
