@@ -37,13 +37,16 @@ export default function TicketResolutionChart({
   data,
   isLoading = false
 }: TicketResolutionChartProps) {
-  const chartData = data || [];
+  // Sort departments by pending work (open + inProgress) descending
+  const chartData = [...(data || [])].sort(
+    (a, b) => (b.open + b.inProgress) - (a.open + a.inProgress)
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-semibold">
-          สถานะงานแยกตามแผนก
+          สถานะงานในแผนก
         </CardTitle>
       </CardHeader>
 
@@ -58,15 +61,15 @@ export default function TicketResolutionChart({
             <div className="flex items-center gap-4 mb-3 text-xs flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded bg-red-500" />
-                <span className="text-gray-600">Open (ยังไม่เริ่ม + รอ)</span>
+                <span className="text-gray-600">ยังไม่ดำเนินการ/รอ</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded bg-yellow-500" />
-                <span className="text-gray-600">In Progress (กำลังดำเนินการ)</span>
+                <span className="text-gray-600">กำลังดำเนินการ</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded bg-green-500" />
-                <span className="text-gray-600">Resolved (แก้ไขแล้ว/ปิด)</span>
+                <span className="text-gray-600">แก้ไขแล้ว</span>
               </div>
             </div>
 
@@ -89,13 +92,19 @@ export default function TicketResolutionChart({
                         borderColor: '#E5E7EB',
                         fontSize: 12,
                       }}
-                      formatter={(value: number, name: string) => {
+                      formatter={(value: number, name: string, props: any) => {
+                        const total =
+                          props.payload.open +
+                          props.payload.inProgress +
+                          props.payload.resolved;
+
                         const labels: Record<string, string> = {
                           open: 'Open',
                           inProgress: 'In Progress',
                           resolved: 'Resolved'
                         };
-                        return [value, labels[name] || name];
+
+                        return [`${value} / ${total}`, labels[name] || name];
                       }}
                     />
                     <Bar

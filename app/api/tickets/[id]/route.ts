@@ -11,6 +11,7 @@ import { lineService } from '@/lib/line';
 import { createDepartmentAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getStatusLabel } from '@/lib/utils';
+import { getCurrentUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,6 +64,10 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Get current user for tracking who made changes
+    const currentUser = await getCurrentUser();
+    const currentUsername = currentUser?.name || 'Staff';
+
     const body = await request.json();
     const {
       status,
@@ -130,7 +135,7 @@ export async function PATCH(
           ticketId: ticket.id,
           fromStatus: ticket.status,
           toStatus: status,
-          changedBy: changedByStaffName || resolvedBy || 'Staff',
+          changedBy: changedByStaffName || resolvedBy || currentUsername,
           changedByLineUserId: changedByLineUserId || null,
           changedByLineName: changedByLineName || null,
           changedByLineAvatar: changedByLineAvatar || null,
@@ -146,22 +151,6 @@ export async function PATCH(
     if (department !== undefined) {
       const newDepartment = department === 'none' ? null : department;
       updateData.department = newDepartment;
-
-      // Auto-update status to IN_PROGRESS when department is assigned and status is NEW
-      if (newDepartment && ticket.status === 'NEW') {
-        updateData.status = 'IN_PROGRESS';
-
-        // Create status history for auto-status change
-        await prisma.statusHistory.create({
-          data: {
-            ticketId: ticket.id,
-            fromStatus: 'NEW',
-            toStatus: 'IN_PROGRESS',
-            changedBy: 'System',
-            note: 'Auto-changed to IN_PROGRESS when department assigned',
-          },
-        });
-      }
 
       // Send LINE notification when department is assigned for the FIRST time only
       // Only send if ticket had no department before (ticket.department is null)

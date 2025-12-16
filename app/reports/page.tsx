@@ -35,6 +35,12 @@ export default function ReportsPage() {
   const [isSending, setIsSending] = useState(false);
 
   const handleDownload = async () => {
+    // Validate date range for monthly reports
+    if (reportType === 'monthly' && endDate < startDate) {
+      alert('วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มต้น');
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const response = await fetch('/api/reports/generate', {
@@ -73,6 +79,12 @@ export default function ReportsPage() {
   };
 
   const handleSendToLine = async () => {
+    // Validate date range for monthly reports
+    if (reportType === 'monthly' && endDate < startDate) {
+      alert('วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มต้น');
+      return;
+    }
+
     setIsSending(true);
     try {
       const response = await fetch('/api/reports/send-to-line', {

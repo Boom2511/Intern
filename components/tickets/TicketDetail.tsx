@@ -118,11 +118,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
     try {
       const updateData: any = { department: newDepartment === 'none' ? null : newDepartment };
 
-      // Auto-update status to IN_PROGRESS when department is assigned
-      if (newDepartment !== 'none' && ticket.status === 'NEW') {
-        updateData.status = 'IN_PROGRESS';
-      }
-
       const response = await fetch(`/api/tickets/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -133,9 +128,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
 
       if (data.success) {
         setDepartment(newDepartment === 'none' ? null : newDepartment);
-        if (updateData.status) {
-          setStatus(updateData.status);
-        }
         toast({
           variant: 'success',
           title: 'สำเร็จ!',
