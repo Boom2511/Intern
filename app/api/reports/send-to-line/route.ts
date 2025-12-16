@@ -19,15 +19,16 @@ interface ReportFilters {
   reportType: 'daily' | 'monthly';
   startDate: string;
   endDate?: string;
-  department?: string;
+  department?: string; // For filtering data
   sourceSystem?: 'ALL' | 'CEC' | 'SALESFORCE';
-  lineGroupId?: string; // Optional: specific group, otherwise use department group
+  lineGroupDepartment?: string; // Department to send LINE to (separate from filter)
+  lineGroupId?: string; // Optional: specific group ID override
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { reportType, startDate, endDate, department, sourceSystem, lineGroupId }: ReportFilters = body;
+    const { reportType, startDate, endDate, department, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
 
     // Build query filters
     const whereClause: any = {
@@ -180,15 +181,17 @@ export async function POST(request: NextRequest) {
 
     const fileUrl = urlData.publicUrl;
 
-    // Determine LINE group
+    // Determine LINE group - prioritize lineGroupId, then lineGroupDepartment, then department filter
     let targetGroupId = lineGroupId;
-    if (!targetGroupId && department && department !== 'ALL') {
+    if (!targetGroupId && lineGroupDepartment) {
+      targetGroupId = getDepartmentLineGroup(lineGroupDepartment as any);
+    } else if (!targetGroupId && department && department !== 'ALL') {
       targetGroupId = getDepartmentLineGroup(department as any);
     }
 
     if (!targetGroupId) {
       return NextResponse.json(
-        { success: false, error: 'No LINE group specified' },
+        { success: false, error: 'No LINE group specified. Please select a department for LINE group.' },
         { status: 400 }
       );
     }

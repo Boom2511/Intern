@@ -32,6 +32,7 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [department, setDepartment] = useState<Department>('ALL');
   const [sourceSystem, setSourceSystem] = useState<SourceSystem>('ALL');
+  const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1'); // Separate selection for LINE group
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -151,8 +152,9 @@ export default function ReportsPage() {
           reportType,
           startDate,
           endDate: reportType === 'monthly' ? endDate : undefined,
-          department: department === 'ALL' ? undefined : department,
+          department: department === 'ALL' ? undefined : department, // Filter data
           sourceSystem,
+          lineGroupDepartment, // Send to this LINE group
         }),
       });
 
@@ -266,6 +268,32 @@ export default function ReportsPage() {
             </Select>
           </div>
 
+          {/* LINE Group Selection */}
+          <div className="space-y-2 border-t pt-4">
+            <Label htmlFor="lineGroup" className="text-blue-700 font-semibold">
+              เลือกกลุ่ม LINE ที่จะส่ง
+            </Label>
+            <Select
+              value={lineGroupDepartment}
+              onValueChange={(value) => setLineGroupDepartment(value as Department)}
+            >
+              <SelectTrigger id="lineGroup" className="border-blue-300">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DB1">D1</SelectItem>
+                <SelectItem value="DB2">D2</SelectItem>
+                <SelectItem value="DB3">D3</SelectItem>
+                <SelectItem value="DB4">D4</SelectItem>
+                <SelectItem value="DB5">นำจ่ายรถยนต์</SelectItem>
+                <SelectItem value="DB6">บริการประชาชน</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">
+              💡 การเลือกแผนกด้านบนจะกรองข้อมูลใน report / การเลือกกลุ่ม LINE นี้จะส่งไปกลุ่มที่เลือก
+            </p>
+          </div>
+
           {/* Preview Section */}
           {loadingPreview ? (
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -316,7 +344,7 @@ export default function ReportsPage() {
 
             <Button
               onClick={handleSendToLine}
-              disabled={isGenerating || isSending || department === 'ALL'}
+              disabled={isGenerating || isSending}
               variant="outline"
               className="flex-1"
             >
@@ -328,17 +356,11 @@ export default function ReportsPage() {
               ) : (
                 <>
                   <Send className="mr-2 h-4 w-4" />
-                  {department === 'ALL' ? 'ส่งไปยัง LINE Group' : `ส่งไปยัง LINE ${getDepartmentLabel(department)}`}
+                  ส่งไปยัง LINE {getDepartmentLabel(lineGroupDepartment)}
                 </>
               )}
             </Button>
           </div>
-
-          {department === 'ALL' && (
-            <p className="text-sm text-orange-600">
-              ⚠️ กรุณาเลือกแผนกเพื่อส่งรายงานไปยัง LINE Group ของแผนกนั้น
-            </p>
-          )}
 
           {/* Instructions */}
           <div className="bg-blue-50 p-4 rounded-lg mt-6">

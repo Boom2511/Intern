@@ -23,6 +23,7 @@ export default function Navbar() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     loadCurrentUser();
@@ -161,10 +162,98 @@ export default function Navbar() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button className="md:hidden text-white">
+          <button
+            className="md:hidden text-white"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
             <Menu className="h-6 w-6 text-white" />
           </button>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden pb-4 space-y-2">
+            <Link
+              href="/dashboard"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <LayoutDashboard className="h-4 w-4 text-white" />
+              <span className="text-white">Dashboard</span>
+            </Link>
+            <Link
+              href="/tickets"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Ticket className="h-4 w-4 text-white" />
+              <span className="text-white">Tickets</span>
+            </Link>
+            <Link
+              href="/reports"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <FileText className="h-4 w-4 text-white" />
+              <span className="text-white">Reports</span>
+            </Link>
+
+            {canAccessUserManagement && (
+              <Link
+                href="/staff"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <UserCog className="h-4 w-4 text-white" />
+                <span className="text-white">User Management</span>
+              </Link>
+            )}
+
+            {canAccessTestPages && (
+              <Link
+                href="/test-flex"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <FlaskConical className="h-4 w-4 text-white" />
+                <span className="text-white">Test</span>
+              </Link>
+            )}
+
+            <Link
+              href="/tickets/new"
+              className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition block text-center"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              สร้าง Ticket ใหม่
+            </Link>
+
+            {!loading && currentUser && (
+              <div className="pt-2 border-t border-blue-400 mt-2">
+                <div className="flex items-center space-x-2 px-3 py-2">
+                  <User className="h-4 w-4 text-white" />
+                  <div className="flex flex-col">
+                    <span className="text-white text-sm font-medium">{currentUser.name}</span>
+                    <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5 w-fit`}>
+                      {getRoleLabel(currentUser.role)}
+                    </Badge>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition w-full"
+                >
+                  <LogOut className="h-4 w-4 text-white" />
+                  <span className="text-white text-sm">Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );
