@@ -7,6 +7,7 @@ import useSWR from 'swr';
 
 interface DepartmentData {
   department: string;
+  label: string;
   count: number;
 }
 
