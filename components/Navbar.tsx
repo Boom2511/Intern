@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface CurrentUser {
@@ -98,6 +98,13 @@ export default function Navbar() {
             >
               <Ticket className="h-4 w-4 text-white" />
               <span className="text-white">Tickets</span>
+            </Link>
+            <Link
+              href="/reports"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+            >
+              <FileText className="h-4 w-4 text-white" />
+              <span className="text-white">Reports</span>
             </Link>
 
             {/* User Management - Only for ADMIN and ADMINISTRATOR */}
