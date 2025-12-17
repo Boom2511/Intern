@@ -58,100 +58,94 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
 
   return (
     <nav className="bg-blue-600 shadow-lg">
-      <div className="w-full px-4">
+      <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
-          <Link href="/" prefetch={false} className="flex items-center space-x-1 font-bold text-lg text-white hover:text-blue-100 transition flex-shrink-0">
-            <Ticket className="h-5 w-5 text-white" />
+          <Link href="/" prefetch={false} className="flex items-center space-x-2 font-bold text-xl text-white hover:text-blue-100 transition">
+            <Ticket className="h-6 w-6 text-white" />
             <span className="text-white">PostServe</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center justify-between flex-1 ml-4 overflow-visible">
-            {/* Left Side - Main Navigation */}
-            <div className="flex items-center gap-1 flex-wrap">
-              <Link
-                href="/dashboard"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
-              >
-                <LayoutDashboard className="h-4 w-4 text-white" />
-                <span className="text-white">Dashboard</span>
-              </Link>
-              <Link
-                href="/tickets"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
-              >
-                <Ticket className="h-4 w-4 text-white" />
-                <span className="text-white">Tickets</span>
-              </Link>
-              <Link
-                href="/reports"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
-              >
-                <FileText className="h-4 w-4 text-white" />
-                <span className="text-white">Reports</span>
-              </Link>
+          <div className="hidden md:flex items-center space-x-4">
+            <Link
+              href="/dashboard"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+            >
+              <LayoutDashboard className="h-4 w-4 text-white" />
+              <span className="text-white">Dashboard</span>
+            </Link>
+            <Link
+              href="/tickets"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+            >
+              <Ticket className="h-4 w-4 text-white" />
+              <span className="text-white">Tickets</span>
+            </Link>
+            <Link
+              href="/reports"
+              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+            >
+              <FileText className="h-4 w-4 text-white" />
+              <span className="text-white">Reports</span>
+            </Link>
 
-              {/* User Management - Only for ADMIN and ADMINISTRATOR */}
-              {canAccessUserManagement && (
-                <Link
-                  href="/staff"
-                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
-                >
-                  <UserCog className="h-4 w-4 text-white" />
-                  <span className="text-white">Staff</span>
-                </Link>
-              )}
-
-              {/* Test Pages - Only for ADMINISTRATOR */}
-              {canAccessTestPages && (
-                <Link
-                  href="/test-flex"
-                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
-                >
-                  <FlaskConical className="h-4 w-4 text-white" />
-                  <span className="text-white">Test</span>
-                </Link>
-              )}
-            </div>
-
-            {/* Right Side - Actions & User */}
-            <div className="flex items-center space-x-2 flex-shrink-0">
+            {/* User Management - Only for ADMIN and ADMINISTRATOR */}
+            {canAccessUserManagement && (
               <Link
-                href="/tickets/new"
-                className="bg-white text-blue-600 hover:bg-gray-100 px-3 py-1.5 rounded-md font-medium transition text-sm whitespace-nowrap"
+                href="/staff"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
               >
-                สร้าง Ticket
+                <UserCog className="h-4 w-4 text-white" />
+                <span className="text-white">User Management</span>
               </Link>
+            )}
 
-              {/* User Info and Logout */}
-              {currentUser && (
-                <div className="flex items-center space-x-2 pl-2 border-l border-blue-400">
-                  <div className="flex items-center space-x-1">
-                    <User className="h-4 w-4 text-white" />
-                    <div className="flex flex-col">
-                      <span className="text-white text-xs font-medium">{currentUser.name}</span>
-                      <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1`}>
-                        {getRoleLabel(currentUser.role)}
-                      </Badge>
-                    </div>
+            {/* Test Pages - Only for ADMINISTRATOR */}
+            {canAccessTestPages && (
+              <Link
+                href="/test-flex"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              >
+                <FlaskConical className="h-4 w-4 text-white" />
+                <span className="text-white">Test</span>
+              </Link>
+            )}
+
+            <Link
+              href="/tickets/new"
+              className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
+            >
+              สร้าง Ticket ใหม่
+            </Link>
+
+            {/* User Info and Logout */}
+            {currentUser && (
+              <div className="flex items-center space-x-3 ml-2 pl-3 border-l border-blue-400">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-white" />
+                  <div className="flex flex-col">
+                    <span className="text-white text-sm font-medium">{currentUser.name}</span>
+                    <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5`}>
+                      {getRoleLabel(currentUser.role)}
+                    </Badge>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-1.5 rounded-md transition"
-                    title="ออกจากระบบ"
-                  >
-                    <LogOut className="h-4 w-4 text-white" />
-                    <span className="text-white text-xs">Logout</span>
-                  </button>
                 </div>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                  title="ออกจากระบบ"
+                >
+                  <LogOut className="h-4 w-4 text-white" />
+                  <span className="text-white text-sm">Logout</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
-          <button type="button" className="md:hidden text-white" aria-label="Toggle menu">
+          <button type="button" className="md:hidden text-white" title="เมนู">
             <Menu className="h-6 w-6 text-white" />
           </button>
         </div>
