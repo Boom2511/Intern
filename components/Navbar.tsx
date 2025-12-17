@@ -85,80 +85,87 @@ export default function Navbar() {
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center space-x-4">
-            <Link
-              href="/dashboard"
-              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-            >
-              <LayoutDashboard className="h-4 w-4 text-white" />
-              <span className="text-white">Dashboard</span>
-            </Link>
-            <Link
-              href="/tickets"
-              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-            >
-              <Ticket className="h-4 w-4 text-white" />
-              <span className="text-white">Tickets</span>
-            </Link>
-            <Link
-              href="/reports"
-              className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-            >
-              <FileText className="h-4 w-4 text-white" />
-              <span className="text-white">Reports</span>
-            </Link>
-
-            {/* User Management - Only for ADMIN and ADMINISTRATOR */}
-            {canAccessUserManagement && (
+          <div className="hidden md:flex items-center justify-between flex-1 ml-8">
+            {/* Left Side - Main Navigation */}
+            <div className="flex items-center space-x-2">
               <Link
-                href="/staff"
+                href="/dashboard"
                 className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
               >
-                <UserCog className="h-4 w-4 text-white" />
-                <span className="text-white">User Management</span>
+                <LayoutDashboard className="h-4 w-4 text-white" />
+                <span className="text-white">Dashboard</span>
               </Link>
-            )}
-
-            {/* Test Pages - Only for ADMINISTRATOR */}
-            {canAccessTestPages && (
               <Link
-                href="/test-flex"
+                href="/tickets"
                 className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
               >
-                <FlaskConical className="h-4 w-4 text-white" />
-                <span className="text-white">Test</span>
+                <Ticket className="h-4 w-4 text-white" />
+                <span className="text-white">Tickets</span>
               </Link>
-            )}
+              <Link
+                href="/reports"
+                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+              >
+                <FileText className="h-4 w-4 text-white" />
+                <span className="text-white">Reports</span>
+              </Link>
 
-            <Link
-              href="/tickets/new"
-              className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
-            >
-              สร้าง Ticket ใหม่
-            </Link>
-
-            {/* User Info and Logout */}
-            {!loading && currentUser && (
-              <div className="flex items-center space-x-3 ml-2 pl-3 border-l border-blue-400">
-                <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4 text-white" />
-                  <div className="flex flex-col">
-                    <span className="text-white text-sm font-medium">{currentUser.name}</span>
-                    <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5`}>
-                      {getRoleLabel(currentUser.role)}
-                    </Badge>
-                  </div>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-                  title="ออกจากระบบ"
+              {/* User Management - Only for ADMIN and ADMINISTRATOR */}
+              {canAccessUserManagement && (
+                <Link
+                  href="/staff"
+                  className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
                 >
-                  <LogOut className="h-4 w-4 text-white" />
-                  <span className="text-white text-sm">Logout</span>
-                </button>
-              </div>
-            )}
+                  <UserCog className="h-4 w-4 text-white" />
+                  <span className="text-white">User Management</span>
+                </Link>
+              )}
+
+              {/* Test Pages - Only for ADMINISTRATOR */}
+              {canAccessTestPages && (
+                <Link
+                  href="/test-flex"
+                  className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                >
+                  <FlaskConical className="h-4 w-4 text-white" />
+                  <span className="text-white">Test</span>
+                </Link>
+              )}
+            </div>
+
+            {/* Right Side - Actions & User */}
+            <div className="flex items-center space-x-3">
+              <Link
+                href="/tickets/new"
+                className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
+              >
+                สร้าง Ticket ใหม่
+              </Link>
+
+              {/* User Info and Logout */}
+              {!loading && currentUser && (
+                <div className="flex items-center space-x-3 pl-3 border-l border-blue-400">
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4 text-white" />
+                    <div className="flex flex-col">
+                      <span className="text-white text-sm font-medium">{currentUser.name}</span>
+                      <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5`}>
+                        {getRoleLabel(currentUser.role)}
+                      </Badge>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex items-center space-x-1 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                    title="ออกจากระบบ"
+                  >
+                    <LogOut className="h-4 w-4 text-white" />
+                    <span className="text-white text-sm">Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
