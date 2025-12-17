@@ -87,26 +87,26 @@ export default function Navbar() {
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center justify-between flex-1 ml-4">
+          <div className="hidden md:flex items-center justify-between flex-1 ml-4 overflow-visible">
             {/* Left Side - Main Navigation */}
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center gap-1 flex-wrap">
               <Link
                 href="/dashboard"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
               >
                 <LayoutDashboard className="h-4 w-4 text-white" />
                 <span className="text-white">Dashboard</span>
               </Link>
               <Link
                 href="/tickets"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
               >
                 <Ticket className="h-4 w-4 text-white" />
                 <span className="text-white">Tickets</span>
               </Link>
               <Link
                 href="/reports"
-                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
               >
                 <FileText className="h-4 w-4 text-white" />
                 <span className="text-white">Reports</span>
@@ -116,7 +116,7 @@ export default function Navbar() {
               {canAccessUserManagement && (
                 <Link
                   href="/staff"
-                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
                 >
                   <UserCog className="h-4 w-4 text-white" />
                   <span className="text-white">Staff</span>
@@ -127,7 +127,7 @@ export default function Navbar() {
               {canAccessTestPages && (
                 <Link
                   href="/test-flex"
-                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm whitespace-nowrap"
                 >
                   <FlaskConical className="h-4 w-4 text-white" />
                   <span className="text-white">Test</span>
