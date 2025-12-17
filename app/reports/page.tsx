@@ -281,17 +281,14 @@ export default function ReportsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="DB1">D1</SelectItem>
-                <SelectItem value="DB2">D2</SelectItem>
-                <SelectItem value="DB3">D3</SelectItem>
-                <SelectItem value="DB4">D4</SelectItem>
+                <SelectItem value="DB1">DB1</SelectItem>
+                <SelectItem value="DB2">DB2</SelectItem>
+                <SelectItem value="DB3">DB3</SelectItem>
+                <SelectItem value="DB4">DB4</SelectItem>
                 <SelectItem value="DB5">นำจ่ายรถยนต์</SelectItem>
                 <SelectItem value="DB6">บริการประชาชน</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500">
-              💡 การเลือกแผนกด้านบนจะกรองข้อมูลใน report / การเลือกกลุ่ม LINE นี้จะส่งไปกลุ่มที่เลือก
-            </p>
           </div>
 
           {/* Preview Section */}
@@ -362,14 +359,7 @@ export default function ReportsPage() {
             </Button>
           </div>
 
-          {/* Instructions */}
-          <div className="bg-blue-50 p-4 rounded-lg mt-6">
-            <h3 className="font-semibold mb-2">คำแนะนำ</h3>
-            <ul className="text-sm space-y-1 list-disc list-inside text-gray-700">
-              <li>เลือกแผนก :ถ้าเลือกแผนกไหนก็จะเป็น report แผนกนั้น ๆ (แต่ก็จะส่งไฟล์ไปแค่กลุ่มแค่กลุ่มไลน์นั้น ๆ)</li>
-              <li>ขนาดไฟล์สูงสุดสำหรับ LINE: 10MB</li>
-            </ul>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
