@@ -24,8 +24,10 @@ export default function Navbar() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     loadCurrentUser();
   }, []);
 
@@ -71,8 +73,8 @@ export default function Navbar() {
     }
   };
 
-  const canAccessUserManagement = currentUser && (currentUser.role === 'ADMINISTRATOR' || currentUser.role === 'ADMIN');
-  const canAccessTestPages = currentUser && currentUser.role === 'ADMINISTRATOR';
+  const canAccessUserManagement = mounted && currentUser && (currentUser.role === 'ADMINISTRATOR' || currentUser.role === 'ADMIN');
+  const canAccessTestPages = mounted && currentUser && currentUser.role === 'ADMINISTRATOR';
 
   return (
     <nav className="bg-blue-600 shadow-lg">
@@ -143,7 +145,7 @@ export default function Navbar() {
               </Link>
 
               {/* User Info and Logout */}
-              {!loading && currentUser && (
+              {mounted && !loading && currentUser && (
                 <div className="flex items-center space-x-3 pl-3 border-l border-blue-400">
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-white" />
@@ -170,8 +172,10 @@ export default function Navbar() {
 
           {/* Mobile Menu Button */}
           <button
+            type="button"
             className="md:hidden text-white"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
           >
             <Menu className="h-6 w-6 text-white" />
           </button>
@@ -235,7 +239,7 @@ export default function Navbar() {
               สร้าง Ticket ใหม่
             </Link>
 
-            {!loading && currentUser && (
+            {mounted && !loading && currentUser && (
               <div className="pt-2 border-t border-blue-400 mt-2">
                 <div className="flex items-center space-x-2 px-3 py-2">
                   <User className="h-4 w-4 text-white" />
