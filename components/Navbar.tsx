@@ -78,35 +78,35 @@ export default function Navbar() {
 
   return (
     <nav className="bg-blue-600 shadow-lg">
-      <div className="container mx-auto px-4">
+      <div className="w-full px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
-          <Link href="/" prefetch={false} className="flex items-center space-x-2 font-bold text-xl text-white hover:text-blue-100 transition">
-            <Ticket className="h-6 w-6 text-white" />
+          <Link href="/" prefetch={false} className="flex items-center space-x-1 font-bold text-lg text-white hover:text-blue-100 transition flex-shrink-0">
+            <Ticket className="h-5 w-5 text-white" />
             <span className="text-white">PostServe</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center justify-between flex-1 ml-8">
+          <div className="hidden md:flex items-center justify-between flex-1 ml-4">
             {/* Left Side - Main Navigation */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
               <Link
                 href="/dashboard"
-                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
               >
                 <LayoutDashboard className="h-4 w-4 text-white" />
                 <span className="text-white">Dashboard</span>
               </Link>
               <Link
                 href="/tickets"
-                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
               >
                 <Ticket className="h-4 w-4 text-white" />
                 <span className="text-white">Tickets</span>
               </Link>
               <Link
                 href="/reports"
-                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
               >
                 <FileText className="h-4 w-4 text-white" />
                 <span className="text-white">Reports</span>
@@ -116,10 +116,10 @@ export default function Navbar() {
               {canAccessUserManagement && (
                 <Link
                   href="/staff"
-                  className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
                 >
                   <UserCog className="h-4 w-4 text-white" />
-                  <span className="text-white">User Management</span>
+                  <span className="text-white">Staff</span>
                 </Link>
               )}
 
@@ -127,7 +127,7 @@ export default function Navbar() {
               {canAccessTestPages && (
                 <Link
                   href="/test-flex"
-                  className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                  className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-2 rounded-md transition text-sm"
                 >
                   <FlaskConical className="h-4 w-4 text-white" />
                   <span className="text-white">Test</span>
@@ -136,22 +136,22 @@ export default function Navbar() {
             </div>
 
             {/* Right Side - Actions & User */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 flex-shrink-0">
               <Link
                 href="/tickets/new"
-                className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
+                className="bg-white text-blue-600 hover:bg-gray-100 px-3 py-1.5 rounded-md font-medium transition text-sm whitespace-nowrap"
               >
-                สร้าง Ticket ใหม่
+                สร้าง Ticket
               </Link>
 
               {/* User Info and Logout */}
               {mounted && !loading && currentUser && (
-                <div className="flex items-center space-x-3 pl-3 border-l border-blue-400">
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 pl-2 border-l border-blue-400">
+                  <div className="flex items-center space-x-1">
                     <User className="h-4 w-4 text-white" />
                     <div className="flex flex-col">
-                      <span className="text-white text-sm font-medium">{currentUser.name}</span>
-                      <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1.5`}>
+                      <span className="text-white text-xs font-medium">{currentUser.name}</span>
+                      <Badge className={`${getRoleBadgeColor(currentUser.role)} text-xs py-0 px-1`}>
                         {getRoleLabel(currentUser.role)}
                       </Badge>
                     </div>
@@ -159,11 +159,11 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center space-x-1 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
+                    className="flex items-center space-x-1 text-white hover:bg-blue-700 px-2 py-1.5 rounded-md transition"
                     title="ออกจากระบบ"
                   >
                     <LogOut className="h-4 w-4 text-white" />
-                    <span className="text-white text-sm">Logout</span>
+                    <span className="text-white text-xs">Logout</span>
                   </button>
                 </div>
               )}
