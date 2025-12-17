@@ -3,8 +3,6 @@
  * Conditional layout for ticket detail page based on view mode
  */
 
-import Navbar from '@/components/Navbar';
-
 interface TicketLayoutProps {
   children: React.ReactNode;
   params: {
