@@ -371,7 +371,7 @@ export async function GET() {
         by: ['status'],
         _count: true,
         where: {
-          createdBy: currentUser.email,
+          createdBy: currentUser.name,
         },
       });
 
@@ -392,7 +392,7 @@ export async function GET() {
         take: 5,
         orderBy: { createdAt: 'desc' },
         where: {
-          createdBy: currentUser.email,
+          createdBy: currentUser.name,
         },
         select: {
           id: true,
