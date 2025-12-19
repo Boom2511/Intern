@@ -45,13 +45,10 @@ export async function GET() {
     recentNotes.forEach(n => activeUserNames.add(n.createdBy));
     recentStatusChanges.forEach(s => activeUserNames.add(s.changedBy));
 
-    // Get user IDs from names/emails
+    // Get user IDs from names (username)
     const users = await prisma.user.findMany({
       where: {
-        OR: [
-          { name: { in: Array.from(activeUserNames) } },
-          { email: { in: Array.from(activeUserNames) } },
-        ],
+        name: { in: Array.from(activeUserNames) },
       },
       select: { id: true },
     });

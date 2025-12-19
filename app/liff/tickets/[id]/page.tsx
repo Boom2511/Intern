@@ -14,6 +14,9 @@ import VConsole from '@/components/VConsole';
 import TicketSkeleton from '@/components/liff/TicketSkeleton';
 import { useLiff } from '@/hooks/useLiff';
 import { useTicketDetail } from '@/hooks/useTicketDetail';
+import { toast } from '@/hooks/use-toast';
+import { getIssueTypeLabel } from '@/config/issue-types';
+import type { IssueType } from '@prisma/client';
 
 // Dynamic imports for heavy components and utilities
 const StatusHistory = lazy(() => import('@/components/liff/StatusHistory'));
@@ -24,15 +27,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   PENDING: { label: 'รอตรวจสอบ', color: 'text-orange-700', bg: 'bg-orange-50' },
   RESOLVED: { label: 'แก้ไขแล้ว', color: 'text-green-700', bg: 'bg-green-50' },
   CLOSED: { label: 'ปิดงาน', color: 'text-gray-700', bg: 'bg-gray-50' },
-};
-
-const ISSUE_TYPE_LABELS: Record<string, string> = {
-  NEW_DELIVERY: 'นำจ่ายใหม่',
-  CHECK_DELIVERY: 'ตรวจสอบการนำจ่าย',
-  RETURN_TO_SENDER: 'ร้องเรียนบริการ',
-  DAMAGED_PARCEL: 'ขอถอนเงิน',
-  LOST_PARCEL: 'สอบถามข้อมูล',
-  OTHER: 'อื่นๆ',
 };
 
 export default function LiffTicketDetailPage() {
@@ -95,10 +89,21 @@ export default function LiffTicketDetailPage() {
     try {
       // Dynamic import for image conversion utility
       const { convertImagesToWebP } = await import('@/lib/image-utils');
-      const webpFiles = await convertImagesToWebP(files, 0.8);
-      setSelectedImages((prev) => [...prev, ...webpFiles]);
+      const { convertedFiles, needsServerConversion } = await convertImagesToWebP(files, 0.8);
+
+      // Add all files (both converted and those needing server conversion)
+      // Server will handle HEIC conversion on upload
+      setSelectedImages((prev) => [...prev, ...convertedFiles, ...needsServerConversion]);
+
+      if (needsServerConversion.length > 0) {
+        console.log(`[LIFF] ${needsServerConversion.length} HEIC files will be converted on server`);
+      }
     } catch (err) {
-      alert('ไม่สามารถแปลงรูปภาพได้');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถแปลงรูปภาพได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setUploadingImages(false);
       if (fileInputRef.current) {
@@ -116,7 +121,11 @@ export default function LiffTicketDetailPage() {
 
     const trimmedNote = actionNote.trim();
     if (trimmedNote.length < 20) {
-      alert('กรุณากรอกวิธีดำเนินการอย่างน้อย 20 ตัวอักษร');
+      toast({
+        variant: 'warning',
+        title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+        description: 'กรุณากรอกวิธีดำเนินการอย่างน้อย 20 ตัวอักษร',
+      });
       return;
     }
 
@@ -171,8 +180,19 @@ export default function LiffTicketDetailPage() {
       setActionNote('');
       setSelectedImages([]);
 
+      // Show success message
+      toast({
+        variant: 'success',
+        title: 'บันทึกสำเร็จ',
+        description: 'บันทึกการดำเนินการเรียบร้อยแล้ว',
+      });
+
     } catch (err: any) {
-      alert(err.message || 'เกิดข้อผิดพลาด');
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: err.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -262,7 +282,7 @@ export default function LiffTicketDetailPage() {
             </div>
             <div className="flex items-start text-sm text-gray-600">
               <FileText size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
-              <span>ประเภท: {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : (ISSUE_TYPE_LABELS[ticket.issueType] || ticket.issueType)}</span>
+              <span>ประเภท: {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType as IssueType)}</span>
             </div>
             {(ticket as any).createdBy && (
               <div className="flex items-start text-sm text-gray-600">
@@ -606,25 +626,28 @@ export default function LiffTicketDetailPage() {
                 className="
     flex-1
     bg-emerald-600 hover:bg-emerald-700
-    text-white
+    text-white 
     py-3 rounded-lg
     font-semibold text-sm
     transition-colors
     flex items-center justify-center gap-2
     disabled:bg-gray-300
-    disabled:text-gray-500
+    disabled:text-gray-500 
     disabled:cursor-not-allowed
   "
               >
                 {submitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    <span>กำลังส่ง...</span>
+                    <span className="text-white">กำลังส่ง...</span>
                   </>
                 ) : (
                   <>
-                    <CircleCheckBig size={18} className="text-white" />
-                    <span>ยืนยันการแก้ไข</span>
+                    {/* ลบ className text-white ออกจาก Lucide Icon เพื่อให้มันสืบทอดสีจากปุ่มโดยตรง */}
+                    <CircleCheckBig size={18} />
+                    <span className={actionNote.trim().length < 20 || submitting ? 'text-gray-500' : 'text-white'}>
+                      ยืนยันการแก้ไข
+                    </span>
                   </>
                 )}
               </button>

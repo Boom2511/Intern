@@ -25,23 +25,23 @@ export const SLA_CONFIG: Record<IssueType, IssueTypeConfig> = {
     label: 'ตรวจสอบการนำจ่าย',
     description: 'ตรวจสอบสถานะการนำจ่าย',
   },
-  RETURN_TO_SENDER: {
+  SERVICE_COMPLAINT: {
     slaHours: 24,
     priority: 'MEDIUM',
     label: 'ร้องเรียนบริการ',
     description: 'ร้องเรียนคุณภาพบริการ',
   },
-  DAMAGED_PARCEL: {
+  RETURN_REQUEST: {
     slaHours: 24,
     priority: 'HIGH',
-    label: 'ขอถอนเงิน',
-    description: 'ขอคืนเงินหรือเคลมค่าเสียหาย',
+    label: 'ขอถอนคืน',
+    description: 'ขอคืนพัสดุเนื่องจากความเสียหาย',
   },
-  LOST_PARCEL: {
+  ADDRESS_CORRECTION: {
     slaHours: 24,
     priority: 'MEDIUM',
-    label: 'สอบถามข้อมูล',
-    description: 'สอบถามข้อมูลทั่วไป',
+    label: 'ขอแก้ไขจ่าหน้า',
+    description: 'ขอแก้ไขจ่าหน้าพัสดุ',
   },
   OTHER: {
     slaHours: 24,

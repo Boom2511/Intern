@@ -70,6 +70,7 @@ model Ticket {
 
   notes          Note[]
   statusHistory  StatusHistory[]
+  fieldEdits     FieldEdit[]
   views          TicketView[]
 
   createdAt    DateTime     @default(now())
@@ -133,6 +134,31 @@ model StatusHistory {
   @@index([changedByLineUserId])
 }
 
+// FieldEdit model - tracks field-level changes for audit trail
+model FieldEdit {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  fieldName String   // Field that was changed (e.g., 'trackingNo', 'recipientName')
+  oldValue  String?  @db.Text // Previous value (null if field was empty)
+  newValue  String?  @db.Text // New value (null if field was cleared)
+
+  // Changed by information
+  editedBy  String   // User who made the change (for CEC staff)
+
+  // LINE user information (for edits via LIFF)
+  editedByLineUserId   String?  // LINE User ID
+  editedByLineName     String?  // Display name from LINE
+  editedByLineAvatar   String?  // Profile picture URL from LINE
+
+  editedAt  DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([editedAt])
+  @@index([editedByLineUserId])
+}
+
 // Channel enum - where the ticket came from
 enum Channel {
   CEC         // CEC Call Center
@@ -141,11 +167,11 @@ enum Channel {
 
 // Issue Type enum - type of problem
 enum IssueType {
-  NEW_DELIVERY        // ส่งใหม่
-  CHECK_DELIVERY      // ตรวจสอบการส่ง
-  RETURN_TO_SENDER    // ส่งคืนผู้ส่ง
-  DAMAGED_PARCEL      // พัสดุเสียหาย
-  LOST_PARCEL         // พัสดุสูญหาย
+  NEW_DELIVERY        // นำจ่ายใหม่
+  CHECK_DELIVERY      // ตรวจสอบการนำจ่าย
+  SERVICE_COMPLAINT   // ร้องเรียนบริการ
+  RETURN_REQUEST      // ขอถอนคืน
+  ADDRESS_CORRECTION  // ขอแก้ไขจ่าหน้า
   OTHER               // อื่นๆ
 }
 
@@ -187,16 +213,16 @@ enum SLAStatus {
 // User model - for authentication and authorization
 model User {
   id        String   @id @default(cuid())
-  email     String   @unique
+  username  String   @unique  // For login/authentication
   password  String   // Hashed password
-  name      String
+  name      String   // Display name
   role      UserRole @default(OPERATOR)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([email])
   @@index([role])
+  @@index([username])
 }
 
 // User Role enum

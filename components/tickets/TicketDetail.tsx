@@ -16,54 +16,74 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
-import { getIssueTypeLabel } from '@/config/issue-types';
-import { ROLE_LABELS } from '@/config/roles';
-import { User, MessageSquare, Edit, CheckCircle, Package, MapPin, FileText, Tag, TrendingUp, History } from 'lucide-react';
+import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
+import TicketInfoCard from './TicketInfoCard';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
-  viewMode?: 'staff' | 'client'; // staff = full control, client = limited to resolved status only
   mutate?: () => void; // SWR mutate function for refreshing data
 }
 
-export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: TicketDetailProps) {
+export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const { toast } = useToast();
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
   const [newNote, setNewNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentStaffName, setCurrentStaffName] = useState<string>('Staff');
+  const [isEditing, setIsEditing] = useState(false);
+  const [expandedEdits, setExpandedEdits] = useState<Set<string>>(new Set());
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    trackingNo: ticket.trackingNo || '',
+    issueType: ticket.issueType,
+    issueTypeOther: ticket.issueTypeOther || '',
+    recipientName: ticket.recipientName,
+    recipientPhone: ticket.recipientPhone,
+    recipientAddress: ticket.recipientAddress,
+    description: ticket.description,
+    zoneId: ticket.zoneId || '',
+  });
 
   const departmentOptions = getDepartmentOptions();
-
-  // Client can only mark as RESOLVED
-  const isClientMode = viewMode === 'client';
 
   // Update local state when ticket prop changes (real-time updates)
   useEffect(() => {
     setStatus(ticket.status);
     setDepartment(ticket.department || null);
-  }, [ticket.status, ticket.department]);
+    // Reset edit form when ticket changes
+    setEditForm({
+      trackingNo: ticket.trackingNo || '',
+      issueType: ticket.issueType,
+      issueTypeOther: ticket.issueTypeOther || '',
+      recipientName: ticket.recipientName,
+      recipientPhone: ticket.recipientPhone,
+      recipientAddress: ticket.recipientAddress,
+      description: ticket.description,
+      zoneId: ticket.zoneId || '',
+    });
+  }, [ticket]);
 
   // Fetch current staff user info
   useEffect(() => {
-    if (!isClientMode) {
-      fetch('/api/auth/me')
-        .then(res => res.json())
-        .then(data => {
-          if (data.user?.name) {
-            setCurrentStaffName(data.user.name);
-          }
-        })
-        .catch(err => console.error('Failed to fetch current user:', err));
-    }
-  }, [isClientMode]);
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user?.name) {
+          setCurrentStaffName(data.user.name);
+        }
+      })
+      .catch(err => console.error('Failed to fetch current user:', err));
+  }, []);
 
   const handleStatusUpdate = async (newStatus: TicketStatus) => {
     setLoading(true);
@@ -73,8 +93,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          resolvedBy: isClientMode ? ticket.customer.name : currentStaffName,
-          changedByStaffName: !isClientMode ? currentStaffName : undefined,
+          resolvedBy: currentStaffName,
+          changedByStaffName: currentStaffName,
         }),
       });
 
@@ -208,11 +228,121 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
     }
   };
 
+  const handleSaveEdit = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          variant: 'success',
+          title: 'สำเร็จ!',
+          description: 'อัปเดตข้อมูลเรียบร้อยแล้ว',
+        });
+        setIsEditing(false);
+        // Refresh data using SWR mutate
+        if (mutate) {
+          mutate();
+        }
+        // Invalidate tickets list and dashboard to show updated data
+        invalidateTicketsList();
+        invalidateDashboardStats();
+      } else {
+        toast({
+          variant: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถอัปเดตข้อมูลได้',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating ticket:', error);
+      toast({
+        variant: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถอัปเดตข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    // Reset form to original ticket values
+    setEditForm({
+      trackingNo: ticket.trackingNo || '',
+      issueType: ticket.issueType,
+      issueTypeOther: ticket.issueTypeOther || '',
+      recipientName: ticket.recipientName,
+      recipientPhone: ticket.recipientPhone,
+      recipientAddress: ticket.recipientAddress,
+      description: ticket.description,
+      zoneId: ticket.zoneId || '',
+    });
+    setIsEditing(false);
+  };
+
+  // Helper function to get Thai field name
+  const getFieldNameThai = (fieldName: string): string => {
+    const fieldNameMap: Record<string, string> = {
+      trackingNo: 'หมายเลขสิ่งของ',
+      issueType: 'ประเภทปัญหา',
+      issueTypeOther: 'รายละเอียดปัญหา (อื่นๆ)',
+      recipientName: 'ชื่อผู้รับ',
+      recipientPhone: 'เบอร์โทรศัพท์',
+      recipientAddress: 'ที่อยู่',
+      description: 'รายละเอียดปัญหา',
+      zoneId: 'Zone ID',
+    };
+    return fieldNameMap[fieldName] || fieldName;
+  };
+
+  // Helper function to format field value for display
+  const formatFieldValue = (fieldName: string, value: string | null): string => {
+    if (value === null || value === '') return '-';
+
+    // Special formatting for issueType
+    if (fieldName === 'issueType') {
+      const issueTypeMap: Record<string, string> = {
+        NEW_DELIVERY: 'นำจ่ายใหม่',
+        CHECK_DELIVERY: 'ตรวจสอบการนำจ่าย',
+        SERVICE_COMPLAINT: 'ร้องเรียนบริการ',
+        RETURN_REQUEST: 'ขอถอนคืน',
+        ADDRESS_CORRECTION: 'ขอแก้ไขจ่าหน้า',
+        OTHER: 'อื่นๆ',
+      };
+      return issueTypeMap[value] || value;
+    }
+
+    return value;
+  };
+
+  // Toggle expand/collapse for a field edit group
+  const toggleEditExpand = (editId: string) => {
+    setExpandedEdits((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(editId)) {
+        newSet.delete(editId);
+      } else {
+        newSet.add(editId);
+      }
+      return newSet;
+    });
+  };
+
   // Get all notes (both user reports and internal)
   const allNotes = ticket.notes || [];
 
   // Get status history for timeline (separate from notes)
   const statusHistory = ticket.statusHistory || [];
+
+  // Get field edits for timeline
+  const fieldEdits = ticket.fieldEdits || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -232,11 +362,22 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 สร้างเมื่อวันที่ {formatThaiDate(ticket.createdAt)}
               </p>
             </div>
-            {!isClientMode && (
-              <Button variant="outline" size="sm">
+            {!isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 แก้ไข
               </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={loading}>
+                  <X className="h-4 w-4 mr-2" />
+                  ยกเลิก
+                </Button>
+                <Button variant="default" size="sm" onClick={handleSaveEdit} disabled={loading}>
+                  <Save className="h-4 w-4 mr-2" />
+                  บันทึก
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -246,91 +387,12 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Ticket Information Card */}
-            <Card className="shadow-sm border-gray-200">
-              <CardHeader className="bg-white border-b border-gray-200 pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  ข้อมูล Ticket
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-5">
-                {/* Issue Type and Tracking Number Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Tag className="h-4 w-4" />
-                      <span>ประเภทปัญหา</span>
-                    </div>
-                    <div className="pl-6">
-                      <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 font-medium">
-                        {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {ticket.trackingNo && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Package className="h-4 w-4" />
-                        <span>หมายเลขสิ่งของ</span>
-                      </div>
-                      <div className="pl-6">
-                        <span className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-1.5 rounded border border-gray-200">
-                          {ticket.trackingNo}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Salesforce ID Row */}
-                {ticket.salesforceId && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <FileText className="h-4 w-4" />
-                      <span>Salesforce ID</span>
-                    </div>
-                    <div className="pl-6">
-                      <span className="text-sm font-mono text-gray-900 bg-purple-50 px-3 py-1.5 rounded border border-purple-200">
-                        {ticket.salesforceId}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Recipient Information */}
-                <div className="border-t pt-5">
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-                    <MapPin className="h-4 w-4" />
-                    <span>ข้อมูลผู้รับ</span>
-                  </div>
-                  <div className="pl-6 space-y-2">
-                    <div className="flex gap-3">
-                      <span className="text-sm text-gray-500 min-w-[80px]">ชื่อ:</span>
-                      <span className="text-sm text-gray-900 font-medium">{ticket.recipientName}</span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="text-sm text-gray-500 min-w-[80px]">เบอร์โทร:</span>
-                      <span className="text-sm text-gray-900">{ticket.recipientPhone}</span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="text-sm text-gray-500 min-w-[80px]">ที่อยู่:</span>
-                      <span className="text-sm text-gray-900">{ticket.recipientAddress}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="border-t pt-5">
-                  <div className="text-sm text-gray-500 mb-3">รายละเอียดปัญหา</div>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-                      {ticket.description}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <TicketInfoCard
+              ticket={ticket}
+              isEditing={isEditing}
+              editForm={editForm}
+              onFormChange={(updates) => setEditForm({ ...editForm, ...updates })}
+            />
 
             {/* Notes/Comments Section */}
             <Card className="shadow-sm border-gray-200">
@@ -341,22 +403,20 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                {!isClientMode && (
-                  <div className="mb-6 pb-6 border-b">
-                    <textarea
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
-                      rows={3}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    />
-                    <div className="flex justify-end mt-3">
-                      <Button onClick={handleAddNote} disabled={loading || !newNote.trim()} size="sm">
-                        เพิ่มบันทึก
-                      </Button>
-                    </div>
+                <div className="mb-6 pb-6 border-b">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <div className="flex justify-end mt-3">
+                    <Button onClick={handleAddNote} disabled={loading || !newNote.trim()} size="sm">
+                      เพิ่มบันทึก
+                    </Button>
                   </div>
-                )}
+                </div>
 
                 {/* Notes List */}
                 <div className="space-y-4">
@@ -440,15 +500,14 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
           {/* Right Sidebar */}
           <div className="space-y-6">
             {/* Statistics Card */}
-            {!isClientMode && (
-              <Card className="shadow-sm border-gray-200">
-                <CardHeader className="bg-white border-b border-gray-200 pb-4">
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
-                    สถานะ
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6 space-y-4">
+            <Card className="shadow-sm border-gray-200">
+              <CardHeader className="bg-white border-b border-gray-200 pb-4">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                  สถานะ
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
                   {/* Status Stats */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between py-2">
@@ -515,7 +574,6 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                   )}
                 </CardContent>
               </Card>
-            )}
 
             {/* Timeline Card */}
             <Card className="shadow-sm border-gray-200">
@@ -547,7 +605,7 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                             </span>
                           </div>
                         )}
-                        {idx < statusHistory.length && (
+                        {(idx < statusHistory.length || fieldEdits.length > 0) && (
                           <div className="w-0.5 h-full bg-gray-200 mt-1 min-h-[20px]" />
                         )}
                       </div>
@@ -567,6 +625,98 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
                       </div>
                     </div>
                   ))}
+
+                  {/* Field Edit History - Grouped by editedAt timestamp */}
+                  {(() => {
+                    // Group field edits by timestamp (within 1 second = same batch)
+                    const editGroups: Record<string, typeof fieldEdits> = {};
+                    fieldEdits.forEach((edit: any) => {
+                      const timestamp = new Date(edit.editedAt).getTime();
+                      // Round to nearest second to group edits from same action
+                      const groupKey = Math.floor(timestamp / 1000).toString();
+                      if (!editGroups[groupKey]) {
+                        editGroups[groupKey] = [];
+                      }
+                      editGroups[groupKey].push(edit);
+                    });
+
+                    return Object.entries(editGroups).map(([groupKey, edits], groupIdx) => {
+                      const firstEdit = edits[0];
+                      const isExpanded = expandedEdits.has(groupKey);
+                      const editCount = edits.length;
+
+                      return (
+                        <div key={groupKey} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            {/* Edit Icon */}
+                            {firstEdit.editedByLineAvatar ? (
+                              <Image
+                                src={firstEdit.editedByLineAvatar}
+                                alt={firstEdit.editedByLineName || firstEdit.editedBy}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                              </div>
+                            )}
+                            {groupIdx < Object.keys(editGroups).length - 1 && (
+                              <div className="w-0.5 h-full bg-gray-200 mt-1 min-h-[20px]" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-4">
+                            {/* Collapsible Header */}
+                            <button
+                              type="button"
+                              onClick={() => toggleEditExpand(groupKey)}
+                              className="w-full text-left hover:bg-gray-50 rounded px-2 py-1 -mx-2 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                )}
+                                <p className="text-sm text-gray-900 font-medium flex-1">
+                                  {firstEdit.editedByLineName || firstEdit.editedBy} แก้ไขข้อมูล{' '}
+                                  <span className="text-amber-700">
+                                    ({editCount} ฟิลด์)
+                                  </span>
+                                </p>
+                              </div>
+                              <p className="text-xs text-gray-500 ml-6">
+                                {formatRelativeTime(firstEdit.editedAt)}
+                              </p>
+                            </button>
+
+                            {/* Expanded Field Changes */}
+                            {isExpanded && (
+                              <div className="ml-6 mt-2 space-y-2 border-l-2 border-amber-200 pl-3">
+                                {edits.map((edit: any) => (
+                                  <div key={edit.id} className="text-xs">
+                                    <p className="font-medium text-gray-700 mb-1">
+                                      {getFieldNameThai(edit.fieldName)}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                      <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded">
+                                        {formatFieldValue(edit.fieldName, edit.oldValue)}
+                                      </span>
+                                      <span>→</span>
+                                      <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded">
+                                        {formatFieldValue(edit.fieldName, edit.newValue)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
 
                   {/* Created Event - Always show */}
                   <div className="flex gap-3">
@@ -588,8 +738,8 @@ export default function TicketDetail({ ticket, viewMode = 'staff', mutate }: Tic
               </CardContent>
             </Card>
 
-            {/* View History - Show in staff mode */}
-            {!isClientMode && ticket.views && ticket.views.length > 0 && (
+            {/* View History */}
+            {ticket.views && ticket.views.length > 0 && (
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="bg-white border-b border-gray-200 pb-4">
                   <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">

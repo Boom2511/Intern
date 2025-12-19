@@ -9,6 +9,7 @@ import { Ticket, Customer, Note, TicketStatus, Priority } from '@prisma/client';
 export type TicketWithCustomer = Ticket & {
   customer: Customer;
   notes?: Note[];
+  views?: TicketView[];
 };
 
 export type CustomerWithTickets = Customer & {
@@ -19,6 +20,7 @@ export type TicketWithRelations = Ticket & {
   customer: Customer;
   notes: Note[];
   statusHistory?: StatusHistory[];
+  fieldEdits?: FieldEdit[];
   views?: TicketView[];
 };
 
@@ -30,6 +32,17 @@ export interface StatusHistory {
   changedByLineName?: string;
   changedByLineAvatar?: string;
   createdAt: string;
+}
+
+export interface FieldEdit {
+  id: string;
+  fieldName: string;
+  oldValue: string | null;
+  newValue: string | null;
+  editedBy: string;
+  editedByLineName?: string;
+  editedByLineAvatar?: string;
+  editedAt: string;
 }
 
 export interface TicketView {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -21,9 +21,18 @@ export default function TestFlexClient() {
     recipientAddress: '123/45 หมู่ 2 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110',
     trackingNo: 'TH1234567890',
     createdAt: new Date(),
+    slaDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+    slaStatus: 'ON_TRACK' as any,
+    status: 'NEW' as any,
+    channel: 'CEC' as any,
+    department: 'DB2' as any,
     customer: {
+      id: 'customer-123',
       name: 'สมชาย ใจดี',
       phone: '081-234-5678',
+      email: 'test@example.com',
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
   };
 
@@ -43,11 +52,18 @@ export default function TestFlexClient() {
     }
   };
 
-  const flexMessage = createDepartmentAssignedFlexMessage(
-    mockTicket as any,
-    'D2',
-    'http://localhost:3000/dashboard'
-  );
+  const baseUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'http://localhost:3000';
+  const queueUrl = `${baseUrl}/liff/queue?department=DB2`;
+
+  const flexMessage = createDepartmentWorkSnapshotMessage({
+    tickets: [mockTicket as any],
+    department: 'DB2',
+    departmentLabel: 'D2',
+    zone: null,
+    queueUrl,
+  }).contents[0]; // Get first bubble for preview
 
   return (
     <div className="container mx-auto p-8 max-w-6xl">

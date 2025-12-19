@@ -412,24 +412,16 @@ export default function StaffPage() {
 
                   <select
                     id="role"
-                    name="role" 
+                    name="role"
                     className="w-full border rounded-md p-2"
-                    aria-labelledby="role-label" 
+                    aria-label="สิทธิ์การใช้งาน"
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                    disabled={editingUser?.role === 'ADMINISTRATOR' && currentUser?.role === 'ADMIN'}
+                    disabled={editingUser?.role === 'ADMINISTRATOR'}
                   >
-                    <option value="OPERATOR">Operator - ใช้งาน CEC เท่านั้น</option>
-                    <option value="ADMIN">Admin - จัดการผู้ใช้ + CEC</option>
-                    {currentUser?.role === 'ADMINISTRATOR' && (
-                      <option value="ADMINISTRATOR">Administrator - เข้าถึงทุกอย่าง</option>
-                    )}
+                    <option value="OPERATOR">Operator </option>
+                    <option value="ADMIN">Admin</option>
                   </select>
-                  {currentUser?.role === 'ADMIN' && (
-                    <p className="text-gray-500 text-xs">
-                      Admin ไม่สามารถมอบหรือแก้ไขสิทธิ์ Administrator ได้
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
@@ -530,9 +522,8 @@ export default function StaffPage() {
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <h3 className="font-semibold mb-2">สิทธิ์การใช้งาน</h3>
         <ul className="space-y-1 text-sm text-gray-700">
-          <li><strong>Administrator:</strong> เข้าถึงได้ทุกอย่าง รวมถึงหน้าทดสอบ</li>
-          <li><strong>Admin:</strong> จัดการผู้ใช้งาน + ใช้งาน CEC </li>
-          <li><strong>Operator:</strong> ใช้งาน CEC เท่านั้น </li>
+          <li><strong>Admin:</strong> สามารถจัดการผู้ใช้งาน และการตั้งค่าระบบทั้งหมดรวมถึงดูภาพรวมงาน, SLA และใช้งานระบบได้ครบทุกฟังก์ชัน </li>
+          <li><strong>Operator:</strong> ใช้งานระบบ CEC เพื่อสร้างและจัดการ Ticket เห็นเฉพาะงานที่ได้รับมอบหมายหรือเกี่ยวข้อง ไม่สามารถจัดการผู้ใช้งานหรือระบบได้ </li>
         </ul>
       </div>
       <Toaster />

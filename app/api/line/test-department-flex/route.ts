@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { lineService } from '@/lib/line';
-import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,26 +79,28 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
       || 'http://localhost:3000';
-    const ticketUrl = `${baseUrl}/tickets/${sampleTicket.id}?mode=client`;
+    const queueUrl = `${baseUrl}/liff/queue?department=DB1`;
 
-    // Create and send Flex Message
-    const flexMessage = createDepartmentAssignedFlexMessage(
-      sampleTicket,
-      'D1', // Department label
-      ticketUrl
-    );
+    // Create and send Flex Message (Department Work Snapshot)
+    const flexMessage = createDepartmentWorkSnapshotMessage({
+      tickets: [sampleTicket],
+      department: 'DB1',
+      departmentLabel: 'D1',
+      zone: null,
+      queueUrl,
+    });
 
     const success = await lineService.sendFlexMessage(
       groupId,
-      `🔔 ทดสอบ Ticket ใหม่: ${sampleTicket.ticketNo}`,
+      `📋 ทดสอบงานค้าง D1`,
       flexMessage
     );
 
     if (success) {
       return NextResponse.json({
         success: true,
-        message: 'ส่ง Department Flex Message สำเร็จ! ตรวจสอบใน LINE group 🎉',
-        ticketUrl,
+        message: 'ส่ง Department Work Snapshot สำเร็จ! ตรวจสอบใน LINE group 🎉',
+        queueUrl,
       });
     } else {
       return NextResponse.json(

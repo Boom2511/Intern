@@ -21,6 +21,7 @@ export function useLiff(options?: UseLiffOptions) {
   const [isReady, setIsReady] = useState(false);
   const [profile, setProfile] = useState<LineProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liffInitialized, setLiffInitialized] = useState(false);
   const initialized = useRef(false);
   const loginAttempted = useRef(false);
 
@@ -42,14 +43,16 @@ export function useLiff(options?: UseLiffOptions) {
         }
 
         if (!liffId) {
-          // No LIFF ID - load as anonymous
+          // No LIFF ID - load as anonymous (no LIFF SDK initialized)
           setIsReady(true);
+          setLiffInitialized(false);
           options?.onReady?.(null);
           return;
         }
 
         // Initialize LIFF
         await liff.init({ liffId });
+        setLiffInitialized(true);
 
         // Not in LINE app - load as read-only
         if (!liff.isInClient()) {
@@ -96,7 +99,7 @@ export function useLiff(options?: UseLiffOptions) {
     isReady,
     profile,
     error,
-    isInClient: isReady && liff.isInClient?.() || false,
-    isLoggedIn: isReady && liff.isLoggedIn?.() || false,
+    isInClient: liffInitialized && liff.isInClient ? liff.isInClient() : false,
+    isLoggedIn: liffInitialized && liff.isLoggedIn ? liff.isLoggedIn() : false,
   };
 }

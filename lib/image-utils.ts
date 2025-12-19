@@ -11,111 +11,195 @@
  */
 export async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    let cleanedUp = false;
 
-    reader.onload = (e) => {
-      const img = new Image();
+    // Cleanup function to prevent memory leaks
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      URL.revokeObjectURL(objectUrl);
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    };
 
-      img.onload = () => {
-        // Create canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+    img.onload = () => {
+      // Create canvas with optimized context options
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', {
+        alpha: false,
+        willReadFrequently: false,
+      });
 
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
+      if (!ctx) {
+        cleanup();
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
 
-        // Calculate new dimensions (max 1920x1920 to save storage)
-        let width = img.width;
-        let height = img.height;
-        const maxSize = 1920;
+      // Calculate new dimensions (max 1920x1920 to save storage)
+      let width = img.width;
+      let height = img.height;
+      const maxSize = 1920;
 
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize;
-            width = maxSize;
-          } else {
-            width = (width / height) * maxSize;
-            height = maxSize;
+      if (width > maxSize || height > maxSize) {
+        const scale = Math.min(maxSize / width, maxSize / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      // Enable image smoothing for better quality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Draw image on canvas
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert to WebP
+      canvas.toBlob(
+        (blob) => {
+          // Cleanup resources
+          cleanup();
+          canvas.width = 0;
+          canvas.height = 0;
+
+          if (!blob) {
+            reject(new Error('Failed to convert image to WebP'));
+            return;
           }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
+          // Create new File from blob
+          const webpFile = new File(
+            [blob],
+            file.name.replace(/\.[^.]+$/, '.webp'),
+            { type: 'image/webp' }
+          );
 
-        // Draw image on canvas
-        ctx.drawImage(img, 0, 0, width, height);
+          console.log(`[Image Utils] Converted ${file.name}:`);
+          console.log(`  Original: ${(file.size / 1024).toFixed(2)} KB`);
+          console.log(`  WebP: ${(webpFile.size / 1024).toFixed(2)} KB`);
+          console.log(`  Savings: ${(((file.size - webpFile.size) / file.size) * 100).toFixed(1)}%`);
 
-        // Convert to WebP
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              reject(new Error('Failed to convert image to WebP'));
-              return;
-            }
-
-            // Create new File from blob
-            const webpFile = new File(
-              [blob],
-              file.name.replace(/\.[^.]+$/, '.webp'),
-              { type: 'image/webp' }
-            );
-
-            console.log(`[Image Utils] Converted ${file.name}:`);
-            console.log(`  Original: ${(file.size / 1024).toFixed(2)} KB`);
-            console.log(`  WebP: ${(webpFile.size / 1024).toFixed(2)} KB`);
-            console.log(`  Savings: ${(((file.size - webpFile.size) / file.size) * 100).toFixed(1)}%`);
-
-            resolve(webpFile);
-          },
-          'image/webp',
-          quality
-        );
-      };
-
-      img.onerror = () => {
-        reject(new Error('Failed to load image'));
-      };
-
-      img.src = e.target?.result as string;
+          resolve(webpFile);
+        },
+        'image/webp',
+        quality
+      );
     };
 
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
+    img.onerror = () => {
+      cleanup();
+      reject(new Error('Failed to load image'));
     };
 
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   });
+}
+
+/**
+ * Check if file is HEIC/HEIF format
+ */
+function isHEIC(file: File): boolean {
+  return (
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    file.name.toLowerCase().endsWith('.heic') ||
+    file.name.toLowerCase().endsWith('.heif')
+  );
 }
 
 /**
  * Compress and convert multiple images to WebP
  * @param files - Array of image files
  * @param quality - WebP quality (0-1), default 0.8
- * @returns Promise<File[]> - Array of converted WebP files
+ * @param concurrentLimit - Maximum number of concurrent conversions (default 3)
+ * @returns Promise<{convertedFiles: File[], needsServerConversion: File[]}> - Converted files and files that need server-side conversion
  */
 export async function convertImagesToWebP(
   files: File[],
-  quality: number = 0.8
-): Promise<File[]> {
-  const convertPromises = files.map((file) => {
-    // Skip if already WebP
-    if (file.type === 'image/webp') {
-      console.log(`[Image Utils] ${file.name} is already WebP, skipping conversion`);
-      return Promise.resolve(file);
+  quality: number = 0.8,
+  concurrentLimit: number = 3
+): Promise<{ convertedFiles: File[]; needsServerConversion: File[] }> {
+  const convertedFiles: File[] = [];
+  const needsServerConversion: File[] = [];
+
+  // Process files in batches to prevent memory overflow
+  for (let i = 0; i < files.length; i += concurrentLimit) {
+    const batch = files.slice(i, i + concurrentLimit);
+
+    const batchPromises = batch.map(async (file) => {
+      // Skip if already WebP
+      if (file.type === 'image/webp') {
+        console.log(`[Image Utils] ${file.name} is already WebP, skipping conversion`);
+        return { status: 'converted', file };
+      }
+
+      // Handle HEIC/HEIF files (iPhone photos)
+      const isHEICFile = isHEIC(file);
+      if (isHEICFile) {
+        console.log(`[Image Utils] ${file.name} is HEIC format - attempting client-side conversion`);
+      }
+
+      // Only convert images
+      if (!file.type.startsWith('image/') && !isHEICFile) {
+        console.warn(`[Image Utils] ${file.name} is not an image, skipping`);
+        return { status: 'converted', file };
+      }
+
+      try {
+        const converted = await convertToWebP(file, quality);
+
+        // Check if HEIC conversion actually worked
+        if (isHEICFile) {
+          // If converted file is still very similar size to original, conversion likely failed
+          const sizeRatio = converted.size / file.size;
+          if (sizeRatio > 0.95 && converted.size === file.size) {
+            console.warn(`[Image Utils] ${file.name} HEIC client-side conversion may have failed - marking for server conversion`);
+            return { status: 'needs_server', file };
+          }
+          console.log(`[Image Utils] ${file.name} HEIC successfully converted on client`);
+        }
+
+        return { status: 'converted', file: converted };
+      } catch (error) {
+        console.error(`[Image Utils] Failed to convert ${file.name}:`, error);
+
+        // If it's HEIC, mark for server-side conversion instead of returning original
+        if (isHEICFile) {
+          console.log(`[Image Utils] ${file.name} will be converted on server`);
+          return { status: 'needs_server', file };
+        }
+
+        // For other formats, return original file
+        return { status: 'converted', file };
+      }
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+
+    // Separate converted files from those that need server conversion
+    batchResults.forEach((result) => {
+      if (result.status === 'converted') {
+        convertedFiles.push(result.file);
+      } else if (result.status === 'needs_server') {
+        needsServerConversion.push(result.file);
+      }
+    });
+
+    // Log progress for large batches
+    if (files.length > concurrentLimit) {
+      console.log(`[Image Utils] Processed ${Math.min(i + concurrentLimit, files.length)}/${files.length} images`);
     }
+  }
 
-    // Only convert images
-    if (!file.type.startsWith('image/')) {
-      console.warn(`[Image Utils] ${file.name} is not an image, skipping`);
-      return Promise.resolve(file);
-    }
+  console.log(`[Image Utils] Summary: ${convertedFiles.length} converted, ${needsServerConversion.length} need server conversion`);
 
-    return convertToWebP(file, quality);
-  });
-
-  return Promise.all(convertPromises);
+  return { convertedFiles, needsServerConversion };
 }
 
 /**

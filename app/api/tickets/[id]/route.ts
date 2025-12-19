@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateSLAStatus } from '@/lib/sla';
 import { lineService } from '@/lib/line';
-import { createDepartmentAssignedFlexMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getStatusLabel } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
@@ -30,6 +30,9 @@ export async function GET(
         },
         statusHistory: {
           orderBy: { createdAt: 'desc' },
+        },
+        fieldEdits: {
+          orderBy: { editedAt: 'desc' },
         },
         views: {
           orderBy: { viewedAt: 'desc' },
@@ -79,6 +82,15 @@ export async function PATCH(
       changedByLineName,
       changedByLineAvatar,
       changedByStaffName, // For CEC staff updates
+      // Editable ticket fields
+      trackingNo,
+      issueType,
+      issueTypeOther,
+      recipientName,
+      recipientPhone,
+      recipientAddress,
+      description,
+      zoneId,
     } = body;
 
     // Verify ticket exists
@@ -152,7 +164,7 @@ export async function PATCH(
       const newDepartment = department === 'none' ? null : department;
       updateData.department = newDepartment;
 
-      // Send LINE notification when department is assigned for the FIRST time only
+      // Send Department Work Snapshot when department is assigned for the FIRST time only
       // Only send if ticket had no department before (ticket.department is null)
       // This prevents notifications on department reassignments to reduce quota usage
       if (newDepartment && !ticket.department && lineService.isConfigured()) {
@@ -160,20 +172,46 @@ export async function PATCH(
         if (groupId) {
           const deptLabel = getDepartmentLabel(newDepartment);
 
-          const flexMessage = createDepartmentAssignedFlexMessage(
-            { ...ticket, department: newDepartment },
-            deptLabel
-          );
+          // Fetch all pending tickets for this department to create work snapshot
+          const pendingTickets = await prisma.ticket.findMany({
+            where: {
+              department: newDepartment,
+              status: {
+                notIn: ['RESOLVED', 'CLOSED'],
+              },
+            },
+            include: {
+              customer: true,
+            },
+            orderBy: [
+              { priority: 'desc' },
+              { slaDeadline: 'asc' },
+              { createdAt: 'asc' },
+            ],
+            take: 10, // Limit to 10 tickets for the snapshot
+          });
+
+          // Build LIFF queue URL
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
+          const queueUrl = `${baseUrl}/liff/queue?department=${newDepartment}`;
+
+          const flexMessage = createDepartmentWorkSnapshotMessage({
+            tickets: pendingTickets,
+            department: newDepartment,
+            departmentLabel: deptLabel,
+            zone: null,
+            queueUrl,
+          });
 
           try {
             await lineService.sendFlexMessage(
               groupId,
-              `🔔 Ticket มอบหมาย: ${ticket.ticketNo}`,
+              `📋 งานค้าง ${deptLabel}`,
               flexMessage
             );
-            console.log('✅ LINE notification sent for initial department assignment:', ticket.ticketNo);
+            console.log(`✅ Department Work Snapshot sent to ${deptLabel}: ${pendingTickets.length} pending tickets`);
           } catch (error) {
-            console.error('❌ Failed to send LINE notification:', error);
+            console.error('❌ Failed to send Department Work Snapshot:', error);
           }
         }
       } else if (newDepartment && ticket.department) {
@@ -184,6 +222,59 @@ export async function PATCH(
     // Handle assignee update
     if (assignedTo !== undefined) {
       updateData.assignedTo = assignedTo === 'none' ? null : assignedTo;
+    }
+
+    // Track field changes for edit history
+    const fieldChanges: Array<{ field: string; oldValue: string | null; newValue: string | null }> = [];
+
+    // Helper function to track field changes
+    const trackFieldChange = (fieldName: string, oldValue: any, newValue: any) => {
+      // Convert values to strings for storage (handling null/undefined)
+      const oldStr = oldValue === null || oldValue === undefined ? null : String(oldValue);
+      const newStr = newValue === null || newValue === undefined ? null : String(newValue);
+
+      // Only track if values are different
+      if (oldStr !== newStr) {
+        fieldChanges.push({
+          field: fieldName,
+          oldValue: oldStr,
+          newValue: newStr,
+        });
+      }
+    };
+
+    // Handle editable ticket field updates with change tracking
+    if (trackingNo !== undefined) {
+      trackFieldChange('trackingNo', ticket.trackingNo, trackingNo || null);
+      updateData.trackingNo = trackingNo || null;
+    }
+    if (issueType !== undefined) {
+      trackFieldChange('issueType', ticket.issueType, issueType);
+      updateData.issueType = issueType;
+    }
+    if (issueTypeOther !== undefined) {
+      trackFieldChange('issueTypeOther', ticket.issueTypeOther, issueTypeOther || null);
+      updateData.issueTypeOther = issueTypeOther || null;
+    }
+    if (recipientName !== undefined) {
+      trackFieldChange('recipientName', ticket.recipientName, recipientName);
+      updateData.recipientName = recipientName;
+    }
+    if (recipientPhone !== undefined) {
+      trackFieldChange('recipientPhone', ticket.recipientPhone, recipientPhone);
+      updateData.recipientPhone = recipientPhone;
+    }
+    if (recipientAddress !== undefined) {
+      trackFieldChange('recipientAddress', ticket.recipientAddress, recipientAddress);
+      updateData.recipientAddress = recipientAddress;
+    }
+    if (description !== undefined) {
+      trackFieldChange('description', ticket.description, description);
+      updateData.description = description;
+    }
+    if (zoneId !== undefined) {
+      trackFieldChange('zoneId', ticket.zoneId, zoneId || null);
+      updateData.zoneId = zoneId || null;
     }
 
     // Update the ticket
@@ -198,12 +289,40 @@ export async function PATCH(
         statusHistory: {
           orderBy: { createdAt: 'desc' },
         },
+        fieldEdits: {
+          orderBy: { editedAt: 'desc' },
+        },
         views: {
           orderBy: { viewedAt: 'desc' },
           take: 50,
         },
       },
     });
+
+    // Create field edit history records
+    if (fieldChanges.length > 0) {
+      const editedBy = changedByStaffName || currentUsername;
+
+      // Create a field edit record for each changed field
+      await Promise.all(
+        fieldChanges.map((change) =>
+          prisma.fieldEdit.create({
+            data: {
+              ticketId: params.id,
+              fieldName: change.field,
+              oldValue: change.oldValue,
+              newValue: change.newValue,
+              editedBy,
+              editedByLineUserId: changedByLineUserId || null,
+              editedByLineName: changedByLineName || null,
+              editedByLineAvatar: changedByLineAvatar || null,
+            },
+          })
+        )
+      );
+
+      console.log(`✏️ Logged ${fieldChanges.length} field edit(s) for ticket ${ticket.ticketNo} by ${editedBy}`);
+    }
 
     // Handle adding note (after ticket update)
     if (addNote && addNote.content) {

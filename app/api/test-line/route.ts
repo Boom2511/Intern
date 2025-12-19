@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 import { getCurrentUser, Permission, hasPermission } from '@/lib/auth';
 
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -29,17 +29,33 @@ export async function POST(request: NextRequest) {
         recipientAddress: '123/45 หมู่ 2 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110',
         trackingNo: 'TH1234567890',
         createdAt: new Date(),
+        slaDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        slaStatus: 'ON_TRACK' as any,
+        status: 'NEW' as any,
+        channel: 'CEC' as any,
+        department: 'DB2' as any,
         customer: {
+          id: 'customer-123',
           name: 'สมชาย ใจดี',
           phone: '081-234-5678',
+          email: 'test@example.com',
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       };
 
-      const flexMessage = createDepartmentAssignedFlexMessage(
-        mockTicket as any,
-        'D2',
-        'http://localhost:3000/dashboard'
-      );
+      const baseUrl = process.env.NEXTAUTH_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+        || 'http://localhost:3000';
+      const queueUrl = `${baseUrl}/liff/queue?department=DB2`;
+
+      const flexMessage = createDepartmentWorkSnapshotMessage({
+        tickets: [mockTicket as any],
+        department: 'DB2',
+        departmentLabel: 'D2',
+        zone: null,
+        queueUrl,
+      });
 
       const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
         method: 'POST',

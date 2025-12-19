@@ -1,6 +1,5 @@
 /**
- * TicketCard Component
- * Individual ticket card for list view
+ * TicketCard Component (Improved Version)
  */
 
 import Link from 'next/link';
@@ -9,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithCustomer } from '@/types';
 import { formatThaiDate, getPriorityColor, getPriorityLabel } from '@/lib/utils';
-import { Clock, User, Phone, CircleAlert, Package, Building2, Tag } from 'lucide-react';
+import { Clock, User, MapPin, MessageSquare, Package } from 'lucide-react';
 import { getDepartmentLabel } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 
@@ -18,74 +17,91 @@ interface TicketCardProps {
 }
 
 export default function TicketCard({ ticket }: TicketCardProps) {
+  const notesCount = ticket.notes?.length || 0;
+  const hasUserUpdate = ticket.notes?.some(n => n.isFromEndUser);
+
   return (
-    <Link href={`/tickets/${ticket.id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className="font-mono text-sm text-gray-600">{ticket.ticketNo}</span>
-                <StatusBadge status={ticket.status} />
-                <Badge className={getPriorityColor(ticket.priority)}>
-                  {getPriorityLabel(ticket.priority)}
-                </Badge>
-                {!ticket.department && (
-                  <div className="flex items-center gap-1 text-amber-600" title="ยังไม่ได้เลือกแผนกรับผิดชอบ">
-                    <CircleAlert className="h-4 w-4" />
-                    <span className="text-xs">ยังไม่ได้เลือกแผนก</span>
-                  </div>
-                )}
-              </div>
+    <Link href={`/tickets/${ticket.id}`} className="block group">
+      <Card className="hover:border-blue-400 transition-all duration-200 shadow-sm hover:shadow-md">
+        <CardContent className="p-4">
+          {/* Top Row: Ticket No & Status */}
+          <div className="flex justify-between items-start mb-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="font-mono text-[13px] font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                {ticket.ticketNo}
+              </span>
+              <StatusBadge status={ticket.status} />
+              <Badge className={`${getPriorityColor(ticket.priority)} border-none text-white text-[10px] h-5`}>
+                {getPriorityLabel(ticket.priority)}
+              </Badge>
+              {/* แสดง Salesforce ID ถ้ามี */}
+              {ticket.salesforceId && (
+                <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 rounded uppercase font-semibold">
+                  SF: {ticket.salesforceId}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {formatThaiDate(ticket.createdAt)}
+            </div>
+          </div>
 
-              {/* Issue Type and Department */}
-              <div className="flex items-center gap-3 mb-2 text-sm">
-                <div className="flex items-center gap-1 text-gray-700">
-                  <Tag className="h-4 w-4" />
-                  <span className="font-medium">{getIssueTypeLabel(ticket.issueType)}</span>
-                </div>
+          {/* Middle Row: Content */}
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-4 mb-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-slate-900 text-sm">
+                  {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
+                </h3>
+                {/* Badge แผนก (ถ้ามี) */}
                 {ticket.department && (
-                  <div className="flex items-center gap-1 text-gray-700">
-                    <Building2 className="h-4 w-4" />
-                    <span className="font-medium">{getDepartmentLabel(ticket.department)}</span>
-                  </div>
-                )}
-                {ticket.trackingNo && (
-                  <div className="flex items-center gap-1 text-blue-600">
-                    <Package className="h-4 w-4" />
-                    <span className="font-mono text-xs">{ticket.trackingNo}</span>
-                  </div>
+                  <span className="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                    {getDepartmentLabel(ticket.department)}
+                  </span>
                 )}
               </div>
-
-              <p className="text-sm text-gray-600 line-clamp-2">
+              <p className="text-sm text-slate-500 line-clamp-1 leading-relaxed">
                 {ticket.description}
               </p>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between text-sm text-gray-500 pt-3 border-t">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1">
-                <User className="h-4 w-4" />
-                <span>{ticket.customer.name}</span>
+            {/* Customer & Recipient Info */}
+            <div className="text-[12px] text-slate-600 space-y-1 border-l pl-4 border-slate-100">
+              <div className="flex items-center gap-2">
+                <User className="h-3.5 w-3.5 text-blue-500" />
+                <span className="font-medium truncate">ลูกค้า: {ticket.customer.name}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Phone className="h-4 w-4" />
-                <span>{ticket.customer.phone}</span>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                <span className="truncate text-slate-500">ผู้รับ: {ticket.recipientName}</span>
               </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              <span>{formatThaiDate(ticket.createdAt)}</span>
             </div>
           </div>
 
-          {ticket.assignedTo && (
-            <div className="mt-2 text-sm text-gray-600">
-              รับผิดชอบโดย: {ticket.assignedTo}
-            </div>
-          )}
+          {/* Bottom Row: Footer Stats */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+             <div className="flex items-center gap-4">
+                <div className={`flex items-center gap-1.5 text-[11px] ${hasUserUpdate ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  <span>{notesCount} บันทึก</span>
+                  {hasUserUpdate && <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                </div>
+
+                {ticket.trackingNo && (
+                  <div className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 rounded">
+                    <Package className="h-3.5 w-3.5" />
+                    <span className="font-mono">{ticket.trackingNo}</span>
+                  </div>
+                )}
+             </div>
+
+             {ticket.assignedTo && (
+               <div className="text-[11px] text-slate-500 italic">
+                 โดย: {ticket.assignedTo}
+               </div>
+             )}
+          </div>
         </CardContent>
       </Card>
     </Link>

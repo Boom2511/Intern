@@ -12,7 +12,6 @@ const SESSION_EXPIRY_DAYS = 7;
 
 export interface SessionUser {
   id: string;
-  email: string;
   name: string;
   role: UserRole;
 }
@@ -102,7 +101,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       where: { id: payload.userId },
       select: {
         id: true,
-        email: true,
         name: true,
         role: true,
         isActive: true,
@@ -115,7 +113,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
     return {
       id: user.id,
-      email: user.email,
       name: user.name,
       role: user.role,
     };

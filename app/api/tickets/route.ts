@@ -13,7 +13,7 @@ import { generateTicketNumber } from '@/lib/utils';
 import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
 import { getSLAHours, getSLAPriority } from '@/config/issue-types';
 import { lineService } from '@/lib/line';
-import { createDepartmentAssignedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -296,26 +296,55 @@ export async function POST(request: NextRequest) {
           const deptLabel = getDepartmentLabel(department);
           console.log('Department label:', deptLabel);
 
-          // Create and send Flex Message (will use LIFF URL automatically)
-          const flexMessage = createDepartmentAssignedFlexMessage(ticket, deptLabel);
-          console.log('✅ Sending LINE notification for new ticket...');
+          // Fetch all pending tickets for this department to create work snapshot
+          const pendingTickets = await prisma.ticket.findMany({
+            where: {
+              department,
+              status: {
+                notIn: ['RESOLVED', 'CLOSED'],
+              },
+            },
+            include: {
+              customer: true,
+            },
+            orderBy: [
+              { priority: 'desc' },
+              { slaDeadline: 'asc' },
+              { createdAt: 'asc' },
+            ],
+            take: 10, // Limit to 10 tickets for the snapshot
+          });
+
+          // Build LIFF queue URL
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
+          const queueUrl = `${baseUrl}/liff/queue?department=${department}`;
+
+          // Create and send Department Work Snapshot
+          const flexMessage = createDepartmentWorkSnapshotMessage({
+            tickets: pendingTickets,
+            department,
+            departmentLabel: deptLabel,
+            zone: null,
+            queueUrl,
+          });
+          console.log('✅ Sending Department Work Snapshot...');
 
           try {
             const success = await lineService.sendFlexMessage(
               groupId,
-              `🔔 Ticket ใหม่: ${ticket.ticketNo}`,
+              `📋 งานค้าง ${deptLabel}`,
               flexMessage
             );
 
             if (success) {
-              console.log('✅ LINE notification sent successfully for new ticket:', ticket.ticketNo);
+              console.log(`✅ Department Work Snapshot sent to ${deptLabel}: ${pendingTickets.length} pending tickets`);
               notificationSent = true;
             } else {
-              console.error('❌ LINE notification failed for new ticket:', ticket.ticketNo);
+              console.error('❌ Department Work Snapshot failed for:', deptLabel);
               notificationError = 'Failed to send notification (quota exceeded or rate limited)';
             }
           } catch (error: any) {
-            console.error('❌ Failed to send LINE notification:', error);
+            console.error('❌ Failed to send Department Work Snapshot:', error);
             notificationError = error.message || 'Unknown error';
           }
         } else {

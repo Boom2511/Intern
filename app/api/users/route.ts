@@ -17,7 +17,7 @@ export async function GET() {
     const users = await prisma.user.findMany({
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         role: true,
         isActive: true,
@@ -49,24 +49,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, name, role } = await request.json();
+    const { username, password, name, role } = await request.json();
 
     // Validation
-    if (!email || !password || !name || !role) {
+    if (!username || !password || !name || !role) {
       return NextResponse.json(
         { error: 'All fields are required' },
         { status: 400 }
       );
     }
 
-    // Check if email already exists
+    // Check if username already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { username }
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Email already exists' },
+        { error: 'Username already exists' },
         { status: 409 }
       );
     }
@@ -77,14 +77,14 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await prisma.user.create({
       data: {
-        email,
+        username,
         password: hashedPassword,
         name,
         role,
       },
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         role: true,
         isActive: true,

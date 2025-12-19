@@ -18,7 +18,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const { email, password, name, role, isActive } = await request.json();
+    const { username, password, name, role, isActive } = await request.json();
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -35,30 +35,33 @@ export async function PATCH(
     // Prepare update data
     const updateData: any = {};
 
-    if (email !== undefined) {
-      // Check if new email is already taken
-      const emailTaken = await prisma.user.findFirst({
+    if (username !== undefined) {
+      // Check if new username is already taken
+      const usernameTaken = await prisma.user.findFirst({
         where: {
-          email,
+          username,
           id: { not: id }
         }
       });
 
-      if (emailTaken) {
+      if (usernameTaken) {
         return NextResponse.json(
-          { error: 'Email already exists' },
+          { error: 'Username already exists' },
           { status: 409 }
         );
       }
 
-      updateData.email = email;
+      updateData.username = username;
+    }
+
+    if (name !== undefined) {
+      updateData.name = name;
     }
 
     if (password) {
       updateData.password = await hashPassword(password);
     }
 
-    if (name !== undefined) updateData.name = name;
     if (role !== undefined) updateData.role = role;
     if (isActive !== undefined) updateData.isActive = isActive;
 
@@ -68,7 +71,7 @@ export async function PATCH(
       data: updateData,
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         role: true,
         isActive: true,
