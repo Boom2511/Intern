@@ -233,8 +233,12 @@ export async function POST(request: NextRequest) {
           const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
           const lockKey = parseInt(dateStr); // Convert to number for pg_advisory_xact_lock
 
+          console.log(`[Ticket Creation] Attempting to acquire lock with key: ${lockKey}`);
+
           // Acquire advisory lock - other transactions will WAIT here
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
+          console.log(`[Ticket Creation] Lock acquired! Finding latest ticket...`);
 
           // Now we have exclusive access - find latest ticket
           const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
@@ -244,6 +248,8 @@ export async function POST(request: NextRequest) {
             ORDER BY "createdAt" DESC
             LIMIT 1
           `;
+
+          console.log(`[Ticket Creation] Latest tickets found:`, latestTickets);
 
           // Extract sequence from latest ticketNo or start from 1
           let nextSequence = 1;
@@ -259,6 +265,8 @@ export async function POST(request: NextRequest) {
           }
 
           const ticketNo = generateTicketNumber(nextSequence);
+
+          console.log(`[Ticket Creation] Generated ticketNo: ${ticketNo} (sequence: ${nextSequence})`);
 
           // Get SLA hours and priority from config based on issue type
           const slaHours = getSLAHours(issueType);
