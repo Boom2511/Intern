@@ -221,32 +221,27 @@ export async function POST(request: NextRequest) {
 
     while (retryCount < maxRetries) {
       try {
-        // Use transaction to atomically get latest ticket and create new one
+        // Use serializable transaction with row locking to prevent race conditions
         ticket = await prisma.$transaction(async (tx) => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          // Find the latest ticket created today to get the last sequence number
-          // This is more reliable than COUNT because it reads actual data
-          const latestTicket = await tx.ticket.findFirst({
-            where: {
-              createdAt: {
-                gte: today,
-              },
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-            select: {
-              ticketNo: true,
-            },
-          });
+          // CRITICAL FIX: Use SELECT FOR UPDATE to lock the latest ticket row
+          // This prevents other transactions from reading the same row until we commit
+          const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
+            SELECT "ticketNo"
+            FROM "Ticket"
+            WHERE "createdAt" >= ${today}
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+            FOR UPDATE
+          `;
 
           // Extract sequence from latest ticketNo or start from 1
           let nextSequence = 1;
-          if (latestTicket?.ticketNo) {
+          if (latestTickets.length > 0 && latestTickets[0].ticketNo) {
             // ticketNo format: TH-YYYYMMDD-XXXX
-            const parts = latestTicket.ticketNo.split('-');
+            const parts = latestTickets[0].ticketNo.split('-');
             if (parts.length === 3) {
               const lastSeq = parseInt(parts[2], 10);
               if (!isNaN(lastSeq)) {
