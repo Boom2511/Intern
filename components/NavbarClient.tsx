@@ -101,17 +101,6 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
               </Link>
             )}
 
-            {/* Test Pages - Only for ADMINISTRATOR */}
-            {canAccessTestPages && (
-              <Link
-                href="/test-flex"
-                className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
-              >
-                <FlaskConical className="h-4 w-4 text-white" />
-                <span className="text-white">Test</span>
-              </Link>
-            )}
-
             <Link
               href="/tickets/new"
               className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
