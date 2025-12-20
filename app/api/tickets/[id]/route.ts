@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateSLAStatus } from '@/lib/sla';
 import { lineService } from '@/lib/line';
-import { createDepartmentWorkSnapshotMessage, createTicketResolvedFlexMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getStatusLabel } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
