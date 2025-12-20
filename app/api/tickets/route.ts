@@ -213,28 +213,49 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate ticket number with transaction + retry to handle race conditions
-    // Use transaction to ensure atomic count + create operation
+    // Strategy: Use findFirst + orderBy to get latest ticket instead of COUNT
+    // This is more reliable because it reads actual committed data
     let ticket;
     let retryCount = 0;
     const maxRetries = 5;
 
     while (retryCount < maxRetries) {
       try {
-        // Use transaction to atomically get count and create ticket
+        // Use transaction to atomically get latest ticket and create new one
         ticket = await prisma.$transaction(async (tx) => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          // Get count within transaction for consistency
-          const todayCount = await tx.ticket.count({
+          // Find the latest ticket created today to get the last sequence number
+          // This is more reliable than COUNT because it reads actual data
+          const latestTicket = await tx.ticket.findFirst({
             where: {
               createdAt: {
                 gte: today,
               },
             },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            select: {
+              ticketNo: true,
+            },
           });
 
-          const ticketNo = generateTicketNumber(todayCount + 1);
+          // Extract sequence from latest ticketNo or start from 1
+          let nextSequence = 1;
+          if (latestTicket?.ticketNo) {
+            // ticketNo format: TH-YYYYMMDD-XXXX
+            const parts = latestTicket.ticketNo.split('-');
+            if (parts.length === 3) {
+              const lastSeq = parseInt(parts[2], 10);
+              if (!isNaN(lastSeq)) {
+                nextSequence = lastSeq + 1;
+              }
+            }
+          }
+
+          const ticketNo = generateTicketNumber(nextSequence);
 
           // Get SLA hours and priority from config based on issue type
           const slaHours = getSLAHours(issueType);
