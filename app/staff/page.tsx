@@ -15,7 +15,7 @@ import { useUser } from '@/providers/UserProvider';
 
 interface User {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR';
   isActive: boolean;
@@ -34,7 +34,7 @@ export default function StaffPage() {
   const [lineQuota, setLineQuota] = useState<{ used: number; quota: number; percentage: number } | null>(null);
 
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
     name: '',
     role: 'OPERATOR' as 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR',
@@ -157,11 +157,11 @@ export default function StaffPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingUser ? {
           ...formData,
-          email: formData.email, // Use username directly
+          username: formData.username, // Use username directly
           password: formData.password || undefined, // Only send password if changed
         } : {
           ...formData,
-          email: formData.email, // Use username directly
+          username: formData.username, // Use username directly
         }),
       });
 
@@ -238,7 +238,7 @@ export default function StaffPage() {
 
     setEditingUser(user);
     setFormData({
-      email: user.email, // Use full email/username directly
+      username: user.username, // Use full username directly
       password: '',
       name: user.name,
       role: user.role,
@@ -249,7 +249,7 @@ export default function StaffPage() {
   const resetForm = () => {
     setEditingUser(null);
     setFormData({
-      email: '',
+      username: '',
       password: '',
       name: '',
       role: 'OPERATOR',
@@ -359,14 +359,14 @@ export default function StaffPage() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">ชื่อผู้ใช้</Label>
+                  <Label htmlFor="username">ชื่อผู้ใช้</Label>
                   <Input
-                    id="email"
+                    id="username"
                     type="text"
                     placeholder="username"
-                    value={formData.email}
+                    value={formData.username}
                     onChange={(e) => {
-                      setFormData({ ...formData, email: e.target.value });
+                      setFormData({ ...formData, username: e.target.value });
                     }}
                     required
                   />
@@ -465,7 +465,7 @@ export default function StaffPage() {
                         )}
                       </div>
                     </td>
-                    <td className="p-3">{user.email}</td>
+                    <td className="p-3">{user.username}</td>
                     <td className="p-3">
                       <Badge className={getRoleBadgeColor(user.role)}>
                         {getRoleLabel(user.role)}

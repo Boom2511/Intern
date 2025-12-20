@@ -62,8 +62,8 @@ export default function CommentSection({
       }
 
       // Convert to WebP
-      const webpFiles = await convertImagesToWebP(files, 0.8);
-      setSelectedImages((prev) => [...prev, ...webpFiles]);
+      const { convertedFiles } = await convertImagesToWebP(files, 0.8);
+      setSelectedImages((prev) => [...prev, ...convertedFiles]);
       setUploadingImages(false);
     } catch (err) {
       setError('ไม่สามารถแปลงรูปภาพได้');

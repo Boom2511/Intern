@@ -14,14 +14,12 @@ import { sanitizePhone } from '@/lib/validations';
  * Query params:
  * - phone: Customer phone number (required)
  * - name: Customer name (optional, for fuzzy search)
- * - email: Customer email (optional)
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const phone = searchParams.get('phone');
     const name = searchParams.get('name');
-    const email = searchParams.get('email');
 
     // Build where clause
     const where: any = {};
@@ -38,17 +36,10 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    if (email) {
-      where.email = {
-        contains: email,
-        mode: 'insensitive',
-      };
-    }
-
     // At least one search parameter is required
-    if (!phone && !name && !email) {
+    if (!phone && !name) {
       return NextResponse.json(
-        { success: false, error: 'กรุณาระบุเงื่อนไขการค้นหา (เบอร์โทร, ชื่อ, หรืออีเมล)' },
+        { success: false, error: 'กรุณาระบุเงื่อนไขการค้นหา (เบอร์โทร หรือชื่อ)' },
         { status: 400 }
       );
     }

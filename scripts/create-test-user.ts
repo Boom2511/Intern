@@ -14,13 +14,13 @@ async function main() {
   // Test users to create
   const users = [
     {
-      email: 'admin@test.com',
+      username: 'admin',
       password: 'admin123',
       name: 'Admin User',
       role: 'ADMINISTRATOR' as const,
     },
     {
-      email: 'operator@test.com',
+      username: 'operator',
       password: 'operator123',
       name: 'Operator User',
       role: 'OPERATOR' as const,
@@ -34,11 +34,11 @@ async function main() {
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
-        where: { email: userData.email },
+        where: { username: userData.username },
       });
 
       if (existingUser) {
-        console.log(`✓ User already exists: ${userData.email}`);
+        console.log(`✓ User already exists: ${userData.username}`);
         console.log(`  Role: ${existingUser.role}`);
         console.log(`  Name: ${existingUser.name}\n`);
         continue;
@@ -47,7 +47,7 @@ async function main() {
       // Create user
       const user = await prisma.user.create({
         data: {
-          email: userData.email,
+          username: userData.username,
           password: hashedPassword,
           name: userData.name,
           role: userData.role,
@@ -55,21 +55,21 @@ async function main() {
         },
       });
 
-      console.log(`✓ Created user: ${user.email}`);
+      console.log(`✓ Created user: ${user.username}`);
       console.log(`  Password: ${userData.password}`);
       console.log(`  Role: ${user.role}`);
       console.log(`  Name: ${user.name}\n`);
     } catch (error) {
-      console.error(`✗ Error creating user ${userData.email}:`, error);
+      console.error(`✗ Error creating user ${userData.username}:`, error);
     }
   }
 
   console.log('\n=== Test Users ===');
   console.log('Administrator:');
-  console.log('  Email: admin@test.com');
+  console.log('  Username: admin');
   console.log('  Password: admin123');
   console.log('\nOperator:');
-  console.log('  Email: operator@test.com');
+  console.log('  Username: operator');
   console.log('  Password: operator123');
 }
 

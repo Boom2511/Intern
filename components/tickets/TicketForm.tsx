@@ -23,7 +23,6 @@ import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 import {
   validatePhone,
-  validateEmail,
   validateSalesforceId,
   validateTrackingNumber,
 } from '@/lib/validations';
@@ -31,7 +30,6 @@ import {
 interface TicketFormData {
   customerName: string;
   customerPhone: string;
-  customerEmail: string;
   customerId?: string;
   channel: string;
   salesforceId?: string;
@@ -71,7 +69,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const [formData, setFormData] = useState<TicketFormData>({
     customerName: '',
     customerPhone: '',
-    customerEmail: '',
     channel: 'CEC',
     issueType: '',
     recipientName: '',
@@ -111,9 +108,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     switch (field) {
       case 'recipientPhone':
         error = validatePhone(value);
-        break;
-      case 'customerEmail':
-        error = validateEmail(value);
         break;
       case 'salesforceId':
         error = validateSalesforceId(value);

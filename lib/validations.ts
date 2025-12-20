@@ -28,13 +28,6 @@ export function validateCreateTicket(data: any): { valid: boolean; errors: strin
     }
   }
 
-  if (data.customerEmail && data.customerEmail.trim().length > 0) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(data.customerEmail)) {
-      errors.push('รูปแบบอีเมลไม่ถูกต้อง');
-    }
-  }
-
   if (!data.subject || data.subject.trim().length === 0) {
     errors.push('กรุณาระบุหัวข้อ');
   } else if (data.subject.trim().length < 5) {
@@ -134,15 +127,6 @@ export function validatePhone(phone: string): string | null {
   if (!phone) return null;
   if (phone.length < 10) return 'หมายเลขโทรศัพท์ต้องมี 10 หลัก';
   if (!/^0\d{9}$/.test(phone)) return 'หมายเลขโทรศัพท์ต้องขึ้นต้นด้วย 0 และมี 10 หลัก';
-  return null;
-}
-
-/**
- * Validate email format
- */
-export function validateEmail(email: string): string | null {
-  if (!email) return null;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'รูปแบบอีเมลไม่ถูกต้อง';
   return null;
 }
 

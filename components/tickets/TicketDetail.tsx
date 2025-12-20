@@ -30,6 +30,7 @@ import TicketInfoCard from './TicketInfoCard';
 interface TicketDetailProps {
   ticket: TicketWithRelations;
   mutate?: () => void; // SWR mutate function for refreshing data
+  viewMode?: string; // Optional view mode parameter
 }
 
 export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {

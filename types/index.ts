@@ -58,7 +58,6 @@ export interface CreateTicketFormData {
   customerId?: string;
   customerName: string;
   customerPhone: string;
-  customerEmail?: string;
   subject: string;
   description: string;
   priority: Priority;
@@ -109,7 +108,6 @@ export interface TicketFilters {
 export interface CustomerSearchParams {
   phone?: string;
   name?: string;
-  email?: string;
 }
 
 // Statistics types for dashboard

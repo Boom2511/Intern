@@ -95,9 +95,6 @@ export default function CustomerSearch({ onCustomerSelect }: CustomerSearchProps
                 <p className="text-sm text-gray-600">
                   {formatThaiPhone(customer.phone)}
                 </p>
-                {customer.email && (
-                  <p className="text-sm text-gray-600">{customer.email}</p>
-                )}
 
                 {/* Warning for open tickets */}
                 {openTickets.length > 0 && (

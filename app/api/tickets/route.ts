@@ -147,7 +147,6 @@ export async function POST(request: NextRequest) {
     const {
       customerName,
       customerPhone,
-      customerEmail,
       channel = 'CEC',
       issueType,
       issueTypeOther,
@@ -208,7 +207,6 @@ export async function POST(request: NextRequest) {
           data: {
             name: customerName,
             phone: cleanPhone,
-            email: customerEmail || null,
           },
         });
       }
