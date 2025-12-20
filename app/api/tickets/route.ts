@@ -212,59 +212,90 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate ticket number
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayCount = await prisma.ticket.count({
-      where: {
-        createdAt: {
-          gte: today,
-        },
-      },
-    });
+    // Generate ticket number with retry logic to handle race conditions
+    let ticket;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    const ticketNo = generateTicketNumber(todayCount + 1);
+    while (retryCount < maxRetries) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayCount = await prisma.ticket.count({
+          where: {
+            createdAt: {
+              gte: today,
+            },
+          },
+        });
 
-    // Get SLA hours and priority from config based on issue type
-    const slaHours = getSLAHours(issueType);
-    const priority = getSLAPriority(issueType);
+        const ticketNo = generateTicketNumber(todayCount + 1);
 
-    // Calculate SLA deadline
-    const createdAt = new Date();
-    const slaDeadline = calculateSLADeadline(createdAt, issueType);
-    const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
+        // Get SLA hours and priority from config based on issue type
+        const slaHours = getSLAHours(issueType);
+        const priority = getSLAPriority(issueType);
 
-    // Create ticket
-    // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
-    const initialStatus = 'NEW';
+        // Calculate SLA deadline
+        const createdAt = new Date();
+        const slaDeadline = calculateSLADeadline(createdAt, issueType);
+        const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
 
-    const ticket = await prisma.ticket.create({
-      data: {
-        ticketNo,
-        customerId: customer.id,
-        channel,
-        issueType,
-        issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
-        department: department || null,
-        trackingNo: trackingNo || null,
-        zoneId: zoneId || null,
-        recipientName,
-        recipientPhone,
-        recipientAddress,
-        description,
-        salesforceId: salesforceId || null,
-        priority,
-        status: initialStatus,
-        slaHours,
-        slaDeadline,
-        slaStatus,
-        createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
-      },
-      include: {
-        customer: true,
-        notes: true,
-      },
-    });
+        // Create ticket
+        // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
+        const initialStatus = 'NEW';
+
+        ticket = await prisma.ticket.create({
+          data: {
+            ticketNo,
+            customerId: customer.id,
+            channel,
+            issueType,
+            issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
+            department: department || null,
+            trackingNo: trackingNo || null,
+            zoneId: zoneId || null,
+            recipientName,
+            recipientPhone,
+            recipientAddress,
+            description,
+            salesforceId: salesforceId || null,
+            priority,
+            status: initialStatus,
+            slaHours,
+            slaDeadline,
+            slaStatus,
+            createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
+          },
+          include: {
+            customer: true,
+            notes: true,
+          },
+        });
+
+        // Success - break out of retry loop
+        break;
+      } catch (error: any) {
+        // Check if it's a unique constraint error on ticketNo
+        if (error.code === 'P2002' && error.meta?.target?.includes('ticketNo')) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error('Failed to create ticket after max retries:', error);
+            throw error;
+          }
+          // Wait with exponential backoff + random jitter
+          const delay = Math.random() * 100 * Math.pow(2, retryCount);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          console.log(`Retrying ticket creation (attempt ${retryCount + 1}/${maxRetries})...`);
+        } else {
+          // Different error - throw immediately
+          throw error;
+        }
+      }
+    }
+
+    if (!ticket) {
+      throw new Error('Failed to create ticket after retries');
+    }
 
     // Track notification status
     let notificationSent = false;
