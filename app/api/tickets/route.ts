@@ -212,64 +212,70 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate ticket number with retry logic to handle race conditions
+    // Generate ticket number with transaction + retry to handle race conditions
+    // Use transaction to ensure atomic count + create operation
     let ticket;
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 5;
 
     while (retryCount < maxRetries) {
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayCount = await prisma.ticket.count({
-          where: {
-            createdAt: {
-              gte: today,
+        // Use transaction to atomically get count and create ticket
+        ticket = await prisma.$transaction(async (tx) => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // Get count within transaction for consistency
+          const todayCount = await tx.ticket.count({
+            where: {
+              createdAt: {
+                gte: today,
+              },
             },
-          },
-        });
+          });
 
-        const ticketNo = generateTicketNumber(todayCount + 1);
+          const ticketNo = generateTicketNumber(todayCount + 1);
 
-        // Get SLA hours and priority from config based on issue type
-        const slaHours = getSLAHours(issueType);
-        const priority = getSLAPriority(issueType);
+          // Get SLA hours and priority from config based on issue type
+          const slaHours = getSLAHours(issueType);
+          const priority = getSLAPriority(issueType);
 
-        // Calculate SLA deadline
-        const createdAt = new Date();
-        const slaDeadline = calculateSLADeadline(createdAt, issueType);
-        const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
+          // Calculate SLA deadline
+          const createdAt = new Date();
+          const slaDeadline = calculateSLADeadline(createdAt, issueType);
+          const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
 
-        // Create ticket
-        // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
-        const initialStatus = 'NEW';
+          // Create ticket within same transaction
+          // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
+          const initialStatus = 'NEW';
 
-        ticket = await prisma.ticket.create({
-          data: {
-            ticketNo,
-            customerId: customer.id,
-            channel,
-            issueType,
-            issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
-            department: department || null,
-            trackingNo: trackingNo || null,
-            zoneId: zoneId || null,
-            recipientName,
-            recipientPhone,
-            recipientAddress,
-            description,
-            salesforceId: salesforceId || null,
-            priority,
-            status: initialStatus,
-            slaHours,
-            slaDeadline,
-            slaStatus,
-            createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
-          },
-          include: {
-            customer: true,
-            notes: true,
-          },
+          return await tx.ticket.create({
+            data: {
+              ticketNo,
+              customerId: customer.id,
+              channel,
+              issueType,
+              issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
+              department: department || null,
+              trackingNo: trackingNo || null,
+              zoneId: zoneId || null,
+              recipientName,
+              recipientPhone,
+              recipientAddress,
+              description,
+              salesforceId: salesforceId || null,
+              priority,
+              status: initialStatus,
+              slaHours,
+              slaDeadline,
+              slaStatus,
+              createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
+            },
+            include: {
+              customer: true,
+              notes: true,
+            },
+          });
         });
 
         // Success - break out of retry loop
@@ -282,8 +288,8 @@ export async function POST(request: NextRequest) {
             console.error('Failed to create ticket after max retries:', error);
             throw error;
           }
-          // Wait with exponential backoff + random jitter
-          const delay = Math.random() * 100 * Math.pow(2, retryCount);
+          // Wait with exponential backoff + random jitter (50-400ms)
+          const delay = 50 + Math.random() * 100 * Math.pow(2, retryCount);
           await new Promise(resolve => setTimeout(resolve, delay));
           console.log(`Retrying ticket creation (attempt ${retryCount + 1}/${maxRetries})...`);
         } else {
