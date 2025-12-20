@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          const ticketNo = generateTicketNumber(nextSequence);
+          const ticketNo = generateTicketNumber(nextSequence, thailandDateStr);
 
           console.log(`[Ticket Creation] Generated ticketNo: ${ticketNo} (sequence: ${nextSequence})`);
 

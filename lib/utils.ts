@@ -20,10 +20,21 @@ export function cn(...inputs: ClassValue[]) {
  * Generate Ticket Number
  * Format: TH-YYYYMMDD-XXXX
  * Example: TH-20250103-0001
+ * @param sequence - Sequence number for the ticket (e.g., 1, 2, 3...)
+ * @param thailandDateStr - Optional Thailand date string in YYYY-MM-DD format. If not provided, uses server time.
  */
-export function generateTicketNumber(sequence: number): string {
-  const date = new Date();
-  const dateStr = format(date, 'yyyyMMdd');
+export function generateTicketNumber(sequence: number, thailandDateStr?: string): string {
+  let dateStr: string;
+
+  if (thailandDateStr) {
+    // Use provided Thailand date string (YYYY-MM-DD) and convert to YYYYMMDD
+    dateStr = thailandDateStr.replace(/-/g, '');
+  } else {
+    // Fallback to server time (for backward compatibility)
+    const date = new Date();
+    dateStr = format(date, 'yyyyMMdd');
+  }
+
   const seqStr = sequence.toString().padStart(4, '0');
   return `TH-${dateStr}-${seqStr}`;
 }
