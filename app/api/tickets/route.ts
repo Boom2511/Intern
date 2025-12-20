@@ -224,23 +224,32 @@ export async function POST(request: NextRequest) {
         // Use PostgreSQL Advisory Lock to prevent race conditions
         // Advisory locks work even when no rows exist (first ticket of the day)
         ticket = await prisma.$transaction(async (tx) => {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
+          // CRITICAL: Use Thailand timezone (UTC+7) for date calculations
+          // Server might be in different timezone, so we calculate Thailand's "today"
+          const now = new Date();
+          const thailandOffset = 7 * 60; // Thailand is UTC+7 (in minutes)
+          const thailandTime = new Date(now.getTime() + thailandOffset * 60 * 1000);
+
+          // Get Thailand's date string (YYYY-MM-DD)
+          const thailandDateStr = thailandTime.toISOString().split('T')[0];
+
+          // Create "today" datetime for Thailand (start of day in Thailand time)
+          const today = new Date(thailandDateStr + 'T00:00:00+07:00');
 
           // CRITICAL FIX: Use PostgreSQL Advisory Lock with date-based key
           // This ensures only ONE transaction can generate ticket numbers at a time
           // Lock key: Hash of today's date (YYYYMMDD) to ensure daily uniqueness
-          const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
-          const lockKey = parseInt(dateStr); // Convert to number for pg_advisory_xact_lock
+          const lockKey = parseInt(thailandDateStr.replace(/-/g, '')); // YYYYMMDD
 
-          console.log(`[Ticket Creation] Attempting to acquire lock with key: ${lockKey}`);
+          console.log(`[Ticket Creation] Thailand date: ${thailandDateStr}, Lock key: ${lockKey}`);
+          console.log(`[Ticket Creation] Attempting to acquire lock...`);
 
           // Acquire advisory lock - other transactions will WAIT here
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-          console.log(`[Ticket Creation] Lock acquired! Finding latest ticket...`);
+          console.log(`[Ticket Creation] Lock acquired! Finding latest ticket for ${thailandDateStr}...`);
 
-          // Now we have exclusive access - find latest ticket
+          // Now we have exclusive access - find latest ticket created today (Thailand time)
           const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
             SELECT "ticketNo"
             FROM "Ticket"
