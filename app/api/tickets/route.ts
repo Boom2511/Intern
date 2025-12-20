@@ -221,20 +221,28 @@ export async function POST(request: NextRequest) {
 
     while (retryCount < maxRetries) {
       try {
-        // Use serializable transaction with row locking to prevent race conditions
+        // Use PostgreSQL Advisory Lock to prevent race conditions
+        // Advisory locks work even when no rows exist (first ticket of the day)
         ticket = await prisma.$transaction(async (tx) => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          // CRITICAL FIX: Use SELECT FOR UPDATE to lock the latest ticket row
-          // This prevents other transactions from reading the same row until we commit
+          // CRITICAL FIX: Use PostgreSQL Advisory Lock with date-based key
+          // This ensures only ONE transaction can generate ticket numbers at a time
+          // Lock key: Hash of today's date (YYYYMMDD) to ensure daily uniqueness
+          const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+          const lockKey = parseInt(dateStr); // Convert to number for pg_advisory_xact_lock
+
+          // Acquire advisory lock - other transactions will WAIT here
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
+          // Now we have exclusive access - find latest ticket
           const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
             SELECT "ticketNo"
             FROM "Ticket"
             WHERE "createdAt" >= ${today}
             ORDER BY "createdAt" DESC
             LIMIT 1
-            FOR UPDATE
           `;
 
           // Extract sequence from latest ticketNo or start from 1
