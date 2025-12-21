@@ -391,20 +391,26 @@ export class LineMessagingService {
 
     try {
       const url = `${this.groupSummaryUrl}/${groupId}/summary`;
+      console.log(`🔍 Fetching group summary for: ${groupId}`);
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.channelAccessToken}`,
-          'Content-Type': 'application/json',
         },
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
         console.error(`❌ Failed to get group summary: ${response.status} ${response.statusText}`);
+        console.error(`   Response body:`, errorText);
+        console.error(`   Possible reasons: Bot not in group, or invalid group ID`);
         return null;
       }
 
       const data = await response.json();
+      console.log(`✅ Got group summary: ${data.groupName}`);
+
       return {
         groupId: data.groupId,
         groupName: data.groupName,

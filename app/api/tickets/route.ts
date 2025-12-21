@@ -386,8 +386,14 @@ export async function POST(request: NextRequest) {
           const queueUrl = getLiffUrl(`/liff/queue?department=${department}`);
 
           // Get or create LINE group to fetch group name
-          const lineGroupData = await getOrCreateLineGroup(groupId, department);
-          const groupName = lineGroupData?.groupName;
+          let groupName: string | undefined;
+          try {
+            const lineGroupData = await getOrCreateLineGroup(groupId, department);
+            groupName = lineGroupData?.groupName;
+          } catch (err) {
+            console.error('⚠️ Failed to get LINE group name, continuing without it:', err);
+            groupName = undefined;
+          }
 
           // Create and send Department Work Snapshot
           const flexMessage = createDepartmentWorkSnapshotMessage({
@@ -398,11 +404,12 @@ export async function POST(request: NextRequest) {
             groupName,
           });
           console.log('✅ Sending Department Work Snapshot...');
+          console.log('📋 Flex Message Preview:', JSON.stringify(flexMessage, null, 2).substring(0, 500));
 
           try {
             const success = await lineService.sendFlexMessage(
               groupId,
-              `📋 มีงานใหม่${groupName ? ` | ${groupName}` : ` | ${deptLabel}`}`,
+              `📋 มีงานใหม่ ${deptLabel}${groupName ? ` (${groupName})` : ''}`,
               flexMessage
             );
 
