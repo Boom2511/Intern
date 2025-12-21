@@ -86,6 +86,7 @@ export async function PATCH(
       trackingNo,
       issueType,
       issueTypeOther,
+      salesforceId,
       recipientName,
       recipientPhone,
       recipientAddress,
@@ -275,6 +276,10 @@ export async function PATCH(
     if (zoneId !== undefined) {
       trackFieldChange('zoneId', ticket.zoneId, zoneId || null);
       updateData.zoneId = zoneId || null;
+    }
+    if (salesforceId !== undefined) {
+      trackFieldChange('salesforceId', ticket.salesforceId, salesforceId || null);
+      updateData.salesforceId = salesforceId || null;
     }
 
     // Update the ticket
