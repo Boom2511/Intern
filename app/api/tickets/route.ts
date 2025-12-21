@@ -402,7 +402,7 @@ export async function POST(request: NextRequest) {
           try {
             const success = await lineService.sendFlexMessage(
               groupId,
-              `📋 งานค้าง ${deptLabel}`,
+              `📋 มีงานใหม่${groupName ? ` | ${groupName}` : ` | ${deptLabel}`}`,
               flexMessage
             );
 

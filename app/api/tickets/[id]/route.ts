@@ -212,7 +212,7 @@ export async function PATCH(
           try {
             await lineService.sendFlexMessage(
               groupId,
-              `📋 งานค้าง ${deptLabel}`,
+              `📋 มีงานใหม่${groupName ? ` | ${groupName}` : ` | ${deptLabel}`}`,
               flexMessage
             );
             console.log(`✅ Department Work Snapshot sent to ${deptLabel}: ${pendingTickets.length} pending tickets`);
