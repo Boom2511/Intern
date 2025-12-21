@@ -366,7 +366,7 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/user.png',
-                    size: 'xs',
+                    size: 'xxs',
                     flex: 0,
                     margin: 'none',
                   },
@@ -388,7 +388,7 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/package.png',
-                    size: 'xs',
+                    size: 'xxs',
                     flex: 0,
                     margin: 'none',
                   },
@@ -409,7 +409,7 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/timer.png',
-                    size: 'xs',
+                    size: 'xxs',
                     flex: 0,
                     margin: 'none',
                   },

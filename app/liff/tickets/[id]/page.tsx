@@ -17,6 +17,7 @@ import { useTicketDetail } from '@/hooks/useTicketDetail';
 import { toast } from '@/hooks/use-toast';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import type { IssueType } from '@prisma/client';
+import { invalidateTicketsList } from '@/lib/swr-utils';
 
 // Dynamic imports for heavy components and utilities
 const StatusHistory = lazy(() => import('@/components/liff/StatusHistory'));
@@ -37,6 +38,9 @@ export default function LiffTicketDetailPage() {
 
   // Handle back navigation - go to queue if opened from Carousel
   const handleBack = () => {
+    // Invalidate queue cache to ensure fresh data when going back
+    invalidateTicketsList();
+
     // Check if there's history (from queue page)
     if (window.history.length > 1) {
       router.back();

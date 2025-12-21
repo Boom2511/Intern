@@ -1,10 +1,11 @@
 /**
  * Ticket Detail Hook
  * Handles fetching and managing ticket data for LIFF
- * Refactored with separated concerns: load, view tracking, auto-update
+ * Uses SWR for caching and automatic revalidation
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
+import useSWR, { mutate } from 'swr';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 
 export interface LineProfile {
@@ -64,43 +65,33 @@ interface TicketDetailData {
   views: TicketView[];
 }
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  const result = await res.json();
+
+  if (!res.ok || !result.success) {
+    throw new Error(result.error || 'ไม่สามารถโหลดข้อมูลได้');
+  }
+
+  return result.data;
+};
+
 export function useTicketDetail(ticketId: string) {
-  const [data, setData] = useState<TicketDetailData>({
-    ticket: null,
-    notes: [],
-    statusHistory: [],
-    views: [],
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Pure function: Load ticket data (fast, no side effects)
-  const loadTicket = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Simple GET request without query params
-      const res = await fetch(`/api/liff/tickets/${ticketId}`);
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || 'ไม่สามารถโหลดข้อมูลได้');
-      }
-
-      setData({
-        ticket: result.data.ticket,
-        notes: result.data.notes || [],
-        statusHistory: result.data.statusHistory || [],
-        views: result.data.views || [],
-      });
-    } catch (err: any) {
-      const errorMsg = err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
+  // Use SWR for automatic caching and revalidation
+  const { data, error, isLoading, mutate: mutateTicket } = useSWR<TicketDetailData>(
+    `/api/liff/tickets/${ticketId}`,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 2000, // Prevent duplicate requests within 2s
     }
-  }, [ticketId]);
+  );
+
+  // Load ticket function for manual refresh
+  const loadTicket = useCallback(async () => {
+    await mutateTicket();
+  }, [mutateTicket]);
 
   // Separate function: Record view (fire-and-forget, non-blocking)
   const recordView = useCallback(async (profile: LineProfile) => {
@@ -114,13 +105,13 @@ export function useTicketDetail(ticketId: string) {
           viewerAvatar: profile.pictureUrl,
         }),
       });
-      // Reload views after recording
-      await loadTicket();
+      // Optimistically update views without full reload
+      await mutateTicket();
     } catch (err) {
       console.error('[recordView] Failed:', err);
       // Non-critical, don't throw
     }
-  }, [ticketId, loadTicket]);
+  }, [ticketId, mutateTicket]);
 
   // Separate function: Auto-update status from NEW to IN_PROGRESS
   const autoUpdateStatus = useCallback(async (profile: LineProfile) => {
@@ -137,9 +128,9 @@ export function useTicketDetail(ticketId: string) {
       });
 
       if (res.ok) {
-        // Reload ticket to get updated status
-        await loadTicket();
-        // Invalidate cache
+        // Optimistic update with mutate
+        await mutateTicket();
+        // Invalidate queue cache
         invalidateTicketsList();
         invalidateDashboardStats();
       }
@@ -147,7 +138,7 @@ export function useTicketDetail(ticketId: string) {
       console.error('[autoUpdateStatus] Failed:', err);
       // Non-critical, don't throw
     }
-  }, [ticketId, loadTicket]);
+  }, [ticketId, mutateTicket]);
 
   // Manual status update (for user actions like marking as RESOLVED)
   const updateStatus = useCallback(async (
@@ -172,29 +163,43 @@ export function useTicketDetail(ticketId: string) {
         throw new Error(result.error || 'ไม่สามารถอัปเดตสถานะได้');
       }
 
-      // Reload ticket data
-      await loadTicket();
+      // Optimistic update
+      await mutateTicket();
+      // Invalidate queue cache
+      invalidateTicketsList();
+      invalidateDashboardStats();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
-  }, [ticketId, loadTicket]);
+  }, [ticketId, mutateTicket]);
 
   const addNote = useCallback((note: Note) => {
-    setData(prev => ({
-      ...prev,
-      notes: [note, ...prev.notes],
-    }));
-  }, []);
+    // Optimistic update for notes
+    mutateTicket(
+      (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          notes: [note, ...current.notes],
+        };
+      },
+      false // Don't revalidate immediately
+    );
+  }, [mutateTicket]);
 
   return {
-    ...data,
-    loading,
-    error,
+    ticket: data?.ticket || null,
+    notes: data?.notes || [],
+    statusHistory: data?.statusHistory || [],
+    views: data?.views || [],
+    loading: isLoading,
+    error: error?.message || null,
     loadTicket,
     recordView,
     autoUpdateStatus,
     updateStatus,
     addNote,
+    mutate: mutateTicket, // Expose mutate for manual cache updates
   };
 }
