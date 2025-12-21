@@ -366,13 +366,13 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/user.png',
-                    size: 'xxs',
+                    size: '16px',
                     flex: 0,
                     margin: 'none',
                   },
                   {
                     type: 'text',
-                    text: ticket.recipientName + (ticket.customer?.phone ? ` (${ticket.customer.phone})` : ''),
+                    text: ticket.recipientName ,
                     size: 'xs',
                     color: '#1E293B',
                     weight: 'bold',
@@ -388,7 +388,7 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/package.png',
-                    size: 'xxs',
+                    size: '16px',
                     flex: 0,
                     margin: 'none',
                   },
@@ -409,13 +409,13 @@ export function createDepartmentWorkSnapshotMessage(
                   {
                     type: 'image',
                     url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/timer.png',
-                    size: 'xxs',
+                    size: '16px',
                     flex: 0,
                     margin: 'none',
                   },
                   {
                     type: 'text',
-                    text: `Priority: ${getPriorityLabel(ticket.priority)} (SLA ${ticket.slaHours}h)`,
+                    text: `Priority: ${getPriorityLabel(ticket.priority)} (SLA ${ticket.slaHours} ชม.)`,
                     size: 'xs',
                     color: priorityColor,
                     weight: 'bold',

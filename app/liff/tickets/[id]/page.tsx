@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, CircleCheckBig } from 'lucide-react';
+import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, CircleCheckBig, Truck } from 'lucide-react';
 import VConsole from '@/components/VConsole';
 import TicketSkeleton from '@/components/liff/TicketSkeleton';
 import { useLiff } from '@/hooks/useLiff';
@@ -305,18 +305,25 @@ export default function LiffTicketDetailPage() {
               <FileText size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
               <span>ประเภท: {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType as IssueType)}</span>
             </div>
-            {(ticket as any).createdBy && (
-              <div className="flex items-start text-sm text-gray-600">
-                <User size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
-                <span>ผู้สร้าง: {(ticket as any).createdBy}</span>
-              </div>
-            )}
             {ticket.department && (
               <div className="flex items-start text-sm text-gray-600">
                 <Users size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
                 <span>แผนก: {ticket.department}</span>
               </div>
             )}
+            {(ticket as any).zoneId && (
+              <div className="flex items-start text-sm text-gray-600">
+                <Truck size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
+                <span>Zone ID: {(ticket as any).zoneId}</span>
+              </div>
+            )}
+            {(ticket as any).createdBy && (
+              <div className="flex items-start text-sm text-gray-600">
+                <User size={16} className="mt-0.5 mr-2 flex-shrink-0 text-gray-400" />
+                <span>ผู้สร้าง: {(ticket as any).createdBy}</span>
+              </div>
+            )}
+            
           </div>
         </div>
 

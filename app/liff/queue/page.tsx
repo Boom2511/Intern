@@ -28,13 +28,6 @@ import { useLiff } from '@/hooks/useLiff';
 import { QueueSkeleton } from '@/components/liff/QueueSkeleton';
 
 // --- Interfaces (Keep existing) ---
-interface QueueData {
-  department: string;
-  zone: string | null;
-  totalTickets: number;
-  urgentCount: number;
-  tickets: TicketWithCustomer[];
-}
 
 interface ZoneQueueData {
   department: string;
@@ -108,7 +101,7 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
               <span className="font-bold text-gray-900 text-lg">{ticket.ticketNo}</span>
               {isBreached && (
                 <Badge variant="destructive" className="text-[10px] px-1.5 h-5">
-                  SLA หลุด
+                  เกินเวลาที่กำหนด
                 </Badge>
               )}
             </div>

@@ -49,6 +49,7 @@ interface Ticket {
   issueTypeOther?: string;
   description: string;
   trackingNo?: string;
+  zoneId?: string;
   recipientName: string;
   recipientPhone: string;
   recipientAddress: string;
