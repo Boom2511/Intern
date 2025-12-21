@@ -43,6 +43,7 @@ interface LinePushRequest {
 export class LineMessagingService {
   private readonly channelAccessToken: string;
   private readonly apiUrl = 'https://api.line.me/v2/bot/message/push';
+  private readonly groupSummaryUrl = 'https://api.line.me/v2/bot/group';
   private readonly rateLimiter: Bottleneck;
   private readonly retryConfig: RetryConfig;
 
@@ -375,6 +376,44 @@ export class LineMessagingService {
     };
 
     return this.sendFlexMessage(to, altText, flexContents, quickReply);
+  }
+
+  /**
+   * Get LINE group summary information
+   * @param groupId - LINE group ID
+   * @returns Group information including group name
+   */
+  async getGroupSummary(groupId: string): Promise<{ groupId: string; groupName: string; pictureUrl?: string } | null> {
+    if (!this.isConfigured()) {
+      console.warn('⚠️ LINE service not configured');
+      return null;
+    }
+
+    try {
+      const url = `${this.groupSummaryUrl}/${groupId}/summary`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.channelAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error(`❌ Failed to get group summary: ${response.status} ${response.statusText}`);
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        groupId: data.groupId,
+        groupName: data.groupName,
+        pictureUrl: data.pictureUrl,
+      };
+    } catch (error) {
+      console.error('❌ Error fetching group summary:', error);
+      return null;
+    }
   }
 }
 

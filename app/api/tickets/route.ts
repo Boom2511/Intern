@@ -16,6 +16,7 @@ import { lineService } from '@/lib/line';
 import { createDepartmentWorkSnapshotMessage, getLiffUrl } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
+import { getOrCreateLineGroup } from '@/lib/line-groups';
 
 /**
  * GET /api/tickets
@@ -384,13 +385,17 @@ export async function POST(request: NextRequest) {
           // Build LIFF queue URL
           const queueUrl = getLiffUrl(`/liff/queue?department=${department}`);
 
+          // Get or create LINE group to fetch group name
+          const lineGroupData = await getOrCreateLineGroup(groupId, department);
+          const groupName = lineGroupData?.groupName;
+
           // Create and send Department Work Snapshot
           const flexMessage = createDepartmentWorkSnapshotMessage({
             tickets: pendingTickets,
             department,
             departmentLabel: deptLabel,
-            zone: null,
             queueUrl,
+            groupName,
           });
           console.log('✅ Sending Department Work Snapshot...');
 

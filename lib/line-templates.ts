@@ -77,20 +77,29 @@ interface DepartmentWorkSnapshot {
   tickets: TicketWithCustomer[];
   department: string;
   departmentLabel: string;
-  zone?: string | null;
   queueUrl: string;
+  groupName?: string;
 }
 
 export function createDepartmentWorkSnapshotMessage(
   snapshot: DepartmentWorkSnapshot
 ) {
-  const { tickets, departmentLabel, zone, queueUrl } = snapshot;
+  const { tickets, departmentLabel, queueUrl, groupName } = snapshot;
   const totalTickets = tickets.length;
   const newTickets = tickets.filter(t => t.status === 'NEW');
+  const inProgressTickets = tickets.filter(t => t.status === 'IN_PROGRESS');
   const slaBreachedTickets = tickets.filter(t => t.slaStatus === 'BREACHED');
 
   // Display only NEW tickets (up to 10)
   const displayTickets = newTickets.slice(0, 10);
+
+  // Get current time in Thailand timezone
+  const currentTime = new Date().toLocaleTimeString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
 
   // Summary bubble
   const summaryBubble = {
@@ -102,20 +111,20 @@ export function createDepartmentWorkSnapshotMessage(
       contents: [
         {
           type: 'text',
-          text: 'สรุปงานค้าง',
+          text: 'สถานะงานในแผนก',
           color: '#ffffff',
           size: 'xl',
           weight: 'bold',
         },
         {
           type: 'text',
-          text: zone ? `${departmentLabel} | Zone ${zone}` : departmentLabel,
+          text: groupName || departmentLabel,
           color: '#E0E7FF',
           size: 'sm',
           margin: 'sm',
         },
       ],
-      backgroundColor: '#0284C7',
+      backgroundColor: '#1976D2',
       paddingAll: '20px',
     },
     body: {
@@ -133,24 +142,23 @@ export function createDepartmentWorkSnapshotMessage(
                 {
                   type: 'text',
                   text: totalTickets.toString(),
-                  color: '#0284C7',
-                  size: '3xl',
+                  color: '#1E293B',
+                  size: 'xxl',
                   weight: 'bold',
                   align: 'center',
                 },
                 {
                   type: 'text',
-                  text: 'ทั้งหมด',
+                  text: 'งานในระบบ',
                   color: '#64748B',
                   size: 'xs',
                   align: 'center',
-                  margin: 'xs',
                 },
               ],
               flex: 1,
-              backgroundColor: '#F0F9FF',
+              backgroundColor: '#F1F5F9',
               cornerRadius: 'md',
-              paddingAll: '16px',
+              paddingAll: '12px',
             },
             {
               type: 'box',
@@ -159,25 +167,55 @@ export function createDepartmentWorkSnapshotMessage(
                 {
                   type: 'text',
                   text: newTickets.length.toString(),
-                  color: newTickets.length > 0 ? '#0284C7' : '#64748B',
-                  size: '3xl',
+                  color: '#0284C7',
+                  size: 'xxl',
                   weight: 'bold',
                   align: 'center',
                 },
                 {
                   type: 'text',
-                  text: 'งานใหม่',
+                  text: 'รอรับงาน',
                   color: '#64748B',
                   size: 'xs',
                   align: 'center',
-                  margin: 'xs',
                 },
               ],
               flex: 1,
-              backgroundColor: newTickets.length > 0 ? '#F0F9FF' : '#F8FAFC',
+              backgroundColor: '#F0F9FF',
               cornerRadius: 'md',
-              paddingAll: '16px',
+              paddingAll: '12px',
               margin: 'md',
+            },
+          ],
+        },
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'text',
+                  text: inProgressTickets.length.toString(),
+                  color: '#D97706',
+                  size: 'xxl',
+                  weight: 'bold',
+                  align: 'center',
+                },
+                {
+                  type: 'text',
+                  text: 'กำลังทำ',
+                  color: '#64748B',
+                  size: 'xs',
+                  align: 'center',
+                },
+              ],
+              flex: 1,
+              backgroundColor: '#FFFBEB',
+              cornerRadius: 'md',
+              paddingAll: '12px',
             },
             {
               type: 'box',
@@ -186,37 +224,37 @@ export function createDepartmentWorkSnapshotMessage(
                 {
                   type: 'text',
                   text: slaBreachedTickets.length.toString(),
-                  color: slaBreachedTickets.length > 0 ? '#DC2626' : '#64748B',
-                  size: '3xl',
+                  color: '#DC2626',
+                  size: 'xxl',
                   weight: 'bold',
                   align: 'center',
                 },
                 {
                   type: 'text',
-                  text: 'เกิน SLA',
+                  text: 'เลยกำหนดเวลา',
                   color: '#64748B',
                   size: 'xs',
                   align: 'center',
-                  margin: 'xs',
                 },
               ],
               flex: 1,
-              backgroundColor: slaBreachedTickets.length > 0 ? '#FEE2E2' : '#F8FAFC',
+              backgroundColor: '#FEF2F2',
               cornerRadius: 'md',
-              paddingAll: '16px',
+              paddingAll: '12px',
               margin: 'md',
             },
           ],
+          margin: 'md',
         },
         {
           type: 'separator',
-          margin: 'lg',
+          margin: 'xl',
         },
         {
           type: 'text',
-          text: `แสดงงานใหม่ ${newTickets.length} รายการ`,
-          color: '#64748B',
-          size: 'xs',
+          text: `ข้อมูลอัปเดตเมื่อ ${currentTime} น.`,
+          color: '#94A3B8',
+          size: 'xxs',
           align: 'center',
           margin: 'md',
         },
@@ -231,11 +269,11 @@ export function createDepartmentWorkSnapshotMessage(
           type: 'button',
           action: {
             type: 'uri',
-            label: 'ดูคิวงานทั้งหมด',
+            label: 'ดูรายละเอียด →',
             uri: queueUrl,
           },
           style: 'primary',
-          color: '#0284C7',
+          color: '#1976D2',
           height: 'sm',
         },
       ],
@@ -246,7 +284,6 @@ export function createDepartmentWorkSnapshotMessage(
   // Individual ticket bubbles (only NEW status)
   const ticketBubbles = displayTickets.map((ticket) => {
     const priorityColor = getPriorityColor(ticket.priority);
-    const isPriorityUrgent = ticket.priority === 'URGENT' || ticket.priority === 'HIGH';
     const url = getLiffUrl(`/liff/tickets/${ticket.id}`);
 
     return {
@@ -266,37 +303,39 @@ export function createDepartmentWorkSnapshotMessage(
                 contents: [
                   {
                     type: 'text',
-                    text: getPriorityLabel(ticket.priority),
+                    text: ticket.zoneId ? `ZONE ${ticket.zoneId}` : departmentLabel,
                     color: '#ffffff',
                     size: 'sm',
                     weight: 'bold',
                   },
                 ],
-                backgroundColor: priorityColor,
+                backgroundColor: '#0369A1',
                 cornerRadius: 'sm',
                 paddingAll: '6px',
+                paddingStart: '10px',
+                paddingEnd: '10px',
                 flex: 0,
-                margin: 'none',
               },
               {
                 type: 'text',
                 text: ticket.ticketNo,
-                color: '#E0E7FF',
+                color: '#BAE6FD',
                 size: 'xs',
-                flex: 0,
-                margin: 'md',
+                align: 'end',
                 gravity: 'center',
+                flex: 1,
               },
             ],
           },
           {
             type: 'text',
-            text: ticket.zoneId
-              ? `${departmentLabel} | Zone ${ticket.zoneId}`
-              : departmentLabel,
-            color: '#BAE6FD',
-            size: 'xxs',
-            margin: 'sm',
+            text: ticket.issueType === 'OTHER' && ticket.issueTypeOther
+              ? ticket.issueTypeOther
+              : getIssueTypeLabel(ticket.issueType),
+            color: '#ffffff',
+            size: 'md',
+            weight: 'bold',
+            margin: 'md',
           },
         ],
         backgroundColor: '#0284C7',
@@ -307,65 +346,38 @@ export function createDepartmentWorkSnapshotMessage(
         layout: 'vertical',
         contents: [
           {
-            type: 'box',
-            layout: 'vertical',
-            contents: [
-              {
-                type: 'text',
-                text: ticket.issueType === 'OTHER' && ticket.issueTypeOther
-                  ? ticket.issueTypeOther
-                  : getIssueTypeLabel(ticket.issueType),
-                color: '#0F172A',
-                size: 'lg',
-                weight: 'bold',
-                wrap: true,
-              },
-            ],
-            backgroundColor: '#F8FAFC',
-            cornerRadius: 'md',
-            paddingAll: '12px',
+            type: 'text',
+            text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
+            color: '#334155',
+            size: 'sm',
+            wrap: true,
+            maxLines: 2,
           },
           {
             type: 'box',
             layout: 'vertical',
-            contents: [
-              {
-                type: 'text',
-                text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
-                color: '#475569',
-                size: 'sm',
-                wrap: true,
-                maxLines: 3,
-              },
-            ],
-            margin: 'md',
-          },
-          {
-            type: 'separator',
             margin: 'lg',
-          },
-          {
-            type: 'box',
-            layout: 'vertical',
+            spacing: 'sm',
             contents: [
               {
                 type: 'box',
                 layout: 'horizontal',
                 contents: [
                   {
-                    type: 'text',
-                    text: '👤',
-                    size: 'sm',
+                    type: 'image',
+                    url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/user.png',
+                    size: 'xs',
                     flex: 0,
+                    margin: 'none',
                   },
                   {
                     type: 'text',
-                    text: ticket.recipientName,
-                    color: '#0F172A',
-                    size: 'sm',
+                    text: ticket.recipientName + (ticket.customer?.phone ? ` (${ticket.customer.phone})` : ''),
+                    size: 'xs',
+                    color: '#1E293B',
                     weight: 'bold',
                     margin: 'sm',
-                    flex: 0,
+                    flex: 1,
                   },
                 ],
               },
@@ -374,57 +386,56 @@ export function createDepartmentWorkSnapshotMessage(
                 layout: 'horizontal',
                 contents: [
                   {
-                    type: 'text',
-                    text: '📦',
-                    size: 'sm',
+                    type: 'image',
+                    url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/package.png',
+                    size: 'xs',
                     flex: 0,
+                    margin: 'none',
                   },
                   {
                     type: 'text',
                     text: ticket.trackingNo,
-                    color: '#0369A1',
-                    size: 'sm',
-                    weight: 'bold',
+                    size: 'xs',
+                    color: '#0284C7',
                     margin: 'sm',
-                    flex: 0,
+                    flex: 1,
                   },
                 ],
-                margin: 'sm',
               }] : []),
               {
                 type: 'box',
                 layout: 'horizontal',
                 contents: [
                   {
-                    type: 'text',
-                    text: '⏰',
-                    size: 'sm',
+                    type: 'image',
+                    url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/timer.png',
+                    size: 'xs',
                     flex: 0,
+                    margin: 'none',
                   },
                   {
                     type: 'text',
-                    text: `SLA: ${ticket.slaHours} ชั่วโมง`,
+                    text: `Priority: ${getPriorityLabel(ticket.priority)} (SLA ${ticket.slaHours}h)`,
+                    size: 'xs',
                     color: priorityColor,
-                    size: 'sm',
                     weight: 'bold',
                     margin: 'sm',
-                    flex: 0,
+                    flex: 1,
                   },
                 ],
-                margin: 'sm',
               },
             ],
             backgroundColor: '#F8FAFC',
+            paddingAll: '10px',
             cornerRadius: 'md',
-            paddingAll: '12px',
-            margin: 'md',
           },
           {
             type: 'text',
-            text: `สร้างเมื่อ: ${formatShortDate(ticket.createdAt)}`,
+            text: `ส่งเมื่อ: ${formatShortDate(ticket.createdAt)}`,
             color: '#94A3B8',
             size: 'xxs',
             margin: 'md',
+            align: 'end',
           },
         ],
         paddingAll: '16px',
@@ -437,11 +448,11 @@ export function createDepartmentWorkSnapshotMessage(
             type: 'button',
             action: {
               type: 'uri',
-              label: isPriorityUrgent ? 'รับงานด่วน' : 'รับงาน',
+              label: 'เริ่มดำเนินการ',
               uri: url,
             },
             style: 'primary',
-            color: isPriorityUrgent ? '#DC2626' : '#0284C7',
+            color: '#0284C7',
             height: 'sm',
           },
         ],

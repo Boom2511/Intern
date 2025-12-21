@@ -12,6 +12,7 @@ import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getStatusLabel } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
+import { getOrCreateLineGroup } from '@/lib/line-groups';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -196,12 +197,16 @@ export async function PATCH(
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
           const queueUrl = `${baseUrl}/liff/queue?department=${newDepartment}`;
 
+          // Get or create LINE group to fetch group name
+          const lineGroupData = await getOrCreateLineGroup(groupId, newDepartment);
+          const groupName = lineGroupData?.groupName;
+
           const flexMessage = createDepartmentWorkSnapshotMessage({
             tickets: pendingTickets,
             department: newDepartment,
             departmentLabel: deptLabel,
-            zone: null,
             queueUrl,
+            groupName,
           });
 
           try {

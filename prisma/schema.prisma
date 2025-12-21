@@ -245,3 +245,19 @@ model TicketView {
   @@index([ticketId])
   @@index([viewedAt])
 }
+
+// LINE Group - Store LINE group information for each department
+model LineGroup {
+  id          String      @id @default(cuid())
+  groupId     String      @unique  // LINE group ID from webhook
+  groupName   String      // Group name from LINE API
+  department  Department? // Associated department
+  zoneId      String?     // Optional zone identifier
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([groupId])
+  @@index([department])
+  @@index([isActive])
+}
