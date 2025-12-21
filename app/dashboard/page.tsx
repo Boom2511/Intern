@@ -9,7 +9,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { Ticket, CheckCircle, AlertCircle, TrendingUp, AlertTriangle, Loader2, CornerRightDown, User, Clock, MapPin, MessageSquare, Package } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
@@ -17,7 +17,10 @@ import { useDashboardDepartments } from '@/hooks/useDashboardDepartments';
 import { useDashboardRecent } from '@/hooks/useDashboardRecent';
 import { useDashboardMyStats } from '@/hooks/useDashboardMyStats';
 import { useEffect, useState } from 'react';
-import { getStatusLabel, getPriorityLabel } from '@/lib/utils';
+import { getStatusLabel, getPriorityLabel, getPriorityColor, formatThaiDate } from '@/lib/utils';
+import { getIssueTypeLabel } from '@/config/issue-types';
+import { getDepartmentLabel } from '@/config/departments';
+import StatusBadge from '@/components/tickets/StatusBadge';
 import TicketResolutionChart from '@/components/dashboard/TicketResolutionChart';
 import DepartmentTicketStatusChart from '@/components/dashboard/DepartmentTicketStatusChart';
 import { StatsSkeleton } from '@/components/dashboard/StatsSkeleton';
@@ -99,11 +102,12 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="bg-white/20 p-3 rounded-full">
-                  <Ticket className="h-8 w-8 text-white" />
+                  <User className="h-8 w-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold">
-                    {getGreeting()}, {currentUser?.name || 'User'}! 👋
+                  <h1 className="inline-flex items-center gap-2 text-2xl font-bold text-white">
+                    {getGreeting()}, {currentUser?.name || 'User'}
+                    <CornerRightDown className="w-9 h-9 -mb-7 opacity-80" />
                   </h1>
                   <p className="text-blue-100 mt-1">
                     คุณมี {displayStats.openTickets} Tickets ที่กำลังดำเนินการ
@@ -113,22 +117,20 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => setViewMode('mine')}
-                      className={`px-4 py-1.5 text-sm rounded-md transition ${
-                        viewMode === 'mine'
-                          ? 'bg-white text-blue-600 font-medium shadow'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
+                      className={`px-4 py-1.5 text-sm rounded-md transition ${viewMode === 'mine'
+                        ? 'bg-white text-blue-600 font-medium shadow'
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                        }`}
                     >
                       งานของฉัน
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('all')}
-                      className={`px-4 py-1.5 text-sm rounded-md transition ${
-                        viewMode === 'all'
-                          ? 'bg-white text-blue-600 font-medium shadow'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
+                      className={`px-4 py-1.5 text-sm rounded-md transition ${viewMode === 'all'
+                        ? 'bg-white text-blue-600 font-medium shadow'
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                        }`}
                     >
                       ทั้งหมด
                     </button>
@@ -136,7 +138,9 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold">{formatTime(currentTime)}</div>
+                <div className="text-3xl font-bold text-white bg-clip-text bg-gradient-to-b from-white/80 to-blue/60 text-transparent">
+                  {formatTime(currentTime)}
+                </div>
                 <p className="text-blue-100 text-sm mt-1">
                   {currentTime.toLocaleDateString('th-TH', {
                     year: 'numeric',
@@ -269,68 +273,84 @@ export default function DashboardPage() {
                 <CardContent>
                   {displayRecentTickets && displayRecentTickets.length > 0 ? (
                     <div className="space-y-3">
-                      {displayRecentTickets.map((ticket: any) => (
-                        <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
-                          <div className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="font-semibold text-gray-900">
+                      {displayRecentTickets.map((ticket: any) => {
+                        const notesCount = ticket.notes?.length || 0;
+                        const hasUserUpdate = ticket.notes?.some((n: any) => n.isFromEndUser);
+
+                        return (
+                          <Link key={ticket.id} href={`/tickets/${ticket.id}`} className="block group">
+                            <div className="border rounded-lg hover:border-blue-400 transition-all duration-200 shadow-sm hover:shadow-md p-4">
+                              {/* Top Row: Ticket No & Status */}
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  <span className="font-mono text-[13px] font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
                                     {ticket.ticketNo}
                                   </span>
-                                  <Badge
-                                    className={
-                                      ticket.priority === 'URGENT'
-                                        ? 'bg-red-100 text-red-800 border-0'
-                                        : ticket.priority === 'HIGH'
-                                        ? 'bg-orange-100 text-orange-800 border-0'
-                                        : ticket.priority === 'MEDIUM'
-                                        ? 'bg-yellow-100 text-yellow-800 border-0'
-                                        : 'bg-blue-100 text-blue-800 border-0'
-                                    }
-                                  >
+                                  <StatusBadge status={ticket.status} />
+                                  <Badge className={`${getPriorityColor(ticket.priority)} border-none text-white text-[10px] h-5`}>
                                     {getPriorityLabel(ticket.priority)}
                                   </Badge>
-                                  <Badge
-                                    className={
-                                      ticket.status === 'NEW'
-                                        ? 'bg-blue-100 text-blue-800 border-0'
-                                        : ticket.status === 'IN_PROGRESS'
-                                        ? 'bg-yellow-100 text-yellow-800 border-0'
-                                        : ticket.status === 'PENDING'
-                                        ? 'bg-orange-100 text-orange-800 border-0'
-                                        : ticket.status === 'RESOLVED'
-                                        ? 'bg-green-100 text-green-800 border-0'
-                                        : 'bg-gray-100 text-gray-800 border-0'
-                                    }
-                                  >
-                                    {getStatusLabel(ticket.status)}
-                                  </Badge>
+                                  {ticket.salesforceId && (
+                                    <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 rounded uppercase font-semibold">
+                                      SF: {ticket.salesforceId}
+                                    </span>
+                                  )}
                                 </div>
-                                <p className="text-sm text-gray-600 line-clamp-1 mb-1">
+                                <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatThaiDate(ticket.createdAt)}
+                                </div>
+                              </div>
+
+                              {/* Middle Row: Content */}
+                              <div className="mb-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-slate-900 text-sm">
+                                    {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
+                                  </h3>
+                                  {ticket.department && (
+                                    <span className="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                      {getDepartmentLabel(ticket.department)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-500 line-clamp-1 leading-relaxed">
                                   {ticket.description}
                                 </p>
-                                {ticket.department && (
-                                  <p className="text-xs text-gray-500">
-                                    แผนก: {ticket.department}
-                                  </p>
-                                )}
+                              </div>
+
+                              {/* Bottom Row: Footer Stats */}
+                              <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                                <div className="flex items-center gap-4">
+                                  <div className={`flex items-center gap-1.5 text-[11px] ${hasUserUpdate ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    <span>{notesCount} บันทึก</span>
+                                    {hasUserUpdate && <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                                  </div>
+
+                                  {ticket.trackingNo && (
+                                    <div className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 rounded">
+                                      <Package className="h-3.5 w-3.5" />
+                                      <span className="font-mono line-clamp-1">{ticket.trackingNo}</span>
+                                    </div>
+                                  )}
+
+                                  {ticket.recipientName && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                      <User className="h-3.5 w-3.5" />
+                                      <span className="line-clamp-1">{ticket.recipientName}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="text-[11px] text-slate-500 italic flex-shrink-0 ml-2">
+                                  {ticket.createdBy || 'N/A'}
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
-                              <span>
-                                {new Date(ticket.createdAt).toLocaleDateString('th-TH', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
+                          </Link>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-gray-500">
@@ -351,45 +371,47 @@ export default function DashboardPage() {
               {recentActivities && recentActivities.length > 0 ? (
                 <div className="space-y-4">
                   {recentActivities.map((activity: any) => (
-                    <div key={activity.id} className="flex gap-3">
-                      <div className="flex-shrink-0">
-                        {activity.changedByLineAvatar ? (
-                          <Image
-                            src={activity.changedByLineAvatar}
-                            alt={activity.changedByLineName || activity.changedBy}
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-xs font-semibold text-blue-600">
-                              {activity.changedBy.charAt(0).toUpperCase()}
+                    <Link key={activity.id} href={`/tickets/${activity.ticketId}`} className="block hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-colors">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0">
+                          {activity.changedByLineAvatar ? (
+                            <Image
+                              src={activity.changedByLineAvatar}
+                              alt={activity.changedByLineName || activity.changedBy}
+                              width={32}
+                              height={32}
+                              className="w-8 h-8 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-xs font-semibold text-blue-600">
+                                {activity.changedBy.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900">
+                            <span className="font-medium">
+                              {activity.changedByLineName || activity.changedBy}
                             </span>
-                          </div>
-                        )}
+                            {' '}อัปเดต{' '}
+                            <span className="font-medium">{activity.ticketNo}</span>
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {getStatusLabel(activity.fromStatus)} → {getStatusLabel(activity.toStatus)}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(activity.createdAt).toLocaleDateString('th-TH', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">
-                          <span className="font-medium">
-                            {activity.changedByLineName || activity.changedBy}
-                          </span>
-                          {' '}อัปเดต{' '}
-                          <span className="font-medium">{activity.ticketNo}</span>
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {getStatusLabel(activity.fromStatus)} → {getStatusLabel(activity.toStatus)}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {new Date(activity.createdAt).toLocaleDateString('th-TH', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (

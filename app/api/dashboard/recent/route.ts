@@ -24,12 +24,23 @@ export async function GET() {
           id: true,
           ticketNo: true,
           issueType: true,
+          issueTypeOther: true,
           description: true,
           priority: true,
           status: true,
           department: true,
           createdAt: true,
           createdBy: true,
+          assignedTo: true,
+          recipientName: true,
+          trackingNo: true,
+          salesforceId: true,
+          notes: {
+            select: {
+              id: true,
+              isFromEndUser: true,
+            },
+          },
         },
       }),
       // Recent status changes

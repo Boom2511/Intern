@@ -53,22 +53,20 @@ function formatShortDate(date: Date): string {
 }
 
 /**
- * Generate LIFF URL for ticket
+ * Generate LIFF URL for any path
+ * @param path - The target path (e.g., "/liff/queue?department=DB1")
  */
-function getLiffUrl(ticketId: string): string {
+export function getLiffUrl(path: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
 
   if (!liffId) {
-    const fallbackUrl = `${baseUrl}/tickets/${ticketId}?mode=client`;
+    const fallbackUrl = `${baseUrl}${path}`;
     console.log('⚠️ LIFF ID not configured, using fallback URL:', fallbackUrl);
     return fallbackUrl;
   }
 
-  const targetPath = `/liff/tickets/${ticketId}`;
-  const liffUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(targetPath)}`;
-  console.log('✅ LIFF URL generated:', liffUrl);
-  console.log('   Target path:', targetPath);
+  const liffUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(path)}`;
   return liffUrl;
 }
 
@@ -249,7 +247,7 @@ export function createDepartmentWorkSnapshotMessage(
   const ticketBubbles = displayTickets.map((ticket) => {
     const priorityColor = getPriorityColor(ticket.priority);
     const isPriorityUrgent = ticket.priority === 'URGENT' || ticket.priority === 'HIGH';
-    const url = getLiffUrl(ticket.id);
+    const url = getLiffUrl(`/liff/tickets/${ticket.id}`);
 
     return {
       type: 'bubble',

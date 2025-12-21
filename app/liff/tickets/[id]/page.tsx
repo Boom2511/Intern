@@ -35,6 +35,23 @@ export default function LiffTicketDetailPage() {
   const ticketId = params.id as string;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Handle back navigation - go to queue if opened from Carousel
+  const handleBack = () => {
+    // Check if there's history (from queue page)
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      // No history - opened directly from Carousel
+      // Try to get department from ticket data to navigate to correct queue
+      if (ticket?.department) {
+        router.push(`/liff/queue?department=${ticket.department}`);
+      } else {
+        // Fallback to generic queue page
+        router.push('/liff/queue');
+      }
+    }
+  };
+
   const [showHistory, setShowHistory] = useState(false);
   const [showViewHistory, setShowViewHistory] = useState(false);
   const [actionNote, setActionNote] = useState('');
@@ -241,7 +258,7 @@ export default function LiffTicketDetailPage() {
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={handleBack}
           className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
           aria-label="ย้อนกลับ"
         >

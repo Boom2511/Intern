@@ -13,7 +13,7 @@ import { generateTicketNumber } from '@/lib/utils';
 import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
 import { getSLAHours, getSLAPriority } from '@/config/issue-types';
 import { lineService } from '@/lib/line';
-import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
+import { createDepartmentWorkSnapshotMessage, getLiffUrl } from '@/lib/line-templates';
 import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -213,11 +213,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate ticket number with transaction + retry to handle race conditions
-    // Strategy: Use findFirst + orderBy to get latest ticket instead of COUNT
-    // This is more reliable because it reads actual committed data
+    // Strategy: Use PostgreSQL Advisory Lock + findFirst to prevent duplicates
+    // Advisory lock ensures sequential access, retries only for network errors
     let ticket;
     let retryCount = 0;
-    const maxRetries = 5;
+    const maxRetries = 2; // Reduced from 5 - advisory lock prevents race conditions
 
     while (retryCount < maxRetries) {
       try {
@@ -241,13 +241,8 @@ export async function POST(request: NextRequest) {
           // Lock key: Hash of today's date (YYYYMMDD) to ensure daily uniqueness
           const lockKey = parseInt(thailandDateStr.replace(/-/g, '')); // YYYYMMDD
 
-          console.log(`[Ticket Creation] Thailand date: ${thailandDateStr}, Lock key: ${lockKey}`);
-          console.log(`[Ticket Creation] Attempting to acquire lock...`);
-
           // Acquire advisory lock - other transactions will WAIT here
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
-
-          console.log(`[Ticket Creation] Lock acquired! Finding latest ticket for ${thailandDateStr}...`);
 
           // Now we have exclusive access - find latest ticket created today (Thailand time)
           const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
@@ -257,8 +252,6 @@ export async function POST(request: NextRequest) {
             ORDER BY "createdAt" DESC
             LIMIT 1
           `;
-
-          console.log(`[Ticket Creation] Latest tickets found:`, latestTickets);
 
           // Extract sequence from latest ticketNo or start from 1
           let nextSequence = 1;
@@ -274,8 +267,6 @@ export async function POST(request: NextRequest) {
           }
 
           const ticketNo = generateTicketNumber(nextSequence, thailandDateStr);
-
-          console.log(`[Ticket Creation] Generated ticketNo: ${ticketNo} (sequence: ${nextSequence})`);
 
           // Get SLA hours and priority from config based on issue type
           const slaHours = getSLAHours(issueType);
@@ -329,10 +320,9 @@ export async function POST(request: NextRequest) {
             console.error('Failed to create ticket after max retries:', error);
             throw error;
           }
-          // Wait with exponential backoff + random jitter (50-400ms)
-          const delay = 50 + Math.random() * 100 * Math.pow(2, retryCount);
+          // Wait with exponential backoff (50-200ms) - only for network errors
+          const delay = 50 + Math.random() * 50 * Math.pow(2, retryCount);
           await new Promise(resolve => setTimeout(resolve, delay));
-          console.log(`Retrying ticket creation (attempt ${retryCount + 1}/${maxRetries})...`);
         } else {
           // Different error - throw immediately
           throw error;
@@ -392,8 +382,7 @@ export async function POST(request: NextRequest) {
           });
 
           // Build LIFF queue URL
-          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
-          const queueUrl = `${baseUrl}/liff/queue?department=${department}`;
+          const queueUrl = getLiffUrl(`/liff/queue?department=${department}`);
 
           // Create and send Department Work Snapshot
           const flexMessage = createDepartmentWorkSnapshotMessage({

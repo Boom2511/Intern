@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithCustomer } from '@/types';
 import { formatThaiDate, getPriorityColor, getPriorityLabel } from '@/lib/utils';
-import { Clock, User, MapPin, MessageSquare, Package } from 'lucide-react';
+import { Clock, MapPin, MessageSquare, Package, Ticket, User } from 'lucide-react';
 import { getDepartmentLabel } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
 
@@ -48,35 +48,21 @@ export default function TicketCard({ ticket }: TicketCardProps) {
           </div>
 
           {/* Middle Row: Content */}
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-4 mb-3">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-slate-900 text-sm">
-                  {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
-                </h3>
-                {/* Badge แผนก (ถ้ามี) */}
-                {ticket.department && (
-                  <span className="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                    {getDepartmentLabel(ticket.department)}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-slate-500 line-clamp-1 leading-relaxed">
-                {ticket.description}
-              </p>
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold text-slate-900 text-sm">
+                {ticket.issueType === 'OTHER' && ticket.issueTypeOther ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
+              </h3>
+              {/* Badge แผนก (ถ้ามี) */}
+              {ticket.department && (
+                <span className="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                  {getDepartmentLabel(ticket.department)}
+                </span>
+              )}
             </div>
-
-            {/* Customer & Recipient Info */}
-            <div className="text-[12px] text-slate-600 space-y-1 border-l pl-4 border-slate-100">
-              <div className="flex items-center gap-2">
-                <User className="h-3.5 w-3.5 text-blue-500" />
-                <span className="font-medium truncate">ลูกค้า: {ticket.customer.name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                <span className="truncate text-slate-500">ผู้รับ: {ticket.recipientName}</span>
-              </div>
-            </div>
+            <p className="text-sm text-slate-500 line-clamp-1 leading-relaxed">
+              {ticket.description}
+            </p>
           </div>
 
           {/* Bottom Row: Footer Stats */}
@@ -91,16 +77,21 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                 {ticket.trackingNo && (
                   <div className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 rounded">
                     <Package className="h-3.5 w-3.5" />
-                    <span className="font-mono">{ticket.trackingNo}</span>
+                    <span className="font-mono line-clamp-1">{ticket.trackingNo}</span>
+                  </div>
+                )}
+
+                {ticket.recipientName && (
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                    <User className="h-3.5 w-3.5" />
+                    <span className="line-clamp-1">{ticket.recipientName}</span>
                   </div>
                 )}
              </div>
 
-             {ticket.assignedTo && (
-               <div className="text-[11px] text-slate-500 italic">
-                 โดย: {ticket.assignedTo}
-               </div>
-             )}
+             <div className="text-[11px] text-slate-500 italic flex-shrink-0 ml-2">
+               {ticket.createdBy}
+             </div>
           </div>
         </CardContent>
       </Card>
