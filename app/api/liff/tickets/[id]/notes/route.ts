@@ -37,6 +37,9 @@ export async function POST(
       );
     }
 
+    // Ensure images is always an array (fix string mismatch bug)
+    const imageUrls = Array.isArray(images) ? images : (images ? [images] : []);
+
     // Create note with LINE user info
     const note = await prisma.note.create({
       data: {
@@ -44,7 +47,7 @@ export async function POST(
         content,
         createdBy: lineName || `LINE User ${lineUserId}`,
         isFromEndUser: true, // Mark as from end user (via LIFF)
-        images: images || [],
+        images: imageUrls,
         createdByLineUserId: lineUserId,
         createdByLineName: lineName || null,
         createdByLineAvatar: lineAvatar || null,

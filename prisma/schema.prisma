@@ -261,3 +261,63 @@ model LineGroup {
   @@index([department])
   @@index([isActive])
 }
+
+// Area - Store zone/area information
+model Area {
+  id            String         @id @default(cuid())
+  zoneId        String         @unique  // Zone ID (e.g., "Z001")
+  zoneName      String         // Zone Thai name
+  department    Department?    // Department (DB1-DB6)
+  description   String?        @db.Text
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  areaEmployees AreaEmployee[]
+
+  @@index([zoneId])
+  @@index([department])
+  @@index([isActive])
+}
+
+// Employee - Store employee information
+model Employee {
+  id            String         @id @default(cuid())
+  employeeId    String         @unique  // Employee ID from system
+  employeeName  String         // Full name
+  chiefOfficer  String?        // Chief Officer name (e.g., "นายวิเชียร สืบกาสี")
+  dbHead        String?        // DB Head name (e.g., "นายไพรวัล วิจิตร")
+  role          EmployeeRole   @default(EMS)  // Role level (REG, ZNE, EMS)
+  department    Department?    // Associated department
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  areaEmployees AreaEmployee[]
+
+  @@index([employeeId])
+  @@index([role])
+  @@index([department])
+  @@index([isActive])
+}
+
+// Employee Role enum - Hierarchy: REG > ZNE > EMS
+enum EmployeeRole {
+  REG  // Regional Head (DB HEAD) - Highest
+  ZNE  // Zone Chief Officer (CHIEF OFFICER) - Middle
+  EMS  // Employee (Staff) - Lowest
+}
+
+// AreaEmployee - Junction table for many-to-many relationship between Area and Employee
+model AreaEmployee {
+  id         String   @id @default(cuid())
+  areaId     String
+  area       Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([areaId, employeeId])  // Prevent duplicate assignments
+  @@index([areaId])
+  @@index([employeeId])
+}

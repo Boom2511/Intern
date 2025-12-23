@@ -11,11 +11,17 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/dashboard';
+  const reason = searchParams.get('reason');
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Show session expired message if redirected due to expired session
+  const sessionExpiredMessage = reason === 'expired'
+    ? 'เซสชันของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง'
+    : '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +39,16 @@ function LoginForm() {
 
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
+      }
+
+      // Clear old session storage to prevent cache issues
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.clear();
+          console.log('[Login] Cleared session storage');
+        } catch (e) {
+          console.warn('[Login] Failed to clear session storage:', e);
+        }
       }
 
       // Redirect to original destination or dashboard
@@ -62,6 +78,12 @@ function LoginForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {sessionExpiredMessage && !error && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded">
+              {sessionExpiredMessage}
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}

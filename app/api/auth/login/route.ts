@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, setSessionCookie } from '@/lib/auth';
+import { clearSessionVerification } from '@/lib/session-storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,7 +46,9 @@ export async function POST(request: NextRequest) {
     // Create session
     await setSessionCookie(user.id);
 
-    return NextResponse.json({
+    // Clear any old session verification markers
+    // Note: This is a server-side hint, actual clearing happens client-side
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -53,6 +56,11 @@ export async function POST(request: NextRequest) {
         role: user.role,
       }
     });
+
+    // Add header to signal client to clear old session data
+    response.headers.set('X-Session-Refreshed', 'true');
+
+    return response;
 
   } catch (error) {
     console.error('Login error:', error);

@@ -34,7 +34,14 @@
       "Bash(DATABASE_URL=\"postgresql://postgres.ffmofolnfzpcxsektpiw:sS0_ssOMN9QzGg4O60-a@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1\" npx prisma migrate dev:*)",
       "Bash(npx shadcn@latest add:*)",
       "Bash(taskkill:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(if exist \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\api\\\\import\\\\zone-employee\" rmdir /s /q \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\api\\\\import\\\\zone-employee\")",
+      "Bash(del /q \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\api\\\\import\\\\zone-employee\\\\route.ts\")",
+      "Bash(del /q \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\import\\\\zone-employee\\\\page.tsx\")",
+      "Bash(findstr:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(chcp 65001)"
     ],
     "deny": [],
     "ask": []

@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 
 const SESSION_COOKIE_NAME = 'session_token';
-const SESSION_EXPIRY_DAYS = 7;
+const SESSION_EXPIRY_DAYS = 1; // 24 hours token expiration
 
 export interface SessionUser {
   id: string;

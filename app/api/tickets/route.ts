@@ -407,6 +407,9 @@ export async function POST(request: NextRequest) {
           console.log('📋 Flex Message Preview:', JSON.stringify(flexMessage, null, 2).substring(0, 500));
 
           try {
+            console.log(`🚀 Attempting to send to: ${groupId}`);
+            console.log(`   Message text: 📋 มีงานใหม่ ${deptLabel}${groupName ? ` (${groupName})` : ''}`);
+
             const success = await lineService.sendFlexMessage(
               groupId,
               `📋 มีงานใหม่ ${deptLabel}${groupName ? ` (${groupName})` : ''}`,
