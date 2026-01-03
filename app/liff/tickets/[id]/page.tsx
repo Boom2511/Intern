@@ -180,7 +180,9 @@ export default function LiffTicketDetailPage() {
         }
 
         if (!uploadRes.ok) {
-          throw new Error(uploadData?.error || 'Failed to upload images');
+          const text = await uploadRes.text();
+          console.error('Upload failed:', text);
+          throw new Error('Upload failed');
         }
 
         imageUrls = uploadData.urls || [];
