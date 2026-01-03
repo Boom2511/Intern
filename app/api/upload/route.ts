@@ -10,13 +10,13 @@
  * - Supports multiple file uploads
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import sharp from 'sharp';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const bucketName = process.env.SUPABASE_BUCKET_NAME || 'ticket-images';
+const bucketName = process.env.SUPABASE_BUCKET_NAME || "ticket-images";
 
 // Create Supabase client with service role (bypasses RLS)
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -26,10 +26,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  */
 function isHEIC(file: File): boolean {
   return (
-    file.type === 'image/heic' ||
-    file.type === 'image/heif' ||
-    file.name.toLowerCase().endsWith('.heic') ||
-    file.name.toLowerCase().endsWith('.heif')
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    file.name.toLowerCase().endsWith(".heic") ||
+    file.name.toLowerCase().endsWith(".heif")
   );
 }
 
@@ -43,7 +43,7 @@ async function convertToWebP(file: File): Promise<Buffer> {
   // Sharp can handle HEIC/HEIF natively
   return await sharp(buffer)
     .resize(1920, 1920, {
-      fit: 'inside',
+      fit: "inside",
       withoutEnlargement: true,
     })
     .webp({ quality: 80 })
@@ -53,11 +53,11 @@ async function convertToWebP(file: File): Promise<Buffer> {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const images = formData.getAll('images') as File[];
+    const images = formData.getAll("images") as File[];
 
     if (!images || images.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No images provided' },
+        { success: false, error: "No images provided" },
         { status: 400 }
       );
     }
@@ -77,23 +77,39 @@ export async function POST(request: NextRequest) {
         const filename = `${timestamp}-${randomStr}.webp`;
         const filepath = `uploads/${filename}`;
 
-        console.log(`[Upload] Processing ${file.name} (${(originalSize / 1024).toFixed(2)} KB)${isHEICFile ? ' [HEIC - Server conversion]' : ''}`);
+        console.log(
+          `[Upload] Processing ${file.name} (${(originalSize / 1024).toFixed(
+            2
+          )} KB)${isHEICFile ? " [HEIC - Server conversion]" : ""}`
+        );
 
-        let buffer: Buffer;
         let wasConverted = false;
+        let buffer: Buffer;
+        let currentType = "image/webp";
 
         // Check if file needs server-side conversion
-        if (isHEICFile || file.type.startsWith('image/') && file.type !== 'image/webp') {
+        if (
+          isHEICFile ||
+          (file.type.startsWith("image/") && file.type !== "image/webp")
+        ) {
           // Convert to WebP on server (handles HEIC + any other formats)
           try {
             buffer = await convertToWebP(file);
             wasConverted = true;
-            console.log(`[Upload] ✅ Converted to WebP: ${file.name} (${(originalSize / 1024).toFixed(2)} KB → ${(buffer.length / 1024).toFixed(2)} KB)`);
+            console.log(
+              `[Upload] ✅ Converted to WebP: ${file.name} (${(
+                originalSize / 1024
+              ).toFixed(2)} KB → ${(buffer.length / 1024).toFixed(2)} KB)`
+            );
           } catch (conversionError: any) {
-            console.error(`[Upload] ⚠️ Conversion failed for ${file.name}, uploading original:`, conversionError.message);
+            console.error(
+              `[Upload] ⚠️ Conversion failed for ${file.name}, uploading original:`,
+              conversionError.message
+            );
             // Fallback to original file
             const arrayBuffer = await file.arrayBuffer();
             buffer = Buffer.from(arrayBuffer);
+            currentType = file.type;
           }
         } else {
           // Already WebP or not an image, use as-is
@@ -105,13 +121,12 @@ export async function POST(request: NextRequest) {
         const { data, error } = await supabase.storage
           .from(bucketName)
           .upload(filepath, buffer, {
-            contentType: 'image/webp',
-            cacheControl: '3600',
+            contentType: currentType,
             upsert: false,
           });
 
         if (error) {
-          console.error('[Upload] Supabase upload error:', error);
+          console.error("[Upload] Supabase upload error:", error);
           throw new Error(`Upload failed: ${error.message}`);
         }
 
@@ -120,12 +135,18 @@ export async function POST(request: NextRequest) {
           .from(bucketName)
           .getPublicUrl(filepath);
 
-        const savings = wasConverted ? ((originalSize - buffer.length) / originalSize * 100).toFixed(1) : '0';
-        console.log(`[Upload] ✅ Uploaded [${index + 1}/${images.length}] ${filename} (savings: ${savings}%)`);
+        const savings = wasConverted
+          ? (((originalSize - buffer.length) / originalSize) * 100).toFixed(1)
+          : "0";
+        console.log(
+          `[Upload] ✅ Uploaded [${index + 1}/${
+            images.length
+          }] ${filename} (savings: ${savings}%)`
+        );
 
         return urlData.publicUrl;
       } catch (err: any) {
-        console.error('[Upload] Failed to upload image:', err);
+        console.error("[Upload] Failed to upload image:", err);
         throw err;
       }
     });
@@ -139,10 +160,7 @@ export async function POST(request: NextRequest) {
       urls,
     });
   } catch (error: any) {
-    console.error('[Upload] Error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Upload failed' },
-      { status: 500 }
-    );
+    console.error("[Upload] Error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
