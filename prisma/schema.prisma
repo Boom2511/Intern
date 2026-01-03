@@ -262,62 +262,111 @@ model LineGroup {
   @@index([isActive])
 }
 
-// Area - Store zone/area information
-model Area {
-  id            String         @id @default(cuid())
-  zoneId        String         @unique  // Zone ID (e.g., "Z001")
-  zoneName      String         // Zone Thai name
-  department    Department?    // Department (DB1-DB6)
-  description   String?        @db.Text
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  areaEmployees AreaEmployee[]
-
-  @@index([zoneId])
-  @@index([department])
-  @@index([isActive])
+// Persistent cache for LINE quota to survive cold starts
+model LineQuotaCache {
+  key         String   @id // use a fixed key e.g., "default"
+  quota       Int
+  used        Int
+  remaining   Int
+  percentage  Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
-// Employee - Store employee information
-model Employee {
-  id            String         @id @default(cuid())
-  employeeId    String         @unique  // Employee ID from system
-  employeeName  String         // Full name
-  chiefOfficer  String?        // Chief Officer name (e.g., "นายวิเชียร สืบกาสี")
-  dbHead        String?        // DB Head name (e.g., "นายไพรวัล วิจิตร")
-  role          EmployeeRole   @default(EMS)  // Role level (REG, ZNE, EMS)
-  department    Department?    // Associated department
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+// Optional: Persist LINE API call metrics
+model LineApiLog {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now())
+  endpoint  String
+  status    Int
+  duration  Int
+  attempt   Int      @default(1)
+  isRetry   Boolean  @default(false)
+  errorType String?
 
-  areaEmployees AreaEmployee[]
+  @@index([timestamp])
+  @@index([endpoint])
+  @@index([status])
+}
+
+// Employee Role enum - Hierarchy: DB_HEAD > CHIEF > STAFF
+enum Role {
+  STAFF    // พนักงานทั่วไป (EMS)
+  CHIEF    // หัวหน้าโซน (ZNE)
+  DB_HEAD  // หัวหน้าแผนก (REG)
+}
+
+// Zone Source enum - Where the zone data came from
+enum ZoneSource {
+  TICKET  // From ticket creation
+  XLSX    // From Excel import
+  MANUAL  // Manually added
+}
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  employeeId String   @unique
+  name       String
+  department String?
+  role       Role     @default(STAFF)
+
+
+  managerId   Int?
+  manager     Employee?  @relation("EmployeeHierarchy", fields: [managerId], references: [id])
+  subordinates Employee[] @relation("EmployeeHierarchy")
+
+  createdAt  DateTime @default(now())
+
+  zones           ZoneEmployee[]
+  chiefOfZones    ZoneEmployee[] @relation("EmployeeChief")
 
   @@index([employeeId])
   @@index([role])
   @@index([department])
-  @@index([isActive])
+  @@index([managerId])
 }
 
-// Employee Role enum - Hierarchy: REG > ZNE > EMS
-enum EmployeeRole {
-  REG  // Regional Head (DB HEAD) - Highest
-  ZNE  // Zone Chief Officer (CHIEF OFFICER) - Middle
-  EMS  // Employee (Staff) - Lowest
+// Zone - Store zone/area information
+model Zone {
+  id        Int        @id @default(autoincrement())
+  zoneId    String     @unique  // Zone ID (e.g., "REG10260EVD0001", "ZNE10260EVD1001")
+  zoneName  String?    // Zone Thai name
+  isMapped  Boolean    @default(false)  // Whether zone has been mapped to employees
+  source    ZoneSource @default(TICKET) // Where this zone came from
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  employees ZoneEmployee[]
+
+  @@index([zoneId])
+  @@index([isMapped])
 }
 
-// AreaEmployee - Junction table for many-to-many relationship between Area and Employee
-model AreaEmployee {
-  id         String   @id @default(cuid())
-  areaId     String
-  area       Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
-  employeeId String
+// ZoneEmployee - Junction table for many-to-many relationship between Zone and Employee
+model ZoneEmployee {
+  id         Int      @id @default(autoincrement())
+  zoneId     Int
+  employeeId Int
+  chiefOfficerId Int?  // Optional: CHIEF OFFICER who manages this employee in this zone
+
+  zone       Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  assignedAt DateTime @default(now())
+  chiefOfficer Employee? @relation("EmployeeChief", fields: [chiefOfficerId], references: [id], onDelete: SetNull)
 
-  @@unique([areaId, employeeId])  // Prevent duplicate assignments
-  @@index([areaId])
+  @@unique([zoneId, employeeId])
+  @@index([zoneId])
   @@index([employeeId])
+  @@index([chiefOfficerId])
+}
+
+// ZoneImportLog - Track Excel import history for zone-employee assignments
+model ZoneImportLog {
+  id         Int      @id @default(autoincrement())
+  filename   String
+  importedBy String   // User who imported the file
+  importedAt DateTime @default(now())
+  rowCount   Int      // Number of rows imported
+  status     String   @default("SUCCESS") // SUCCESS | FAILED
+
+  @@index([importedAt])
 }

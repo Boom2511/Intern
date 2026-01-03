@@ -4,10 +4,9 @@
 
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithCustomer } from '@/types';
-import { formatThaiDate, getPriorityColor, getPriorityLabel } from '@/lib/utils';
+import { formatThaiDate } from '@/lib/utils';
 import { Clock, MapPin, MessageSquare, Package, Ticket, User } from 'lucide-react';
 import { getDepartmentLabel } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
@@ -31,9 +30,6 @@ export default function TicketCard({ ticket }: TicketCardProps) {
                 {ticket.ticketNo}
               </span>
               <StatusBadge status={ticket.status} />
-              <Badge className={`${getPriorityColor(ticket.priority)} border-none text-white text-[10px] h-5`}>
-                {getPriorityLabel(ticket.priority)}
-              </Badge>
               {/* แสดง Salesforce ID ถ้ามี */}
               {ticket.salesforceId && (
                 <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 rounded uppercase font-semibold">

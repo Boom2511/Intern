@@ -17,7 +17,7 @@ import { useDashboardDepartments } from '@/hooks/useDashboardDepartments';
 import { useDashboardRecent } from '@/hooks/useDashboardRecent';
 import { useDashboardMyStats } from '@/hooks/useDashboardMyStats';
 import { useEffect, useState } from 'react';
-import { getStatusLabel, getPriorityLabel, getPriorityColor, formatThaiDate } from '@/lib/utils';
+import { getStatusLabel, formatThaiDate } from '@/lib/utils';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { getDepartmentLabel } from '@/config/departments';
 import StatusBadge from '@/components/tickets/StatusBadge';
@@ -287,9 +287,6 @@ export default function DashboardPage() {
                                     {ticket.ticketNo}
                                   </span>
                                   <StatusBadge status={ticket.status} />
-                                  <Badge className={`${getPriorityColor(ticket.priority)} border-none text-white text-[10px] h-5`}>
-                                    {getPriorityLabel(ticket.priority)}
-                                  </Badge>
                                   {ticket.salesforceId && (
                                     <span className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 px-1.5 rounded uppercase font-semibold">
                                       SF: {ticket.salesforceId}

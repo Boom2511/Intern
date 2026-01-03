@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getIssueTypeOptions } from '@/config/issue-types';
-import { getDepartmentOptions } from '@/config/departments';
+import { getDepartmentOptions, DEPARTMENTS } from '@/config/departments';
 import { CircleAlert, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
@@ -56,6 +56,33 @@ interface ExistingTicket {
   createdAt: string;
 }
 
+interface ZoneEmployeeInfo {
+  zoneName: string | null;
+  department: string | null;
+  employees: Array<{
+    name: string;
+    employeeId: string;
+    role: "STAFF" | "CHIEF" | "DB_HEAD";
+    department: string | null;
+    chiefOfficer?: {
+      name: string;
+      employeeId: string;
+      zones: Array<{ zoneName: string }>;
+    } | null;
+
+  }>;
+  chiefOfficer: {
+    name: string;
+    employeeId: string;
+    zoneName: string;
+
+  } | null;
+  dbHead: {
+    name: string;
+    employeeId: string;
+  } | null;
+}
+
 export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -66,6 +93,8 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [checkingTracking, setCheckingTracking] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null);
+  const [zoneEmployees, setZoneEmployees] = useState<ZoneEmployeeInfo | null>(null);
+  const [loadingZone, setLoadingZone] = useState(false);
   const [formData, setFormData] = useState<TicketFormData>({
     customerName: '',
     customerPhone: '',
@@ -79,6 +108,19 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
   const issueTypeOptions = getIssueTypeOptions();
   const allDepartmentOptions = getDepartmentOptions();
+
+  // Helper function to convert department label (นำจ่ายรถยนต์) to code (DB5)
+  const getDepartmentCode = (deptLabel: string | null | undefined): string | null => {
+    if (!deptLabel) return null;
+    // Find the code by matching label
+    for (const [code, config] of Object.entries(DEPARTMENTS)) {
+      if (config.label === deptLabel) {
+        return code;
+      }
+    }
+    // If not found, return as-is (might already be a code)
+    return deptLabel;
+  };
 
   // Load current user to check permissions
   useEffect(() => {
@@ -100,6 +142,95 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const departmentOptions = currentUser?.role === 'ADMINISTRATOR'
     ? allDepartmentOptions
     : allDepartmentOptions.filter(option => option.value !== 'TEST');
+
+  // Load employees when Zone ID is entered
+  useEffect(() => {
+    const loadZoneEmployees = async () => {
+      if (!formData.zoneId?.trim() || formData.zoneId.length < 3) {
+        setZoneEmployees(null);
+        return;
+      }
+
+      setLoadingZone(true);
+      try {
+        const zoneIdInput = formData.zoneId.trim();
+
+        const response = await fetch(`/api/zones?search=${encodeURIComponent(zoneIdInput)}`);
+        if (response.ok) {
+          const data = await response.json();
+
+
+          if (data.success && data.zones && data.zones.length > 0) {
+            // Find exact match for the zone ID
+            const zone = data.zones.find((z: any) => z.zoneId === zoneIdInput);
+
+            if (zone) {
+              // Get department from zone.chiefOfficer or zone.dbHead or employees
+              let zoneDept = zone.employees?.[0]?.department;
+              if (!zoneDept && zone.chiefOfficer?.department) {
+                zoneDept = zone.chiefOfficer.department;
+              }
+              if (!zoneDept && zone.dbHead?.department) {
+                zoneDept = zone.dbHead.department;
+              }
+
+              const zoneData: ZoneEmployeeInfo = {
+                zoneName: zone.zoneName || null,
+                department: zoneDept || null,
+                employees: (zone.employees || []).map((emp: any) => ({
+                  name: emp.name,
+                  employeeId: emp.employeeId,
+                  role: emp.role,
+                  department: emp.department,
+                  chiefOfficer: emp.chiefOfficer,
+                })),
+                chiefOfficer: zone.chiefOfficer
+                  ? {
+                    name: zone.chiefOfficer.name,
+                    employeeId: zone.chiefOfficer.employeeId,
+                    zoneName: zone.zoneName,
+                  }
+                  : null,
+                dbHead: zone.dbHead
+                  ? {
+                    name: zone.dbHead.name,
+                    employeeId: zone.dbHead.employeeId,
+                  }
+                  : null,
+              };
+
+              setZoneEmployees(zoneData);
+
+              // Auto-fill department if found
+              if (zoneData.department && !formData.department) {
+
+                const deptCode = getDepartmentCode(zoneData.department);
+                setFormData(prev => ({
+                  ...prev,
+                  department: deptCode || undefined,
+                }));
+
+              }
+
+            } else {
+              setZoneEmployees(null);
+            }
+          } else {
+            setZoneEmployees(null);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load zone employees:', error);
+        setZoneEmployees(null);
+      } finally {
+        setLoadingZone(false);
+      }
+    };
+
+    // Debounce the API call
+    const timer = setTimeout(loadZoneEmployees, 500);
+    return () => clearTimeout(timer);
+  }, [formData.zoneId]);
 
   // Real-time field validation on blur
   const validateField = (field: string, value: any) => {
@@ -256,6 +387,13 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       const data = await response.json();
 
       if (data.success) {
+        // Show zone status message if applicable
+        if (data.zoneStatus === 'NEW_ZONE') {
+          console.log('พบ Zone ใหม่ - ระบบบันทึกไว้แล้ว รอการ map:', formData.zoneId);
+        } else if (data.zoneStatus === 'UNMAPPED') {
+          console.log('Zone ยังไม่ได้ถูก map กับพนักงาน:', formData.zoneId);
+        }
+
         // Invalidate tickets list and dashboard cache to show new ticket
         invalidateTicketsList();
         invalidateDashboardStats();
@@ -440,14 +578,127 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-              Zone ID
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Zone ID
               </label>
-              <Input
-                value={formData.zoneId || ''}
-                onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
-                placeholder=""
-              />
+              <div className="relative">
+                <Input
+                  value={formData.zoneId || ''}
+                  onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
+                  placeholder="เช่น REG10260EVD0001"
+                  className="pr-10"
+                />
+                {loadingZone && (
+                  <div className="absolute right-3 top-2.5">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Loading State Text */}
+              {loadingZone && (
+                <p className="text-xs text-blue-600 mt-2 flex items-center animate-pulse">
+                  กำลังดึงข้อมูลโซน...
+                </p>
+              )}
+
+              {/* Zone Details Card */}
+              {!loadingZone && zoneEmployees && (
+                <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Zone Members Information</p>
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      Found {zoneEmployees.employees.length} Results
+                    </span>
+                  </div>
+
+                  {zoneEmployees.employees.map((emp) => {
+                    const isStaff = emp.role === "STAFF";
+                    const isChief = emp.role === "CHIEF";
+                    const isDbHead = emp.role === "DB_HEAD";
+
+                    const staffZone = zoneEmployees.zoneName;
+
+                    return (
+                      <div
+                        key={emp.employeeId}
+                        className="group relative bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
+                      >
+                        {/* Accent Bar ตาม Role */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isStaff ? "bg-blue-500" : isChief ? "bg-amber-500" : "bg-purple-600"
+                          }`} />
+
+                        <div className="p-4 sm:p-5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${isStaff
+                                        ? "bg-blue-50 text-blue-600 border-blue-100"
+                                        : isChief
+                                          ? "bg-amber-50 text-amber-600 border-amber-100"
+                                          : "bg-purple-50 text-purple-600 border-purple-100"
+                                      }`}
+                                  >
+                                    {staffZone || "N/A"}
+                                  </span>
+
+                                  <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight">
+                                    {emp.name}
+                                  </h3>
+
+                                  <span className="text-xs text-gray-400 font-mono">
+                                    #{emp.employeeId}
+                                  </span>
+                                </div>
+                                <span className="text-sm text-gray-500 mt-1">{emp.department || "ไม่ระบุแผนก"}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Hierarchy Visualization */}
+                          <div className="space-y-3">
+                            {isStaff && emp.chiefOfficer && (
+                              <div className="relative pl-6 py-1">
+
+                                <div className="absolute left-[7px] top-[-10px] bottom-4 w-[2px] bg-blue-100" />
+                                <div className="absolute left-[7px] bottom-4 w-4 h-[2px] bg-blue-100" />
+
+                                <div className="flex items-center gap-2">
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Chief Officer</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-600 border-amber-100">
+                                        {emp.chiefOfficer.zones?.[0]?.zoneName || "N/A"}
+                                      </span>
+                                      <span className="font-semibold text-sm text-gray-900">{emp.chiefOfficer.name}</span>
+                                      <span className="text-xs text-gray-400 font-mono">#{emp.chiefOfficer.employeeId}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {!isDbHead && zoneEmployees.dbHead && (
+                              <div className="mt-2 pt-3 border-t border-gray-50 pl-6 relative">
+
+                                {isStaff && <div className="absolute left-[7px] top-0 bottom-4 w-[2px] bg-blue-100/50" />}
+                                <div className="absolute left-[7px] bottom-4 w-4 h-[2px] bg-purple-100" />
+
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-purple-500 uppercase tracking-wide">Division Leader</span>
+                                  <span className="text-base font-semibold text-gray-700">{zoneEmployees.dbHead.name}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -598,11 +849,10 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               onBlur={(e) => validateField('recipientAddress', e.target.value)}
               placeholder="กรอกที่อยู่ผู้รับพัสดุ"
               rows={3}
-              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${
-                fieldErrors.recipientAddress
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
+              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${fieldErrors.recipientAddress
+                ? 'border-red-500 focus:ring-red-500'
+                : 'border-gray-300 focus:ring-blue-500'
+                }`}
             />
             {fieldErrors.recipientAddress && (
               <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
@@ -631,11 +881,10 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               onBlur={(e) => validateField('description', e.target.value)}
               placeholder="อธิบายรายละเอียดปัญหาหรือคำถาม"
               rows={5}
-              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${
-                fieldErrors.description
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
+              className={`flex w-full rounded-md border bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${fieldErrors.description
+                ? 'border-red-500 focus:ring-red-500'
+                : 'border-gray-300 focus:ring-blue-500'
+                }`}
             />
             {fieldErrors.description && (
               <p className="text-xs text-red-600 mt-1 flex items-center gap-1">

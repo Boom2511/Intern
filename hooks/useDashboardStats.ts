@@ -5,8 +5,6 @@
 
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
-
 export interface UseDashboardStatsOptions {
   refreshInterval?: number;
 }
@@ -16,7 +14,6 @@ export function useDashboardStats(options: UseDashboardStatsOptions = {}) {
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     '/api/dashboard/stats',
-    fetcher,
     {
       refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true,

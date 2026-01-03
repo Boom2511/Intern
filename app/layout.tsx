@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { UserProvider } from '@/providers/UserProvider';
 import { getCurrentUser } from '@/lib/auth';
 import { Suspense } from 'react';
+import SWRBoundary from '@/providers/SWRBoundary';
 
 export const metadata: Metadata = {
   title: 'PostServe - Help Desk System',
@@ -32,8 +33,8 @@ export default async function RootLayout({
           <Suspense fallback={null}>
             <ConditionalNavbar />
           </Suspense>
-          <main className="container mx-auto px-4 py-8">
-            {children}
+          <main className="container mx-auto px-4 pt-24 pb-8">
+            <SWRBoundary>{children}</SWRBoundary>
           </main>
           <Toaster />
         </UserProvider>

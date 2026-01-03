@@ -4,8 +4,8 @@
  * Uses SWR for caching and automatic revalidation
  */
 
-import { useCallback } from 'react';
-import useSWR, { mutate } from 'swr';
+import { useCallback, useEffect } from 'react';
+import useSWR from 'swr';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 
 export interface LineProfile {
@@ -66,32 +66,36 @@ interface TicketDetailData {
   views: TicketView[];
 }
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  const result = await res.json();
-
-  if (!res.ok || !result.success) {
-    throw new Error(result.error || 'ไม่สามารถโหลดข้อมูลได้');
-  }
-
-  return result.data;
-};
 
 export function useTicketDetail(ticketId: string) {
   // Use SWR for automatic caching and revalidation
-  const { data, error, isLoading, mutate: mutateTicket } = useSWR<TicketDetailData>(
+  const { data: resp, error, isLoading, mutate: mutateTicket } = useSWR<{ success: boolean; data: TicketDetailData }>(
     `/api/liff/tickets/${ticketId}`,
-    fetcher,
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      dedupingInterval: 2000, // Prevent duplicate requests within 2s
+      revalidateIfStale: true,
+      keepPreviousData: true,
+      dedupingInterval: 2000,
     }
   );
 
   // Load ticket function for manual refresh
   const loadTicket = useCallback(async () => {
     await mutateTicket();
+  }, [mutateTicket]);
+
+  // Revalidate when the webview/tab becomes visible again
+  useEffect(() => {
+    const onVis = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        mutateTicket();
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVis);
+      return () => document.removeEventListener('visibilitychange', onVis);
+    }
   }, [mutateTicket]);
 
   // Separate function: Record view (fire-and-forget, non-blocking)
@@ -190,12 +194,12 @@ export function useTicketDetail(ticketId: string) {
   }, [mutateTicket]);
 
   return {
-    ticket: data?.ticket || null,
-    notes: data?.notes || [],
-    statusHistory: data?.statusHistory || [],
-    views: data?.views || [],
+    ticket: resp?.data?.ticket || null,
+    notes: resp?.data?.notes || [],
+    statusHistory: resp?.data?.statusHistory || [],
+    views: resp?.data?.views || [],
     loading: isLoading,
-    error: error?.message || null,
+    error: (error as any)?.message || null,
     loadTicket,
     recordView,
     autoUpdateStatus,

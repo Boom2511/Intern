@@ -41,7 +41,9 @@
       "Bash(findstr:*)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(chcp 65001)"
+      "Bash(chcp 65001)",
+      "Bash(del /q \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\api\\\\areas\\\\[zoneId]\\\\employees\\\\route.ts\")",
+      "Bash(del /q \"c:\\\\Users\\\\Admin\\\\Downloads\\\\Intern\\\\app\\\\api\\\\import\\\\area-employee\\\\route.ts\")"
     ],
     "deny": [],
     "ask": []

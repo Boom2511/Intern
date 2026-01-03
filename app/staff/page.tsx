@@ -31,7 +31,7 @@ export default function StaffPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
-  const [lineQuota, setLineQuota] = useState<{ used: number; quota: number; percentage: number } | null>(null);
+  const [lastOnlineRefresh, setLastOnlineRefresh] = useState<Date | null>(null);
 
   const [formData, setFormData] = useState({
     username: '',
@@ -56,16 +56,14 @@ export default function StaffPage() {
     // Load initial data
     loadUsers();
     loadOnlineStatus();
-    loadLineQuota();
+
 
     // Poll online status every 30 seconds
     const onlineInterval = setInterval(loadOnlineStatus, 30000);
-    // Poll LINE quota every 60 seconds
-    const quotaInterval = setInterval(loadLineQuota, 60000);
+
 
     return () => {
       clearInterval(onlineInterval);
-      clearInterval(quotaInterval);
     };
   }, [currentUser, router]);
 
@@ -90,31 +88,18 @@ export default function StaffPage() {
 
   const loadOnlineStatus = async () => {
     try {
-      const response = await fetch('/api/users/online-status');
+      const response = await fetch('/api/users/online-status', { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
         setOnlineUserIds(data.onlineUserIds || []);
+        setLastOnlineRefresh(new Date());
       }
     } catch (error) {
       console.error('Failed to load online status:', error);
     }
   };
 
-  const loadLineQuota = async () => {
-    try {
-      const response = await fetch('/api/line/quota');
-      if (response.ok) {
-        const data = await response.json();
-        setLineQuota({
-          used: data.used,
-          quota: data.quota,
-          percentage: data.percentage,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load LINE quota:', error);
-    }
-  };
+ 
 
   const validatePassword = (password: string): boolean => {
     if (password.length < 8) {
@@ -295,43 +280,10 @@ export default function StaffPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
-      {/* LINE API Quota Bar */}
-      {lineQuota && (
-        <Card className="mb-6">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-sm">LINE API Quota</h3>
-                  <p className="text-xs text-gray-500">{lineQuota.used} / {lineQuota.quota} messages</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">{lineQuota.used}/{lineQuota.quota}</div>
-                <div className="text-xs text-gray-500">{lineQuota.percentage}% ใช้ไปแล้ว</div>
-              </div>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 rounded-full ${lineQuota.percentage >= 90 ? 'bg-red-500' :
-                    lineQuota.percentage >= 70 ? 'bg-yellow-500' :
-                      'bg-green-500'
-                  }`}
-                style={{ width: `${Math.min(lineQuota.percentage, 100)}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+      
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')}>
+          <Button variant="ghost" size="sm" onClick={() => router.push('/settings')}>
             <ArrowLeft className="h-4 w-4 mr-1" />
             กลับ
           </Button>
@@ -443,6 +395,17 @@ export default function StaffPage() {
           <CardTitle>รายชื่อผู้ใช้ทั้งหมด</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center justify-between mb-3 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <div>
+              ออนไลน์ {onlineUserIds.length} / {users.length} คน
+              {lastOnlineRefresh && (
+                <span className="ml-2 text-xs text-gray-400">อัปเดตล่าสุด {lastOnlineRefresh.toLocaleTimeString()}</span>
+              )}
+            </div>
+          </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">

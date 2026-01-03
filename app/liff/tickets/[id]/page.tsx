@@ -9,8 +9,9 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, CircleCheckBig, Truck } from 'lucide-react';
-import VConsole from '@/components/VConsole';
+import { Clock, Phone, MapPin, FileText, ChevronLeft, MoreVertical, User, Users, Package, Image as ImageIcon, CircleCheckBig, Truck, Copy as CopyIcon } from 'lucide-react';
+import dynamic from 'next/dynamic';
+const DevVConsole = dynamic(() => import('@/components/VConsole'), { ssr: false });
 import TicketSkeleton from '@/components/liff/TicketSkeleton';
 import { useLiff } from '@/hooks/useLiff';
 import { useTicketDetail } from '@/hooks/useTicketDetail';
@@ -18,6 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import type { IssueType } from '@prisma/client';
 import { invalidateTicketsList } from '@/lib/swr-utils';
+import { formatThaiPhone } from '@/lib/utils';
 
 // Dynamic imports for heavy components and utilities
 const StatusHistory = lazy(() => import('@/components/liff/StatusHistory'));
@@ -223,7 +225,7 @@ export default function LiffTicketDetailPage() {
   if (loading && !ticket) {
     return (
       <>
-        <VConsole />
+        {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
         <TicketSkeleton />
       </>
     );
@@ -233,7 +235,7 @@ export default function LiffTicketDetailPage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <VConsole />
+        {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
         <div className="bg-white rounded-lg shadow-sm p-6 max-w-md w-full border border-red-200">
           <p className="text-red-600 text-sm">{error}</p>
         </div>
@@ -245,7 +247,7 @@ export default function LiffTicketDetailPage() {
   if (!ticket) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <VConsole />
+        {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
         <p className="text-gray-500 text-sm">ไม่พบข้อมูล Ticket</p>
       </div>
     );
@@ -256,7 +258,7 @@ export default function LiffTicketDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <VConsole />
+      {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
 
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
@@ -345,7 +347,24 @@ export default function LiffTicketDetailPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-gray-500 mb-0.5">หมายเลขติดตามพัสดุ</p>
-                  <p className="text-sm font-medium text-gray-800">{ticket.trackingNo}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-800">{ticket.trackingNo}</p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(ticket.trackingNo!);
+                          toast({ variant: 'success', title: 'คัดลอกแล้ว', description: 'คัดลอกหมายเลขติดตามเรียบร้อย' });
+                        } catch (e) {
+                          toast({ variant: 'error', title: 'คัดลอกไม่สำเร็จ', description: 'อุปกรณ์ไม่รองรับการคัดลอกอัตโนมัติ' });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                      aria-label="คัดลอกหมายเลขติดตาม"
+                    >
+                      <CopyIcon size={14} /> คัดลอก
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -366,7 +385,12 @@ export default function LiffTicketDetailPage() {
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-500 mb-0.5">เบอร์โทรศัพท์</p>
-                <p className="text-sm font-medium text-gray-800">{ticket.recipientPhone}</p>
+                <a
+                  href={`tel:${(ticket.recipientPhone || '').replace(/[-\s]/g, '')}`}
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  {formatThaiPhone(ticket.recipientPhone || '')}
+                </a>
               </div>
             </div>
 

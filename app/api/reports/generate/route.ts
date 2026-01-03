@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
+import { getStatusLabel } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,14 +17,13 @@ interface ReportFilters {
   reportType: 'daily' | 'monthly';
   startDate: string;
   endDate?: string;
-  department?: string;
   sourceSystem?: 'ALL' | 'CEC' | 'SALESFORCE';
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { reportType, startDate, endDate, department, sourceSystem }: ReportFilters = body;
+    const { reportType, startDate, endDate, sourceSystem }: ReportFilters = body;
 
     // Build query filters
     const whereClause: any = {
@@ -32,12 +32,15 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    if (endDate) {
-      whereClause.createdAt.lte = new Date(endDate);
+    // For daily report, default endDate to end of the same day to include all statuses that day
+    if (reportType === 'daily' && !endDate) {
+      const end = new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      whereClause.createdAt.lte = end;
     }
 
-    if (department && department !== 'ALL') {
-      whereClause.department = department;
+    if (endDate) {
+      whereClause.createdAt.lte = new Date(endDate);
     }
 
     if (sourceSystem && sourceSystem !== 'ALL') {
@@ -49,8 +52,8 @@ export async function POST(request: NextRequest) {
       where: whereClause,
       include: {
         customer: true,
-        notes: {
-          where: { isFromEndUser: true },
+        statusHistory: {
+          where: { toStatus: 'CLOSED' },
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
@@ -133,8 +136,47 @@ export async function POST(request: NextRequest) {
       { width: 30 }, // แนวทางแก้ไข
     ];
 
+    // Build a zone map to fill ผู้ควบคุม/หัวหน้า DB if zoneId exists
+    const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
+    const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
+      where: { zoneId: { in: zoneIds } },
+      include: {
+        employees: {
+          include: {
+            employee: { include: { manager: true } },
+            chiefOfficer: { include: { manager: { include: { manager: true } } } },
+          },
+        },
+      },
+    }) : [];
+    const zoneMap = new Map<string, { chief?: string; dbHead?: string }>();
+    for (const z of zones) {
+      const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
+      const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
+      const chief = chiefEmp?.name;
+      let dbHead = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee?.name || null;
+      if (!dbHead && chiefEmp) {
+        // Fallback: if DB_HEAD not directly assigned to zone, try manager chain from chief
+        let current: any = (chiefEmp as any).manager || null;
+        const visited = new Set<number>();
+        while (current && !visited.has(current.id)) {
+          visited.add(current.id);
+          if (current.role === 'DB_HEAD') { dbHead = current.name; break; }
+          current = current.manager || null;
+        }
+      }
+      zoneMap.set(z.zoneId, { chief: chief || undefined, dbHead: dbHead || undefined });
+    }
+
     // Data rows
     tickets.forEach((ticket, index) => {
+      const latestClosed = (ticket as any).statusHistory?.[0];
+      const note: string = latestClosed?.note || '';
+      const causeMatch = note.match(/สาเหตุ:\s*([\s\S]*?)(?:\n|$)/);
+      const solutionMatch = note.match(/แนวทางแก้ไข:\s*([\s\S]*?)(?:\n|$)/);
+      const cause = causeMatch ? causeMatch[1].trim() : '-';
+      const solution = solutionMatch ? solutionMatch[1].trim() : '-';
+
       const row = worksheet.addRow([
         index + 1,
         ticket.ticketNo,
@@ -145,12 +187,12 @@ export async function POST(request: NextRequest) {
         ticket.recipientAddress || '-',
         ticket.assignedTo || ticket.createdBy || '-',
         ticket.department || '-',
-        '', // ผู้ควบคุม (empty as per requirement)
-        '', // หัวหน้า DB (empty as per requirement)
-        ticket.description,
-        ticket.notes[0]?.content || '-', // Latest end-user response
-        ticket.description, // Root cause (using description)
-        ticket.notes[0]?.content || '-', // Action result
+        (ticket.zoneId && zoneMap.get(ticket.zoneId || '')?.chief) || '-', // ผู้ควบคุม = Chief
+        (ticket.zoneId && zoneMap.get(ticket.zoneId || '')?.dbHead) || '-', // หัวหน้า DB = DB_head
+        ticket.description, // ความต้องการลูกค้า
+        getStatusLabel(ticket.status), // ผลการดำเนินการ (แสดงภาษาไทย)
+        cause, // สาเหตุ from CEC input before close
+        solution, // แนวทางแก้ไข from CEC input before close
       ]);
 
       // Apply borders to all cells

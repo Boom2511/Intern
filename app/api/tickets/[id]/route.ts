@@ -83,6 +83,8 @@ export async function PATCH(
       changedByLineName,
       changedByLineAvatar,
       changedByStaffName, // For CEC staff updates
+      closeCause,
+      closeSolution,
       // Editable ticket fields
       trackingNo,
       issueType,
@@ -133,9 +135,15 @@ export async function PATCH(
         updateData.resolvedAt = new Date();
       }
 
-      // If status is CLOSED, set closedBy and closedAt
+      // If status is CLOSED, require cause and solution, set closedBy and closedAt
       if (status === 'CLOSED') {
-        updateData.closedBy = 'CEC Staff';
+        if (!closeCause || !closeSolution) {
+          return NextResponse.json(
+            { success: false, error: 'กรุณาระบุสาเหตุและแนวทางแก้ไขก่อนปิดงาน' },
+            { status: 400 }
+          );
+        }
+        updateData.closedBy = changedByStaffName || 'CEC Staff';
         updateData.closedAt = new Date();
       }
 
@@ -153,7 +161,7 @@ export async function PATCH(
           changedByLineUserId: changedByLineUserId || null,
           changedByLineName: changedByLineName || null,
           changedByLineAvatar: changedByLineAvatar || null,
-          note: null,
+          note: status === 'CLOSED' ? `สาเหตุ: ${closeCause || ''}\nแนวทางแก้ไข: ${closeSolution || ''}` : null,
         },
       });
 
@@ -201,7 +209,7 @@ export async function PATCH(
           const lineGroupData = await getOrCreateLineGroup(groupId, newDepartment);
           const groupName = lineGroupData?.groupName;
 
-          const flexMessage = createDepartmentWorkSnapshotMessage({
+          const flexMessage = await createDepartmentWorkSnapshotMessage({
             tickets: pendingTickets,
             department: newDepartment,
             departmentLabel: deptLabel,

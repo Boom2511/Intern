@@ -5,8 +5,6 @@
 
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
-
 export interface UseTicketsOptions {
   status?: string;
   priority?: string;
@@ -23,7 +21,6 @@ export interface UseTicketsOptions {
 export function useTickets(options: UseTicketsOptions = {}) {
   const {
     status,
-    priority,
     department,
     issueType,
     search,
@@ -37,7 +34,6 @@ export function useTickets(options: UseTicketsOptions = {}) {
   // Build URL with query params
   const params = new URLSearchParams();
   if (status && status !== 'all') params.append('status', status);
-  if (priority && priority !== 'all') params.append('priority', priority);
   if (department && department !== 'all') params.append('department', department);
   if (issueType && issueType !== 'all') params.append('issueType', issueType);
   if (search) params.append('search', search);
@@ -50,7 +46,6 @@ export function useTickets(options: UseTicketsOptions = {}) {
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     url,
-    fetcher,
     {
       refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true, // Refresh when user returns to tab

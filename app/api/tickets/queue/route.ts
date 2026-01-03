@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma, Department } from '@prisma/client';
+import { Prisma, Department, Role } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -74,13 +74,49 @@ export async function GET(request: NextRequest) {
         ticketsByZone[zoneKey].push(ticket);
       });
 
-      // Calculate stats for each zone
-      const zoneStats = Object.entries(ticketsByZone).map(([zone, zoneTickets]) => ({
-        zone,
-        total: zoneTickets.length,
-        urgent: zoneTickets.filter(t => t.priority === 'URGENT' || t.priority === 'HIGH').length,
-        tickets: zoneTickets,
-      }));
+      // Enrich with zone hierarchy and employee names
+      const zoneIds = Object.keys(ticketsByZone).filter((z) => z && z !== 'ไม่ระบุ Zone');
+
+      let zonesMeta: Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] } > = {};
+      if (zoneIds.length > 0) {
+        const zones = await prisma.zone.findMany({
+          where: { zoneId: { in: zoneIds } },
+          include: {
+            employees: {
+              include: {
+                employee: true,
+              },
+            },
+          },
+        });
+
+        zonesMeta = zones.reduce((acc, z) => {
+          const chief = z.employees.find((ze) => ze.employee.role === Role.CHIEF)?.employee;
+          const employeeNames = z.employees
+            .filter((ze) => ze.employee.role === Role.STAFF)
+            .map((ze) => ze.employee.name);
+          acc[z.zoneId] = {
+            zoneName: z.zoneName,
+            chiefName: chief?.name ?? null,
+            employeeNames,
+          };
+          return acc;
+        }, {} as Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] }>);
+      }
+
+      // Calculate stats for each zone, attaching meta
+      const zoneStats = Object.entries(ticketsByZone).map(([zone, zoneTickets]) => {
+        const meta = zonesMeta[zone] || { zoneName: null, chiefName: null, employeeNames: [] };
+        return {
+          zone,
+          zoneName: meta.zoneName,
+          chiefName: meta.chiefName,
+          employeeNames: meta.employeeNames,
+          total: zoneTickets.length,
+          urgent: zoneTickets.filter((t) => t.priority === 'URGENT' || t.priority === 'HIGH').length,
+          tickets: zoneTickets,
+        };
+      });
 
       return NextResponse.json({
         success: true,

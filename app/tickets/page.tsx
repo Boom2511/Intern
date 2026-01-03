@@ -24,7 +24,6 @@ function TicketsContent() {
 
   // Get all filter parameters
   const status = searchParams.get('status') || undefined;
-  const priority = searchParams.get('priority') || undefined;
   const department = searchParams.get('department') || undefined;
   const issueType = searchParams.get('issueType') || undefined;
   const search = searchParams.get('search') || undefined;
@@ -36,7 +35,6 @@ function TicketsContent() {
   // Use SWR hook without polling - updates on events only
   const { tickets, pagination, isLoading, isError, isValidating, mutate } = useTickets({
     status,
-    priority,
     department,
     issueType,
     search,

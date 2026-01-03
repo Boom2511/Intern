@@ -81,7 +81,7 @@ interface DepartmentWorkSnapshot {
   groupName?: string;
 }
 
-export function createDepartmentWorkSnapshotMessage(
+export async function createDepartmentWorkSnapshotMessage(
   snapshot: DepartmentWorkSnapshot
 ) {
   const { tickets, departmentLabel, queueUrl, groupName } = snapshot;
@@ -282,6 +282,14 @@ export function createDepartmentWorkSnapshotMessage(
   };
 
   // Individual ticket bubbles (only NEW status)
+  // Resolve zone leads (chief/dbHead) for displayed tickets
+  const zoneIds = Array.from(new Set(displayTickets.map(t => t.zoneId).filter(Boolean))) as string[];
+  let zoneLeadMap = new Map<string, { chief?: string; dbHead?: string }>();
+  if (zoneIds.length > 0) {
+    const { resolveZoneLeadsForZones } = await import('./zone-employee-query');
+    zoneLeadMap = await resolveZoneLeadsForZones(zoneIds);
+  }
+
   const ticketBubbles = displayTickets.map((ticket) => {
     const priorityColor = getPriorityColor(ticket.priority);
     const url = getLiffUrl(`/liff/tickets/${ticket.id}`);
@@ -294,40 +302,6 @@ export function createDepartmentWorkSnapshotMessage(
         layout: 'vertical',
         contents: [
           {
-            type: 'box',
-            layout: 'horizontal',
-            contents: [
-              {
-                type: 'box',
-                layout: 'vertical',
-                contents: [
-                  {
-                    type: 'text',
-                    text: ticket.zoneId ? `ZONE ${ticket.zoneId}` : departmentLabel,
-                    color: '#ffffff',
-                    size: 'sm',
-                    weight: 'bold',
-                  },
-                ],
-                backgroundColor: '#0369A1',
-                cornerRadius: 'sm',
-                paddingAll: '6px',
-                paddingStart: '10px',
-                paddingEnd: '10px',
-                flex: 0,
-              },
-              {
-                type: 'text',
-                text: ticket.ticketNo,
-                color: '#BAE6FD',
-                size: 'xs',
-                align: 'end',
-                gravity: 'center',
-                flex: 1,
-              },
-            ],
-          },
-          {
             type: 'text',
             text: ticket.issueType === 'OTHER' && ticket.issueTypeOther
               ? ticket.issueTypeOther
@@ -335,7 +309,14 @@ export function createDepartmentWorkSnapshotMessage(
             color: '#ffffff',
             size: 'md',
             weight: 'bold',
-            margin: 'md',
+          },
+          {
+            type: 'text',
+            text: ticket.description.substring(0, 120) + (ticket.description.length > 120 ? '...' : ''),
+            color: '#E0E7FF',
+            size: 'sm',
+            wrap: true,
+            margin: 'sm',
           },
         ],
         backgroundColor: '#0284C7',
@@ -347,11 +328,10 @@ export function createDepartmentWorkSnapshotMessage(
         contents: [
           {
             type: 'text',
-            text: ticket.description.substring(0, 100) + (ticket.description.length > 100 ? '...' : ''),
+            text: ticket.zoneId ? `${ticket.zoneId}` : departmentLabel,
             color: '#334155',
             size: 'sm',
-            wrap: true,
-            maxLines: 2,
+            weight: 'bold',
           },
           {
             type: 'box',
@@ -372,7 +352,14 @@ export function createDepartmentWorkSnapshotMessage(
                   },
                   {
                     type: 'text',
-                    text: ticket.recipientName ,
+                    text: (() => {
+                      const zId = ticket.zoneId as string | undefined;
+                      if (zId && zoneLeadMap.has(zId)) {
+                        const lead = zoneLeadMap.get(zId)!;
+                        return (lead.chief || lead.dbHead || '-');
+                      }
+                      return '-';
+                    })(),
                     size: 'xs',
                     color: '#1E293B',
                     weight: 'bold',
@@ -402,40 +389,10 @@ export function createDepartmentWorkSnapshotMessage(
                   },
                 ],
               }] : []),
-              {
-                type: 'box',
-                layout: 'horizontal',
-                contents: [
-                  {
-                    type: 'image',
-                    url: 'https://ffmofolnfzpcxsektpiw.supabase.co/storage/v1/object/public/icons/timer.png',
-                    size: '16px',
-                    flex: 0,
-                    margin: 'none',
-                  },
-                  {
-                    type: 'text',
-                    text: `Priority: ${getPriorityLabel(ticket.priority)} (SLA ${ticket.slaHours} ชม.)`,
-                    size: 'xs',
-                    color: priorityColor,
-                    weight: 'bold',
-                    margin: 'sm',
-                    flex: 1,
-                  },
-                ],
-              },
             ],
             backgroundColor: '#F8FAFC',
             paddingAll: '10px',
             cornerRadius: 'md',
-          },
-          {
-            type: 'text',
-            text: `ส่งเมื่อ: ${formatShortDate(ticket.createdAt)}`,
-            color: '#94A3B8',
-            size: 'xxs',
-            margin: 'md',
-            align: 'end',
           },
         ],
         paddingAll: '16px',

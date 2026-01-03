@@ -1,206 +1,378 @@
 /**
- * Zone Employee Import API
  * POST /api/import/zone-employee
+ * FINAL – Production Ready
  *
- * Upserts Zone, Employee, and ZoneEmployee data from XLSX file
- * Handles validation and error tracking per row
+ * - normalize
+ * - preview (soft warning)
+ * - validate (hard + soft)
+ * - import (zone / employee / mapping)
+ * - hierarchy backfill (memory + bulk transaction)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { Department } from '@prisma/client';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+import { Role, ZoneSource } from "@prisma/client";
+import { resolveManagerId } from "@/lib/employee-hierarchy";
+import * as XLSX from 'xlsx';
+
+/* =======================
+   Types
+======================= */
 
 interface ImportRow {
   zoneId: string;
   zoneName: string;
+  department?: string;
+
   employeeId: string;
   employeeName: string;
-  email?: string;
-  phone?: string;
-  position?: string;
-  department?: string;
+  role?: Role;
+
+  chiefOfficerId?: string;
+  dbHeadId?: string;
 }
 
-interface RowResult {
-  rowNumber: number;
-  success: boolean;
-  error?: string;
-  data?: {
-    zoneId: string;
-    zoneName: string;
-    employeeId: string;
-    employeeName: string;
-  };
-}
+/* =======================
+   GET (download latest template)
+======================= */
 
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
-    // Check authentication and permissions
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Only ADMINISTRATOR and ADMIN can import
-    if (user.role !== 'ADMINISTRATOR' && user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { success: false, error: 'Insufficient permissions' },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    const { rows } = body as { rows: ImportRow[] };
-
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No data provided' },
-        { status: 400 }
-      );
-    }
-
-    const results: RowResult[] = [];
-    let successCount = 0;
-    let errorCount = 0;
-
-    // Process each row
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNumber = i + 1;
-
-      try {
-        // Validate required fields
-        if (!row.zoneId?.trim()) {
-          throw new Error('Zone ID is required');
-        }
-        if (!row.zoneName?.trim()) {
-          throw new Error('Zone Name is required');
-        }
-        if (!row.employeeId?.trim()) {
-          throw new Error('Employee ID is required');
-        }
-        if (!row.employeeName?.trim()) {
-          throw new Error('Employee Name is required');
-        }
-
-        const zoneId = row.zoneId.trim();
-        const zoneName = row.zoneName.trim();
-        const employeeId = row.employeeId.trim();
-        const employeeName = row.employeeName.trim();
-
-        // Validate department if provided
-        let department: Department | null = null;
-        if (row.department?.trim()) {
-          const deptValue = row.department.trim().toUpperCase();
-          if (!Object.values(Department).includes(deptValue as Department)) {
-            throw new Error(`Invalid department: ${row.department}. Valid values: DB1, DB2, DB3, DB4, DB5, DB6, TEST`);
-          }
-          department = deptValue as Department;
-        }
-
-        // Use transaction to ensure data consistency
-        await prisma.$transaction(async (tx) => {
-          // 1. Upsert Zone
-          const zone = await tx.zone.upsert({
-            where: { zoneId },
-            update: {
-              zoneName,
-              updatedAt: new Date(),
-            },
-            create: {
-              zoneId,
-              zoneName,
-              isActive: true,
-            },
-          });
-
-          // 2. Upsert Employee
-          const employee = await tx.employee.upsert({
-            where: { employeeId },
-            update: {
-              employeeName,
-              email: row.email?.trim() || null,
-              phone: row.phone?.trim() || null,
-              position: row.position?.trim() || null,
-              department,
-              updatedAt: new Date(),
-            },
-            create: {
-              employeeId,
-              employeeName,
-              email: row.email?.trim() || null,
-              phone: row.phone?.trim() || null,
-              position: row.position?.trim() || null,
-              department,
-              isActive: true,
-            },
-          });
-
-          // 3. Upsert ZoneEmployee relationship
-          await tx.zoneEmployee.upsert({
-            where: {
-              zoneId_employeeId: {
-                zoneId: zone.id,
-                employeeId: employee.id,
+    // Query latest zones and their zone-employee mapping
+    const zones = await prisma.zone.findMany({
+      include: {
+        employees: {
+          include: {
+            employee: {
+              include: {
+                manager: {
+                  include: { manager: { include: { manager: true } } },
+                },
               },
             },
-            update: {
-              // Already exists, no update needed
+            chiefOfficer: {
+              include: {
+                manager: {
+                  include: { manager: { include: { manager: true } } },
+                },
+              },
             },
-            create: {
-              zoneId: zone.id,
-              employeeId: employee.id,
-            },
-          });
-        });
+          },
+        },
+      },
+      orderBy: { zoneId: 'asc' },
+      take: 5000,
+    });
 
-        results.push({
-          rowNumber,
-          success: true,
-          data: {
-            zoneId,
-            zoneName,
-            employeeId,
-            employeeName,
-          },
-        });
-        successCount++;
-      } catch (error: any) {
-        results.push({
-          rowNumber,
-          success: false,
-          error: error.message || 'Unknown error',
-          data: {
-            zoneId: row.zoneId || '',
-            zoneName: row.zoneName || '',
-            employeeId: row.employeeId || '',
-            employeeName: row.employeeName || '',
-          },
-        });
-        errorCount++;
+    const aoa: any[] = [];
+    aoa.push(['ZONE_ID', 'แผนก', 'ZONE_TH', 'NAME', 'EMPLOYEE_ID', 'CHIEF OFFICER', 'DB HEAD']);
+
+    const findDbHeadViaManagers = (start: any): any | null => {
+      let current = start?.manager || null;
+      const visited = new Set<number>();
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        if (current.role === 'DB_HEAD') return current;
+        current = current.manager || null;
+      }
+      return null;
+    };
+
+    for (const z of zones) {
+      for (const ze of z.employees) {
+        const e = ze.employee;
+        const chiefName = ze.chiefOfficer?.name || '';
+        let dbHeadName = '';
+        // Resolve DB Head: direct if employee is DB_HEAD, else via manager chain, else from chiefOfficer chain
+        if (e.role === 'DB_HEAD') {
+          dbHeadName = e.name || '';
+        } else {
+          const directHead = findDbHeadViaManagers(e as any);
+          if (directHead) {
+            dbHeadName = directHead.name || '';
+          } else if (ze.chiefOfficer) {
+            const headFromChief = findDbHeadViaManagers(ze.chiefOfficer as any);
+            if (headFromChief) dbHeadName = headFromChief.name || '';
+          }
+        }
+
+        aoa.push([
+          z.zoneId,
+          e.department || '',
+          z.zoneName || '',
+          e.name || '',
+          e.employeeId || '',
+          chiefName,
+          dbHeadName,
+        ]);
+      }
+
+      // If a zone has no employees yet, still output one blank row for guidance
+      if (z.employees.length === 0) {
+        aoa.push([z.zoneId, '', z.zoneName || '', '', '', '', '']);
       }
     }
 
-    console.log(`[Import] Zone-Employee import completed: ${successCount} success, ${errorCount} errors`);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    // Generate ArrayBuffer and wrap as Uint8Array for Response body
+    const arrayBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    const uint8 = new Uint8Array(arrayBuf);
 
-    return NextResponse.json({
-      success: true,
-      summary: {
-        total: rows.length,
-        success: successCount,
-        errors: errorCount,
+    return new NextResponse(uint8, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="zone_employee_template_current.xlsx"',
       },
-      results,
     });
   } catch (error: any) {
-    console.error('[Import] Zone-Employee import failed:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Import failed' },
-      { status: 500 }
-    );
+    console.error('Failed to generate template:', error);
+    return NextResponse.json({ error: 'Failed to generate template' }, { status: 500 });
   }
+}
+
+/* =======================
+   POST
+======================= */
+
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user || !["ADMIN", "ADMINISTRATOR"].includes(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body?.rows || !Array.isArray(body.rows)) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const {
+    rows,
+    mode = "preview",
+    filename = "import.xlsx",
+  }: {
+    rows: ImportRow[];
+    mode?: "preview" | "import";
+    filename?: string;
+  } = body;
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "No data" }, { status: 400 });
+  }
+
+  /* =======================
+     PHASE 1: Normalize
+  ======================= */
+
+  const normalized: ImportRow[] = rows.map((r) => ({
+    ...r,
+    role: (r.role ?? "STAFF") as Role,
+  }));
+
+  /* =======================
+     PHASE 2: Validate (soft + hard)
+  ======================= */
+
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  console.log('📊 [Backend Validation] Processing', normalized.length, 'rows');
+  console.log('🔍 [Backend Validation] Sample row:', normalized[0]);
+
+  for (const r of normalized) {
+    if (!r.zoneId || !r.zoneName) {
+      errors.push(`ZONE missing (${r.employeeId})`);
+    }
+    if (!r.employeeId || !r.employeeName) {
+      errors.push(`EMPLOYEE missing (${r.zoneId})`);
+    }
+
+    // DB_HEAD can be their own manager (top of hierarchy)
+    // CHIEF can be their own manager if they also have themselves as DB_HEAD
+    // STAFF cannot be their own manager
+    
+    const hasSelfRefChief = r.chiefOfficerId && r.chiefOfficerId.trim() !== '' && r.employeeId === r.chiefOfficerId;
+    const hasSelfRefHead = r.dbHeadId && r.dbHeadId.trim() !== '' && r.employeeId === r.dbHeadId;
+
+    console.log(`🔗 [Row Validation] ${r.employeeId}: role=${r.role}, chiefOfficerId=${r.chiefOfficerId}, dbHeadId=${r.dbHeadId}, hasSelfRefChief=${hasSelfRefChief}, hasSelfRefHead=${hasSelfRefHead}`);
+    
+    // Only flag as error if STAFF is trying to manage themselves
+    if (r.role === Role.STAFF && (hasSelfRefChief || hasSelfRefHead)) {
+      errors.push(`❌ STAFF ${r.employeeId} cannot be their own manager`);
+    }
+    
+    // For CHIEF and DB_HEAD, self-reference is OK (they're at top of their chain)
+    // Just warn if missing hierarchy info
+    if (r.role === Role.CHIEF && !r.dbHeadId) {
+      warnings.push(`⚠️ CHIEF ${r.employeeId} has no DB_HEAD reference`);
+    }
+
+    if (r.role === Role.STAFF && !r.chiefOfficerId) {
+      warnings.push(`⚠️ STAFF ${r.employeeId} has no CHIEF reference`);
+    }
+  }
+
+  /* =======================
+     PREVIEW MODE
+  ======================= */
+
+ if (mode === "preview") {
+    return NextResponse.json({
+      success: true,
+      results: { errors, warnings },
+      summary: {
+        totalRows: normalized.length,
+        validRows: normalized.length - errors.length,
+        invalidRows: errors.length,
+        errors: errors.length,
+        warnings: warnings.length
+      },
+      canImport: errors.length === 0,
+    });
+  }
+
+  /* =======================
+     PHASE 3: Import Base Data
+  ======================= */
+
+  // ---- Zones (dedupe) ----
+  const zoneMap = new Map<string, ImportRow>();
+  for (const r of normalized) {
+    if (!zoneMap.has(r.zoneId)) {
+      zoneMap.set(r.zoneId, r);
+    }
+  }
+
+  for (const z of Array.from(zoneMap.values())) {
+    await prisma.zone.upsert({
+      where: { zoneId: z.zoneId },
+      update: {},
+      create: {
+        zoneId: z.zoneId,
+        zoneName: z.zoneName,
+        source: ZoneSource.XLSX,
+      },
+    });
+  }
+
+  // ---- Employees ----
+  for (const r of normalized) {
+    await prisma.employee.upsert({
+      where: { employeeId: r.employeeId },
+      update: {
+        name: r.employeeName,
+        role: r.role,
+        department: r.department,
+      },
+      create: {
+        employeeId: r.employeeId,
+        name: r.employeeName,
+        role: r.role,
+        department: r.department,
+      },
+    });
+  }
+
+  // ---- ZoneEmployee Mapping ----
+  const zones = await prisma.zone.findMany({
+    select: { id: true, zoneId: true },
+  });
+  const employees = await prisma.employee.findMany({
+    select: { id: true, employeeId: true, managerId: true },
+  });
+
+  const zoneIdMap = new Map(zones.map((z) => [z.zoneId, z.id]));
+  const employeeMap = new Map(employees.map((e) => [e.employeeId, e.id]));
+  const employeeState = new Map(
+    employees.map((e) => [e.employeeId, e])
+  );
+
+  for (const r of normalized) {
+    const zoneDbId = zoneIdMap.get(r.zoneId);
+    const empDbId = employeeMap.get(r.employeeId);
+    if (!zoneDbId || !empDbId) continue;
+
+    // Resolve CHIEF OFFICER ID
+    let chiefOfficerDbId: number | undefined = undefined;
+    if (r.chiefOfficerId) {
+      chiefOfficerDbId = employeeMap.get(r.chiefOfficerId);
+      console.log(`[ZoneEmployee] ${r.employeeId} chiefOfficer: ${r.chiefOfficerId} → DB ID: ${chiefOfficerDbId}`);
+    }
+
+    // @ts-ignore - chiefOfficerId is new field in updated schema
+    await prisma.zoneEmployee.upsert({
+      where: {
+        zoneId_employeeId: {
+          zoneId: zoneDbId,
+          employeeId: empDbId,
+        },
+      },
+      update: {
+        chiefOfficerId: chiefOfficerDbId,
+      },
+      create: {
+        zoneId: zoneDbId,
+        employeeId: empDbId,
+        chiefOfficerId: chiefOfficerDbId,
+      },
+    });
+  }
+
+  /* =======================
+     PHASE 4: Hierarchy Backfill (Memory)
+  ======================= */
+
+  const updates: any[] = [];
+
+  for (const r of normalized) {
+    const self = employeeState.get(r.employeeId);
+    if (!self) continue;
+
+    const managerId = resolveManagerId({
+      role: r.role!,
+      employeeId: r.employeeId,
+      chiefOfficerId: r.chiefOfficerId,
+      dbHeadId: r.dbHeadId,
+      employeeMap,
+    });
+
+    if (
+      managerId &&
+      managerId !== self.id &&
+      managerId !== self.managerId
+    ) {
+      updates.push(
+        prisma.employee.update({
+          where: { id: self.id },
+          data: { managerId },
+        })
+      );
+    }
+  }
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+
+  /* =======================
+     PHASE 5: Log
+  ======================= */
+
+  await prisma.zoneImportLog.create({
+    data: {
+      filename,
+      importedBy: user.id,
+      rowCount: normalized.length,
+      status: "SUCCESS",
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    rows: normalized.length,
+    warnings,
+    hierarchyUpdated: updates.length,
+  });
 }

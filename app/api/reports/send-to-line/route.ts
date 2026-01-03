@@ -28,7 +28,7 @@ interface ReportFilters {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { reportType, startDate, endDate, department, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
+    const { reportType, startDate, endDate, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
 
     // Build query filters
     const whereClause: any = {
@@ -112,7 +112,44 @@ export async function POST(request: NextRequest) {
       { width: 30 }, { width: 30 }, { width: 30 },
     ];
 
+    // Build zone map similar to generate endpoint
+    const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
+    const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
+      where: { zoneId: { in: zoneIds } },
+      include: {
+        employees: {
+          include: {
+            employee: { include: { manager: true } },
+            chiefOfficer: { include: { manager: { include: { manager: true } } } },
+          },
+        },
+      },
+    }) : [];
+    const zoneMap = new Map<string, { chief?: string; dbHead?: string }>();
+    const findDbHeadViaManagers = (start: any): any | null => {
+      let current = start?.manager || null;
+      const visited = new Set<number>();
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        if (current.role === 'DB_HEAD') return current;
+        current = current.manager || null;
+      }
+      return null;
+    };
+    for (const z of zones) {
+      const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
+      const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
+      const chief = chiefEmp?.name;
+      let dbHead = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee?.name || null;
+      if (!dbHead && chiefEmp) {
+        const resolved = findDbHeadViaManagers(chiefEmp as any);
+        if (resolved) dbHead = resolved.name;
+      }
+      zoneMap.set(z.zoneId, { chief: chief || undefined, dbHead: dbHead || undefined });
+    }
+
     tickets.forEach((ticket, index) => {
+      const zoneInfo = ticket.zoneId ? zoneMap.get(ticket.zoneId) : undefined;
       const row = worksheet.addRow([
         index + 1,
         ticket.ticketNo,
@@ -123,8 +160,8 @@ export async function POST(request: NextRequest) {
         ticket.recipientAddress || '-',
         ticket.assignedTo || ticket.createdBy || '-',
         ticket.department || '-',
-        '',
-        '',
+        zoneInfo?.chief || '-',
+        zoneInfo?.dbHead || '-',
         ticket.description,
         ticket.notes[0]?.content || '-',
         ticket.description,
@@ -181,12 +218,10 @@ export async function POST(request: NextRequest) {
 
     const fileUrl = urlData.publicUrl;
 
-    // Determine LINE group - prioritize lineGroupId, then lineGroupDepartment, then department filter
+    // Determine LINE group - prioritize lineGroupId, then explicit lineGroupDepartment
     let targetGroupId = lineGroupId;
     if (!targetGroupId && lineGroupDepartment) {
       targetGroupId = getDepartmentLineGroup(lineGroupDepartment as any);
-    } else if (!targetGroupId && department && department !== 'ALL') {
-      targetGroupId = getDepartmentLineGroup(department as any);
     }
 
     if (!targetGroupId) {

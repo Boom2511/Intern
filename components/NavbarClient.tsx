@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical, FileText } from 'lucide-react';
+import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical, FileText, Settings } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { SessionUser } from '@/lib/auth';
 
@@ -57,7 +57,7 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
   const canAccessTestPages = currentUser && currentUser.role === 'ADMINISTRATOR';
 
   return (
-    <nav className="bg-blue-600 shadow-lg">
+    <nav className="bg-blue-600 shadow-lg fixed top-0 left-0 right-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
@@ -93,11 +93,11 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
             {/* User Management - Only for ADMIN and ADMINISTRATOR */}
             {canAccessUserManagement && (
               <Link
-                href="/staff"
+                href="/settings"
                 className="flex items-center space-x-2 text-white hover:bg-blue-700 px-3 py-2 rounded-md transition"
               >
-                <UserCog className="h-4 w-4 text-white" />
-                <span className="text-white">User Management</span>
+                <Settings className="h-4 w-4 text-white" />
+                <span className="text-white">Settings</span>
               </Link>
             )}
 

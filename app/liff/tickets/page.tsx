@@ -2,7 +2,8 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import VConsole from '@/components/VConsole';
+import dynamic from 'next/dynamic';
+const DevVConsole = dynamic(() => import('@/components/VConsole'), { ssr: false });
 
 /**
  * LIFF Tickets Index Page
@@ -56,7 +57,7 @@ function LiffRedirect() {
 export default function LiffTicketsIndexPage() {
   return (
     <>
-      <VConsole />
+      {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
           <div className="text-center">

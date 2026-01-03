@@ -5,8 +5,6 @@
 
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
-
 export interface UseTicketOptions {
   refreshInterval?: number;
 }
@@ -16,7 +14,6 @@ export function useTicket(ticketId: string | null, options: UseTicketOptions = {
 
   const { data, error, mutate, isLoading, isValidating } = useSWR(
     ticketId ? `/api/tickets/${ticketId}` : null,
-    fetcher,
     {
       refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
       revalidateOnFocus: true,

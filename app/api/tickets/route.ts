@@ -213,6 +213,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle zone_id if provided
+    let zoneStatus: 'NEW_ZONE' | 'UNMAPPED' | 'MAPPED' | null = null;
+    if (zoneId?.trim()) {
+      const existingZone = await prisma.zone.findUnique({
+        where: { zoneId: zoneId.trim() },
+      });
+
+      if (!existingZone) {
+        // Create new zone entry (unmapped, from ticket)
+        await prisma.zone.create({
+          data: {
+            zoneId: zoneId.trim(),
+            isMapped: false,
+            source: 'TICKET',
+          },
+        });
+        zoneStatus = 'NEW_ZONE';
+      } else if (!existingZone.isMapped) {
+        zoneStatus = 'UNMAPPED';
+      } else {
+        zoneStatus = 'MAPPED';
+      }
+    }
+
     // Generate ticket number with transaction + retry to handle race conditions
     // Strategy: Use PostgreSQL Advisory Lock + findFirst to prevent duplicates
     // Advisory lock ensures sequential access, retries only for network errors
@@ -396,7 +420,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Create and send Department Work Snapshot
-          const flexMessage = createDepartmentWorkSnapshotMessage({
+          const flexMessage = await createDepartmentWorkSnapshotMessage({
             tickets: pendingTickets,
             department,
             departmentLabel: deptLabel,
@@ -442,6 +466,7 @@ export async function POST(request: NextRequest) {
         success: true,
         data: ticket,
         message: 'สร้าง Ticket สำเร็จ',
+        zoneStatus,
         notification: {
           sent: notificationSent,
           error: notificationError,

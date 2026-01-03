@@ -26,7 +26,6 @@ export default function TicketFilters() {
   // Get current filter values from URL
   const currentSearch = searchParams.get('search') || '';
   const currentStatus = searchParams.get('status') || '';
-  const currentPriority = searchParams.get('priority') || '';
   const currentDepartment = searchParams.get('department') || '';
   const currentIssueType = searchParams.get('issueType') || '';
   const currentStartDate = searchParams.get('startDate') || '';
@@ -35,7 +34,6 @@ export default function TicketFilters() {
   // Local state for form inputs
   const [search, setSearch] = useState(currentSearch);
   const [status, setStatus] = useState(currentStatus);
-  const [priority, setPriority] = useState(currentPriority);
   const [department, setDepartment] = useState(currentDepartment);
   const [issueType, setIssueType] = useState(currentIssueType);
   const [startDate, setStartDate] = useState(currentStartDate);
@@ -49,7 +47,7 @@ export default function TicketFilters() {
 
     if (search) params.set('search', search);
     if (status && status !== 'all') params.set('status', status);
-    if (priority && priority !== 'all') params.set('priority', priority);
+    
     if (department && department !== 'all') params.set('department', department);
     if (issueType && issueType !== 'all') params.set('issueType', issueType);
     if (startDate) params.set('startDate', startDate);
@@ -69,7 +67,6 @@ export default function TicketFilters() {
 
       if (search) params.set('search', search);
       if (status && status !== 'all') params.set('status', status);
-      if (priority && priority !== 'all') params.set('priority', priority);
       if (department && department !== 'all') params.set('department', department);
       if (issueType && issueType !== 'all') params.set('issueType', issueType);
       if (startDate) params.set('startDate', startDate);
@@ -83,12 +80,11 @@ export default function TicketFilters() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [search, status, priority, department, issueType, startDate, endDate, router]);
+  }, [search, status, department, issueType, startDate, endDate, router]);
 
   const handleClearFilters = () => {
     setSearch('');
     setStatus('');
-    setPriority('');
     setDepartment('');
     setIssueType('');
     setStartDate('');
@@ -101,7 +97,7 @@ export default function TicketFilters() {
     setEndDate('');
   };
 
-  const hasActiveFilters = currentSearch || currentStatus || currentPriority || currentDepartment || currentIssueType || currentStartDate || currentEndDate;
+  const hasActiveFilters = currentSearch || currentStatus || currentDepartment || currentIssueType || currentStartDate || currentEndDate;
 
   return (
     <Card>
@@ -170,25 +166,6 @@ export default function TicketFilters() {
                 </Select>
               </div>
 
-              {/* Priority */}
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  ระดับความสำคัญ
-                </label>
-                <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ทั้งหมด" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">ทั้งหมด</SelectItem>
-                    <SelectItem value="LOW">ต่ำ</SelectItem>
-                    <SelectItem value="MEDIUM">ปานกลาง</SelectItem>
-                    <SelectItem value="HIGH">สูง</SelectItem>
-                    <SelectItem value="URGENT">ด่วนมาก</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Department */}
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -246,7 +223,7 @@ export default function TicketFilters() {
           {hasActiveFilters && (
             <div className="flex items-center justify-between pt-2 border-t">
               <span className="text-sm text-gray-600">
-                มี {[currentSearch, currentStatus, currentPriority, currentDepartment, currentIssueType, currentStartDate, currentEndDate].filter(Boolean).length} ตัวกรองที่ใช้งาน
+                มี {[currentSearch, currentStatus, currentDepartment, currentIssueType, currentStartDate, currentEndDate].filter(Boolean).length} ตัวกรองที่ใช้งาน
               </span>
               <Button variant="ghost" size="sm" onClick={handleClearFilters} className="gap-2">
                 <X className="h-4 w-4" />

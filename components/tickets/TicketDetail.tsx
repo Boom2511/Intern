@@ -14,12 +14,13 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
-import { formatThaiDate, formatRelativeTime, getPriorityColor, getPriorityLabel, getStatusLabel } from '@/lib/utils';
+import { formatThaiDate, formatRelativeTime, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
 import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
@@ -40,6 +41,9 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const [currentStaffName, setCurrentStaffName] = useState<string>('Staff');
   const [isEditing, setIsEditing] = useState(false);
   const [expandedEdits, setExpandedEdits] = useState<Set<string>>(new Set());
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closeCause, setCloseCause] = useState('');
+  const [closeSolution, setCloseSolution] = useState('');
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -86,7 +90,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
       .catch(err => console.error('Failed to fetch current user:', err));
   }, []);
 
-  const handleStatusUpdate = async (newStatus: TicketStatus) => {
+  const handleStatusUpdate = async (newStatus: TicketStatus, extra?: { closeCause?: string; closeSolution?: string }) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/tickets/${ticket.id}`, {
@@ -96,6 +100,8 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
           status: newStatus,
           resolvedBy: currentStaffName,
           changedByStaffName: currentStaffName,
+          closeCause: extra?.closeCause,
+          closeSolution: extra?.closeSolution,
         }),
       });
 
@@ -103,6 +109,11 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
 
       if (data.success) {
         setStatus(newStatus);
+        if (newStatus === 'CLOSED') {
+          setCloseDialogOpen(false);
+          setCloseCause('');
+          setCloseSolution('');
+        }
         toast({
           variant: 'success',
           title: 'สำเร็จ!',
@@ -349,6 +360,46 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-4 md:p-6">
+        {/* Close Ticket Dialog */}
+        <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-base">ระบุสาเหตุและแนวทางแก้ไขก่อนปิดงาน</DialogTitle>
+              <p className="text-xs text-gray-500 mt-1">ข้อมูลนี้จะถูกบันทึกในประวัติสถานะของใบงาน</p>
+            </DialogHeader>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">สาเหตุ <span className="text-red-500">*</span></label>
+                <textarea
+                  value={closeCause}
+                  onChange={(e) => setCloseCause(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ระบุสาเหตุของปัญหา..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">แนวทางแก้ไข <span className="text-red-500">*</span></label>
+                <textarea
+                  value={closeSolution}
+                  onChange={(e) => setCloseSolution(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ระบุแนวทางแก้ไข..."
+                />
+              </div>
+            </div>
+            <DialogFooter className="mt-4 gap-2 sm:gap-3">
+              <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>ยกเลิก</Button>
+              <Button
+                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution })}
+                disabled={!closeCause.trim() || !closeSolution.trim() || loading}
+              >
+                ยืนยันปิดงาน
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {/* Header Section */}
         <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -356,9 +407,6 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{ticket.ticketNo}</h1>
                 <StatusBadge status={status} />
-                <Badge className={`${getPriorityColor(ticket.priority)} text-white border-0`}>
-                  {getPriorityLabel(ticket.priority)}
-                </Badge>
               </div>
               <p className="text-sm text-gray-500">
                 สร้างเมื่อวันที่ {formatThaiDate(ticket.createdAt)}
@@ -405,21 +453,6 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="mb-6 pb-6 border-b">
-                  <textarea
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="เพิ่มบันทึกหรือความคิดเห็น..."
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
-                  <div className="flex justify-end mt-3">
-                    <Button onClick={handleAddNote} disabled={loading || !newNote.trim()} size="sm">
-                      เพิ่มบันทึก
-                    </Button>
-                  </div>
-                </div>
-
                 {/* Notes List */}
                 <div className="space-y-4">
                   {allNotes.length === 0 ? (
@@ -517,12 +550,6 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                       <StatusBadge status={status} />
                     </div>
                     <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-600">ระดับความสำคัญ</span>
-                      <Badge className={`${getPriorityColor(ticket.priority)} text-white border-0 text-xs`}>
-                        {getPriorityLabel(ticket.priority)}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
                       <span className="text-sm text-gray-600">ผู้สร้าง</span>
                       <span className="text-sm font-medium text-gray-900">
                         {(ticket as any).createdBy || 'CEC Staff'}
@@ -564,7 +591,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                   {status !== 'CLOSED' && (
                     <div className="pt-4">
                       <Button
-                        onClick={() => handleStatusUpdate('CLOSED')}
+                        onClick={() => setCloseDialogOpen(true)}
                         disabled={loading}
                         variant="outline"
                         className="w-full border-red-300 text-red-700 hover:bg-red-50"

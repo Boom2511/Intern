@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, Suspense, useState } from 'react';
+import { useEffect, Suspense, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import VConsole from '@/components/VConsole';
+import dynamic from 'next/dynamic';
+const DevVConsole = dynamic(() => import('@/components/VConsole'), { ssr: false });
 import useSWR from 'swr';
+import { mutate } from 'swr';
 import { TicketWithCustomer } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import StatusBadge from '@/components/tickets/StatusBadge';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,12 +23,61 @@ import {
 } from 'lucide-react';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import { getDepartmentLabel } from '@/config/departments';
-import { formatDistanceToNow } from 'date-fns';
-import { th } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+// Lightweight relative time formatter to avoid bundling date-fns locales
+const rtf = typeof Intl !== 'undefined' ? new Intl.RelativeTimeFormat('th-TH', { numeric: 'auto' }) : null;
+function timeAgo(date: Date) {
+  const now = new Date().getTime();
+  const diff = Math.round((date.getTime() - now) / 1000); // seconds (future negative)
+  const abs = Math.abs(diff);
+  const units: [number, Intl.RelativeTimeFormatUnit][] = [
+    [60, 'second'],
+    [60, 'minute'],
+    [24, 'hour'],
+    [7, 'day'],
+    [4.34524, 'week'],
+    [12, 'month'],
+    [Number.POSITIVE_INFINITY, 'year'],
+  ];
+  let unit: Intl.RelativeTimeFormatUnit = 'second';
+  let value = abs;
+  let acc = 1;
+  for (let i = 0; i < units.length; i++) {
+    const [step, name] = units[i];
+    if (value < step) { unit = name; break; }
+    value = Math.round(value / step);
+    acc *= step;
+  }
+  const signed = diff < 0 ? -value : value;
+  return rtf ? rtf.format(signed, unit) : `${signed} ${unit}`;
+}
+function timeUntil(date: Date) {
+  const now = new Date().getTime();
+  const diff = Math.round((date.getTime() - now) / 1000); // seconds
+  if (diff <= 0) return null; // breached/overdue
+  const abs = diff;
+  const units: [number, Intl.RelativeTimeFormatUnit][] = [
+    [60, 'second'],
+    [60, 'minute'],
+    [24, 'hour'],
+    [7, 'day'],
+    [4.34524, 'week'],
+    [12, 'month'],
+    [Number.POSITIVE_INFINITY, 'year'],
+  ];
+  let unit: Intl.RelativeTimeFormatUnit = 'second';
+  let value = abs;
+  for (let i = 0; i < units.length; i++) {
+    const [step, name] = units[i];
+    if (value < step) { unit = name; break; }
+    value = Math.round(value / step);
+  }
+  return rtf ? rtf.format(value, unit) : `${value} ${unit}`;
+}
+import { cn } from '@/lib/utils'; // keep if used, else could be removed
 import { useLiff } from '@/hooks/useLiff';
 
 import { QueueSkeleton } from '@/components/liff/QueueSkeleton';
+import React from 'react';
 
 // --- Interfaces (Keep existing) ---
 
@@ -35,15 +87,21 @@ interface ZoneQueueData {
   totalTickets: number;
   zones: Array<{
     zone: string;
+    zoneName?: string | null;
+    chiefName?: string | null;
+    employeeNames?: string[];
     total: number;
     urgent: number;
     tickets: TicketWithCustomer[];
   }>;
 }
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+type QueueResponse = {
+  success: boolean;
+  data: ZoneQueueData;
+};
 
 // --- Helper Functions (Enhanced) ---
+/* priority display disabled */
 function getPriorityStyles(priority: string) {
   switch (priority) {
     case 'URGENT':
@@ -59,6 +117,8 @@ function getPriorityStyles(priority: string) {
   }
 }
 
+/* priority display disabled */
+/* priority feature disabled across project */
 function getPriorityLabel(priority: string) {
   const map: Record<string, string> = { URGENT: 'ด่วนที่สุด', HIGH: 'สูง', MEDIUM: 'ปานกลาง', LOW: 'ต่ำ' };
   return map[priority] || priority;
@@ -67,8 +127,38 @@ function getPriorityLabel(priority: string) {
 // --- Components ---
 
 // Ticket Card Component (Enhanced)
-function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: any }) {
-  const styles = getPriorityStyles(ticket.priority);
+const TicketCard = React.memo(function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: any }) {
+  // Debounced prefetch to avoid over-fetching on quick pointer movement
+  const prefetchTimeout = React.useRef<number | null>(null);
+
+  const schedulePrefetch = useCallback(() => {
+    if (prefetchTimeout.current) {
+      window.clearTimeout(prefetchTimeout.current);
+    }
+    prefetchTimeout.current = window.setTimeout(async () => {
+      try {
+        // Prefetch the page route for faster navigation
+        router.prefetch(`/liff/tickets/${ticket.id}`);
+        // Prefetch SWR data for the ticket detail
+        await mutate(
+          `/api/liff/tickets/${ticket.id}`,
+          async (current: any) => {
+            const res = await fetch(`/api/liff/tickets/${ticket.id}`);
+            const json = await res.json();
+            return json;
+          },
+          { revalidate: false, populateCache: true }
+        );
+      } catch {}
+    }, 150);
+  }, [router, ticket.id]);
+
+  React.useEffect(() => () => {
+    if (prefetchTimeout.current) {
+      window.clearTimeout(prefetchTimeout.current);
+    }
+  }, []);
+  // priority disabled; using status badge instead
   const isBreached = ticket.slaStatus === 'BREACHED';
 
   // Determine border color based on status
@@ -78,20 +168,22 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
     return 'border-l-blue-500'; // NEW status
   };
 
-  const handleClick = () => {
-    router.push(`/liff/tickets/${ticket.id}`);
-  };
+  const handlePrefetch = schedulePrefetch;
 
-  const handleCall = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click
-    window.location.href = `tel:${ticket.customer.phone}`;
-  };
+  const handleClick = useCallback(() => {
+    // Ensure data is prefetched on click as well (in case of fast tap)
+    schedulePrefetch();
+    router.push(`/liff/tickets/${ticket.id}`);
+  }, [router, ticket.id, schedulePrefetch]);
+
 
   return (
 
     <Card
       className={`relative overflow-hidden border-l-4 shadow-sm hover:shadow-md transition-all active:scale-[0.98] cursor-pointer bg-white ${getBorderColor()}`}
       onClick={handleClick}
+      onMouseEnter={handlePrefetch}
+      onTouchStart={handlePrefetch}
     >
       <CardContent className="p-4">
         {/* ID & Priority */}
@@ -106,12 +198,10 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
               )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              {formatDistanceToNow(new Date(ticket.createdAt), { addSuffix: true, locale: th })}
+              {timeAgo(new Date(ticket.createdAt))}
             </p>
           </div>
-          <Badge variant="outline" className={`${styles.bg} ${styles.text} ${styles.border} border`}>
-            {getPriorityLabel(ticket.priority)}
-          </Badge>
+          <StatusBadge status={ticket.status} />
         </div>
 
         {/* Description */}
@@ -120,7 +210,7 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
             <Package className="h-4 w-4 text-gray-500" />
             {ticket.issueType === 'OTHER' ? ticket.issueTypeOther : getIssueTypeLabel(ticket.issueType)}
           </div>
-          <p className="text-sm text-gray-600 line-clamp-2 pl-5.5 leading-relaxed">
+          <p className="text-sm text-gray-600 line-clamp-2 pl-5 leading-relaxed">
             {ticket.description}
           </p>
         </div>
@@ -134,8 +224,8 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
                 <Clock className="h-3.5 w-3.5" />
                 <span>
                   {isBreached
-                    ? `เกินกำหนด ${formatDistanceToNow(new Date(ticket.slaDeadline), { locale: th })}`
-                    : `เหลือเวลา ${formatDistanceToNow(new Date(ticket.slaDeadline), { locale: th })}`}
+                    ? `เกินกำหนด ${timeAgo(new Date(ticket.slaDeadline))}`
+                    : `เหลือเวลา ${timeUntil(new Date(ticket.slaDeadline)) || '0 วินาที'}`}
                 </span>
               </div>
             ) : (
@@ -158,6 +248,7 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
                         <img
                           src={view.viewerAvatar}
                           alt={view.viewerName}
+                          loading="lazy"
                           className="w-6 h-6 rounded-full border-2 border-white object-cover"
                         />
                       ) : (
@@ -182,7 +273,7 @@ function TicketCard({ ticket, router }: { ticket: TicketWithCustomer; router: an
     </Card>
 
   );
-}
+});
 
 // 3. Zone Section Component (Collapsible)
 function ZoneSection({ zoneData }: { zoneData: any }) {
@@ -198,7 +289,16 @@ function ZoneSection({ zoneData }: { zoneData: any }) {
           <div className="bg-blue-100 p-1.5 rounded-full">
             <MapPin className="h-4 w-4 text-blue-600" />
           </div>
-          <span className="font-bold text-gray-800">{zoneData.zone}</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-gray-800">{zoneData.zone}{zoneData.zoneName ? ` - ${zoneData.zoneName}` : ''}</span>
+            {(zoneData.chiefName || (zoneData.employeeNames && zoneData.employeeNames.length > 0)) && (
+              <span className="text-xs text-gray-500">
+                {zoneData.chiefName ? `หัวหน้า: ${zoneData.chiefName}` : ''}
+                {zoneData.chiefName && zoneData.employeeNames && zoneData.employeeNames.length > 0 ? ' • ' : ''}
+                {zoneData.employeeNames && zoneData.employeeNames.length > 0 ? `พนักงาน: ${zoneData.employeeNames.slice(0,3).join(', ')}${zoneData.employeeNames.length > 3 ? ' +' + (zoneData.employeeNames.length - 3) : ''}` : ''}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -244,16 +344,15 @@ function WorkQueueContent() {
     ? `/api/tickets/queue?department=${department}&groupBy=zone`
     : null;
 
-  const { data, error, isLoading, mutate } = useSWR<{ success: boolean; data: ZoneQueueData }>(
-    apiUrl,
-    fetcher,
-    {
-      refreshInterval: 30000,
-      revalidateOnFocus: true,
-      onSuccess: () => setIsRefetching(false),
-      onError: () => setIsRefetching(false),
-    }
-  );
+  const { data, error, isLoading, mutate } = useSWR<QueueResponse>(
+  apiUrl,
+  {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    onSuccess: () => setIsRefetching(false),
+    onError: () => setIsRefetching(false),
+  }
+);
 
   const handleRefresh = async () => {
     setIsRefetching(true);
@@ -357,7 +456,7 @@ function ErrorState({ message, subMessage, onRetry }: any) {
 export default function LiffQueuePage() {
   return (
     <>
-      <VConsole />
+      {process.env.NODE_ENV !== 'production' ? <DevVConsole /> : null}
       <Suspense fallback={<div className="h-screen bg-gray-50" />}>
         <WorkQueueContent />
       </Suspense>
