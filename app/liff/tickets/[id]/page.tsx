@@ -168,21 +168,22 @@ export default function LiffTicketDetailPage() {
           body: formData,
         });
 
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error || 'Failed to upload images');
-        }
-        imageUrls = uploadData.urls || [];
-        const contentType = uploadRes.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") !== -1) {
-          const uploadData = await uploadRes.json();
-          if (!uploadRes.ok) throw new Error(uploadData.error);
-          imageUrls = uploadData.urls || [];
+        const contentType = uploadRes.headers.get('content-type') || '';
+
+        let uploadData: any;
+
+        if (contentType.includes('application/json')) {
+          uploadData = await uploadRes.json();
         } else {
           const errorText = await uploadRes.text();
-          console.error("Server Error:", errorText);
-          throw new Error("เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (ไม่ใช่ JSON)");
+          throw new Error(`Upload server error: ${errorText}`);
         }
+
+        if (!uploadRes.ok) {
+          throw new Error(uploadData?.error || 'Failed to upload images');
+        }
+
+        imageUrls = uploadData.urls || [];
       }
 
       // 2. Add note
