@@ -173,6 +173,16 @@ export default function LiffTicketDetailPage() {
           throw new Error(uploadData.error || 'Failed to upload images');
         }
         imageUrls = uploadData.urls || [];
+        const contentType = uploadRes.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.error);
+          imageUrls = uploadData.urls || [];
+        } else {
+          const errorText = await uploadRes.text();
+          console.error("Server Error:", errorText);
+          throw new Error("เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (ไม่ใช่ JSON)");
+        }
       }
 
       // 2. Add note
@@ -325,7 +335,7 @@ export default function LiffTicketDetailPage() {
                 <span>ผู้สร้าง: {(ticket as any).createdBy}</span>
               </div>
             )}
-            
+
           </div>
         </div>
 
