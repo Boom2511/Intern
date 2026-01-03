@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 import { useEffect, Suspense, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -245,10 +247,11 @@ const TicketCard = React.memo(function TicketCard({ ticket, router }: { ticket: 
                       style={{ zIndex: 3 - index }}
                     >
                       {view.viewerAvatar ? (
-                        <img
+                        <Image
                           src={view.viewerAvatar}
                           alt={view.viewerName}
-                          loading="lazy"
+                          width={24}
+                          height={24}
                           className="w-6 h-6 rounded-full border-2 border-white object-cover"
                         />
                       ) : (

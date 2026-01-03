@@ -10,18 +10,25 @@ export function getEmpName(emp: any): string {
   return emp?.name || emp?.displayName || (emp as any)?.username || (emp as any)?.lineName || '-';
 }
 
-async function findDbHeadViaManagers(start: Employee | null): Promise<Employee | null> {
+async function findDbHeadViaManagers(
+  start: Employee | null
+): Promise<(Employee & { manager: Employee | null }) | null> {
   if (!start) return null;
-  let current = start as any;
-  const visited = new Set<number>();
-  while (current?.managerId && !visited.has(current.id)) {
-    visited.add(current.id);
-    const manager = await prisma.employee.findUnique({ where: { id: current.managerId } });
-    if (!manager) break;
-    if (manager.role === Role.DB_HEAD) return manager;
-    current = manager;
+
+  const emp = await prisma.employee.findUnique({
+    where: { id: start.id },
+    include: { manager: true },
+  });
+
+  if (!emp) return null;
+
+  if (emp.role === Role.DB_HEAD) {
+    return emp;
   }
-  return null;
+
+  if (!emp.manager) return null;
+
+  return findDbHeadViaManagers(emp.manager);
 }
 
 export async function getZoneLeads(zoneId: string): Promise<{ chief?: string; dbHead?: string }> {

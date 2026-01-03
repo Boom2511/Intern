@@ -6,6 +6,7 @@
 'use client';
 
 import { History, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 
 interface StatusHistory {
   id: string;
@@ -72,9 +73,11 @@ export default function StatusHistory({ history, isOpen, onToggle }: StatusHisto
               <div key={item.id} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0">
                 {/* Avatar */}
                 {item.changedByLineAvatar ? (
-                  <img
+                  <Image
                     src={item.changedByLineAvatar}
                     alt={item.changedBy}
+                    width={40}
+                    height={40}
                     className="w-10 h-10 rounded-full flex-shrink-0"
                   />
                 ) : (

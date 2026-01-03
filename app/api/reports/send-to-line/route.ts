@@ -28,7 +28,7 @@ interface ReportFilters {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { reportType, startDate, endDate, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
+    const { reportType, startDate, endDate, department, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
 
     // Build query filters
     const whereClause: any = {

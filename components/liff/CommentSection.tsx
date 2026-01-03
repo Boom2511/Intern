@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { MessageSquare, Send, Image as ImageIcon, X } from 'lucide-react';
 import { convertImagesToWebP, validateImageFile } from '@/lib/image-utils';
 
@@ -168,9 +169,11 @@ export default function CommentSection({
               <div className="flex items-start gap-2">
                 {/* Show LINE profile picture for current user's comments */}
                 {lineProfile && note.createdBy.includes(lineProfile.displayName) && lineProfile.pictureUrl && (
-                  <img
+                  <Image
                     src={lineProfile.pictureUrl}
                     alt={note.createdBy}
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full"
                   />
                 )}
@@ -191,10 +194,12 @@ export default function CommentSection({
                   {note.images && note.images.length > 0 && (
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {note.images.map((img, idx) => (
-                        <img
+                        <Image
                           key={idx}
                           src={img}
                           alt={`Image ${idx + 1}`}
+                          width={80}
+                          height={80}
                           className="w-20 h-20 object-cover rounded border border-gray-200"
                         />
                       ))}
@@ -225,9 +230,12 @@ export default function CommentSection({
             <div className="flex gap-2 flex-wrap">
               {selectedImages.map((file, idx) => (
                 <div key={idx} className="relative">
-                  <img
+                  <Image
                     src={URL.createObjectURL(file)}
                     alt={`Preview ${idx + 1}`}
+                    width={80}
+                    height={80}
+                    unoptimized
                     className="w-20 h-20 object-cover rounded border border-gray-300"
                   />
                   <button

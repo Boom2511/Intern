@@ -180,18 +180,21 @@ export function useTicketDetail(ticketId: string) {
   }, [ticketId, mutateTicket]);
 
   const addNote = useCallback((note: Note) => {
-    // Optimistic update for notes
-    mutateTicket(
-      (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          notes: [note, ...current.notes],
-        };
-      },
-      false // Don't revalidate immediately
-    );
-  }, [mutateTicket]);
+  mutateTicket(
+    (current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        data: {
+          ...current.data,
+          notes: [note, ...current.data.notes],
+        },
+      };
+    },
+    false // Don't revalidate immediately
+  );
+}, [mutateTicket]);
 
   return {
     ticket: resp?.data?.ticket || null,

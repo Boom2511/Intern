@@ -6,6 +6,7 @@
 'use client';
 
 import { Eye } from 'lucide-react';
+import Image from 'next/image';
 
 interface TicketView {
   id: string;
@@ -54,9 +55,11 @@ export default function ViewHistory({ views, isOpen, onToggle }: ViewHistoryProp
                 style={{ zIndex: 10 - idx }}
               >
                 {view.viewerAvatar ? (
-                  <img
+                  <Image
                     src={view.viewerAvatar}
                     alt={view.viewerName}
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full ring-2 ring-white"
                   />
                 ) : (
@@ -99,9 +102,11 @@ export default function ViewHistory({ views, isOpen, onToggle }: ViewHistoryProp
               <div key={view.id} className="flex gap-3 pb-3 border-b border-gray-100 last:border-0">
                 {/* Avatar */}
                 {view.viewerAvatar ? (
-                  <img
+                  <Image
                     src={view.viewerAvatar}
                     alt={view.viewerName}
+                    width={40}
+                    height={40}
                     className="w-10 h-10 rounded-full flex-shrink-0"
                   />
                 ) : (

@@ -70,8 +70,8 @@ export async function GET(_req: NextRequest) {
         const staff = employees.find((e) => e.role === Role.STAFF);
         if (staff) dbHeadResolved = findDbHeadViaManagers(staff) as any;
       }
-      if (!dbHeadResolved && zone.chiefOfficer) {
-        dbHeadResolved = findDbHeadViaManagers(zone.chiefOfficer) as any;
+      if (!dbHeadResolved && chiefFromMapping) {
+        dbHeadResolved = findDbHeadViaManagers(chiefFromMapping) as any;
       }
 
       const issues: string[] = [];

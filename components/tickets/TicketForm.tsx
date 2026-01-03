@@ -230,7 +230,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     // Debounce the API call
     const timer = setTimeout(loadZoneEmployees, 500);
     return () => clearTimeout(timer);
-  }, [formData.zoneId]);
+  }, [formData.zoneId, formData.department]);
 
   // Real-time field validation on blur
   const validateField = (field: string, value: any) => {
