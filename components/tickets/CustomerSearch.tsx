@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CustomerWithTickets } from '@/types';
-import { formatThaiPhone } from '@/lib/utils';
+import { displayThaiPhone } from '@/lib/utils';
 
 interface CustomerSearchProps {
   onCustomerSelect: (customer: CustomerWithTickets) => void;
@@ -93,7 +93,7 @@ export default function CustomerSearch({ onCustomerSelect }: CustomerSearchProps
               <div className="flex-1">
                 <h3 className="font-semibold text-lg">{customer.name}</h3>
                 <p className="text-sm text-gray-600">
-                  {formatThaiPhone(customer.phone)}
+                  {displayThaiPhone(customer.phone)}
                 </p>
 
                 {/* Warning for open tickets */}

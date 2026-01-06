@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sanitizePhone } from '@/lib/validations';
+import { normalizePhoneToE164 } from '@/lib/validations';
 
 /**
  * GET /api/customers/search
@@ -25,8 +25,14 @@ export async function GET(request: NextRequest) {
     const where: any = {};
 
     if (phone) {
-      const cleanPhone = sanitizePhone(phone);
-      where.phone = cleanPhone;
+      const e164 = normalizePhoneToE164(phone, 'TH');
+      if (!e164) {
+        return NextResponse.json(
+          { success: false, error: 'หมายเลขโทรศัพท์ไม่ถูกต้อง' },
+          { status: 400 }
+        );
+      }
+      where.phone = e164;
     }
 
     if (name) {

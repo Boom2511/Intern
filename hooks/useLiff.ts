@@ -15,6 +15,7 @@ interface LineProfile {
 interface UseLiffOptions {
   onReady?: (profile: LineProfile | null) => void;
   onError?: (error: string) => void;
+  requireLogin?: boolean; // force LIFF login and auth
 }
 
 export function useLiff(options?: UseLiffOptions) {
@@ -54,15 +55,22 @@ export function useLiff(options?: UseLiffOptions) {
         await liff.init({ liffId });
         setLiffInitialized(true);
 
-        // Not in LINE app - load as read-only
+        // Not in LINE app
         if (!liff.isInClient()) {
+          if (options?.requireLogin) {
+            // Force login via LIFF universal flow
+            const redirect = window.location.href;
+            await new Promise(r => setTimeout(r, 200));
+            liff.login({ redirectUri: redirect });
+            return;
+          }
           setIsReady(true);
           options?.onReady?.(null);
           return;
         }
 
-        // Not logged in - trigger login
-        if (!liff.isLoggedIn()) {
+        // Not logged in - trigger login when required
+        if (!liff.isLoggedIn() && options?.requireLogin) {
           if (loginAttempted.current) {
             // Prevent login loop
             setIsReady(true);

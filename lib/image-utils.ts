@@ -42,7 +42,7 @@ export async function convertToWebP(file: File, quality: number = 0.8): Promise<
       // Calculate new dimensions (max 1920x1920 to save storage)
       let width = img.width;
       let height = img.height;
-      const maxSize = 1920;
+      const maxSize = 1280;
 
       if (width > maxSize || height > maxSize) {
         const scale = Math.min(maxSize / width, maxSize / height);
@@ -122,8 +122,8 @@ function isHEIC(file: File): boolean {
  */
 export async function convertImagesToWebP(
   files: File[],
-  quality: number = 0.8,
-  concurrentLimit: number = 3
+  quality: number = 0.7,
+  concurrentLimit: number = 2
 ): Promise<{ convertedFiles: File[]; needsServerConversion: File[] }> {
   const convertedFiles: File[] = [];
   const needsServerConversion: File[] = [];

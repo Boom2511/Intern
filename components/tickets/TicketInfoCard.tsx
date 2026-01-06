@@ -15,7 +15,7 @@ import { Package, MapPin, FileText, Tag, Truck } from 'lucide-react';
 import { getIssueTypeLabel, getIssueTypeOptions } from '@/config/issue-types';
 import { TicketWithRelations } from '@/types';
 import { IssueType } from '@prisma/client';
-import { cn } from '@/lib/utils';
+import { cn, displayThaiPhone } from '@/lib/utils';
 
 interface TicketInfoCardProps {
   ticket: TicketWithRelations;
@@ -247,7 +247,7 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                     </div>
                   ) : (
                     <div className="font-mono text-gray-900">
-                      {ticket.recipientPhone}
+                      {displayThaiPhone(ticket.recipientPhone)}
                     </div>
                   )}
                 </div>

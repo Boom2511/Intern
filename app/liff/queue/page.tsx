@@ -338,7 +338,7 @@ function WorkQueueContent() {
   const department = searchParams.get('department');
 
   // Initialize LIFF (optional for queue page, but needed for consistency)
-  const { isReady, error: liffError } = useLiff();
+  const { isReady, error: liffError } = useLiff({ requireLogin: true });
 
   // State for manual refresh feedback
   const [isRefetching, setIsRefetching] = useState(false);

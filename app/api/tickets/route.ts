@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sanitizePhone } from '@/lib/validations';
+import { normalizePhoneToE164 } from '@/lib/validations';
 import { generateTicketNumber } from '@/lib/utils';
 import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
 import { getSLAHours, getSLAPriority } from '@/config/issue-types';
@@ -69,12 +69,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
+      const phoneE164 = normalizePhoneToE164(search, 'TH');
       where.OR = [
         { ticketNo: { contains: search, mode: 'insensitive' } },
         { trackingNo: { contains: search, mode: 'insensitive' } },
         { salesforceId: { contains: search, mode: 'insensitive' } },
         { customer: { name: { contains: search, mode: 'insensitive' } } },
         { customer: { phone: { contains: search } } },
+        ...(phoneE164 ? [{ customer: { phone: { equals: phoneE164 } } }] : []),
       ];
     }
 
@@ -184,8 +186,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sanitize phone number
-    const cleanPhone = sanitizePhone(customerPhone);
+    // Normalize customer phone to E.164 (TH)
+    const cleanPhone = normalizePhoneToE164(customerPhone, 'TH');
+    if (!cleanPhone) {
+      return NextResponse.json(
+        { success: false, error: 'หมายเลขโทรศัพท์ลูกค้าไม่ถูกต้อง' },
+        { status: 400 }
+      );
+    }
 
     let customer;
 

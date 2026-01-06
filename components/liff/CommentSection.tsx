@@ -63,7 +63,7 @@ export default function CommentSection({
       }
 
       // Convert to WebP
-      const { convertedFiles } = await convertImagesToWebP(files, 0.8);
+      const { convertedFiles } = await convertImagesToWebP(files, 0.7, 2);
       setSelectedImages((prev) => [...prev, ...convertedFiles]);
       setUploadingImages(false);
     } catch (err) {
@@ -96,6 +96,18 @@ export default function CommentSection({
     setAddingComment(true);
 
     try {
+      // Optimistic note first for fast UX
+      const tempId = `tmp_${Date.now()}`;
+      const previewImages = selectedImages.map(f => URL.createObjectURL(f));
+      const optimistic = {
+        id: tempId,
+        content: newComment.trim(),
+        createdBy: lineProfile.displayName,
+        createdAt: new Date().toISOString(),
+        images: previewImages,
+      };
+      onCommentAdded(optimistic as any);
+
       // Upload images first if any
       let imageUrls: string[] = [];
       if (selectedImages.length > 0) {
@@ -139,7 +151,8 @@ export default function CommentSection({
         throw new Error(data.error || 'Failed to add comment');
       }
 
-      // Success
+      // Success: replace optimistic by refetching parent state if needed
+      // For now, append the server note too; parent may dedupe or show both briefly
       onCommentAdded(data.data);
       setNewComment('');
       setSelectedImages([]);

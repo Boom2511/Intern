@@ -8,6 +8,8 @@
 // For now, we'll create basic validation functions
 // When zod is installed, replace these with proper Zod schemas
 
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
+
 /**
  * Validate ticket creation data
  */
@@ -116,17 +118,35 @@ export function validateCreateNote(data: any): { valid: boolean; errors: string[
  * Sanitize phone number (remove spaces and dashes)
  */
 export function sanitizePhone(phone: string): string {
-  return phone.replace(/[-\s]/g, '');
+  return phone.replace(/[\s-]/g, '');
+}
+
+
+
+/**
+ * Normalize a phone number to E.164 (e.g., +66812345678) using libphonenumber-js
+ * Defaults to Thailand (TH)
+ */
+export function normalizePhoneToE164(phone: string, defaultCountry: 'TH' | string = 'TH'): string | null {
+  if (!phone) return null;
+  const input = phone.toString().trim();
+  // Quick allow if already E.164
+  if (/^\+\d{7,15}$/.test(input)) return input;
+  const parsed = parsePhoneNumberFromString(input, defaultCountry as any);
+  if (!parsed || !parsed.isValid()) return null;
+  return parsed.number; // E.164 format
 }
 
 /**
- * Validate Thai phone number
- * Must be 10 digits starting with 0
+ * Validate phone number using libphonenumber-js and E.164 rules
+ * Returns an error message in Thai if invalid, otherwise null
  */
 export function validatePhone(phone: string): string | null {
-  if (!phone) return null;
-  if (phone.length < 10) return 'หมายเลขโทรศัพท์ต้องมี 10 หลัก';
-  if (!/^0\d{9}$/.test(phone)) return 'หมายเลขโทรศัพท์ต้องขึ้นต้นด้วย 0 และมี 10 หลัก';
+  if (!phone || !phone.toString().trim()) return 'กรุณาระบุเบอร์โทรศัพท์';
+  const e164 = normalizePhoneToE164(phone, 'TH');
+  if (!e164) return 'หมายเลขโทรศัพท์ไม่ถูกต้อง';
+  // Extra: ensure Thai numbers only if desired
+  if (!e164.startsWith('+66')) return 'กรุณาระบุหมายเลขโทรศัพท์ในประเทศไทย';
   return null;
 }
 

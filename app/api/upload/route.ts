@@ -10,6 +10,7 @@
  * - Supports multiple file uploads
  */
 
+export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";

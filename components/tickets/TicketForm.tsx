@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getIssueTypeOptions } from '@/config/issue-types';
@@ -21,6 +22,8 @@ import { getDepartmentOptions, DEPARTMENTS } from '@/config/departments';
 import { CircleAlert, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
+import { normalizePhoneToE164 } from '@/lib/validations';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import {
   validatePhone,
   validateSalesforceId,
@@ -85,6 +88,7 @@ interface ZoneEmployeeInfo {
 
 export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -361,10 +365,17 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       return;
     }
 
-    // Validate phone number (must be exactly 10 digits starting with 0)
-    const phoneRegex = /^0\d{9}$/;
-    if (!phoneRegex.test(formData.recipientPhone)) {
-      setErrors(['หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0']);
+    // Validate phone number using libphonenumber-js (TH)
+    const phoneError = validatePhone(formData.recipientPhone);
+    if (phoneError) {
+      setErrors([phoneError]);
+      return;
+    }
+
+    // Normalize to E.164 for submit
+    const phoneE164 = normalizePhoneToE164(formData.recipientPhone, 'TH');
+    if (!phoneE164) {
+      setErrors(['หมายเลขโทรศัพท์ไม่ถูกต้อง']);
       return;
     }
 
@@ -375,7 +386,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       const submitData = {
         ...formData,
         customerName: formData.recipientName,
-        customerPhone: formData.recipientPhone,
+        customerPhone: phoneE164,
       };
 
       const response = await fetch('/api/tickets', {
@@ -387,11 +398,41 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       const data = await response.json();
 
       if (data.success) {
+        // Success toast
+        try {
+          toast({ title: 'สร้าง Ticket สำเร็จ', description: `หมายเลข ${data.data.ticketNo}` });
+        } catch {}
+
         // Show zone status message if applicable
         if (data.zoneStatus === 'NEW_ZONE') {
           console.log('พบ Zone ใหม่ - ระบบบันทึกไว้แล้ว รอการ map:', formData.zoneId);
         } else if (data.zoneStatus === 'UNMAPPED') {
           console.log('Zone ยังไม่ได้ถูก map กับพนักงาน:', formData.zoneId);
+        }
+
+        // If LINE notification failed (e.g., quota exceeded), suggest copying LIFF link
+        if (data.notification && !data.notification.sent) {
+          const liffUrl = `${window.location.origin}/liff/tickets/${data.data.id}`;
+          try {
+            toast({
+              variant: 'warning',
+              title: 'แจ้งเตือน LINE ไม่สำเร็จ',
+              description: data.notification.error || 'อาจเกินจำนวนโควตา กรุณาคัดลอกลิงก์ LIFF เพื่อแชร์ด้วยตนเอง',
+              action: (
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(liffUrl);
+                      toast({ title: 'คัดลอกลิงก์แล้ว', description: liffUrl });
+                    } catch {}
+                  }}
+                  className="ml-2 text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                >
+                  คัดลอกลิงก์
+                </button>
+              ),
+            });
+          } catch {}
         }
 
         // Invalidate tickets list and dashboard cache to show new ticket
@@ -813,17 +854,30 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 type="tel"
                 value={formData.recipientPhone}
                 onChange={(e) => {
-                  // Only allow numbers and limit to 10 digits
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  // Allow digits, +, space, -
+                  const value = e.target.value.replace(/[^\d+\-\s]/g, '');
                   setFormData({ ...formData, recipientPhone: value });
                   // Clear error when typing
                   if (fieldErrors.recipientPhone) {
                     setFieldErrors(prev => ({ ...prev, recipientPhone: '' }));
                   }
                 }}
-                onBlur={(e) => validateField('recipientPhone', e.target.value)}
-                placeholder="เช่น 0812345678"
-                maxLength={10}
+                onBlur={(e) => {
+                  // Validate and format nicely for UX after blur
+                  const value = e.target.value;
+                  const error = validatePhone(value);
+                  if (!error) {
+                    // If valid, format to national display (e.g., 081-234-5678 or 02-345-6789)
+                    try {
+                      const pn = parsePhoneNumberFromString(value, 'TH');
+                      if (pn && pn.isValid()) {
+                        setFormData(prev => ({ ...prev, recipientPhone: pn.formatNational() }));
+                      }
+                    } catch {}
+                  }
+                  validateField('recipientPhone', value);
+                }}
+                placeholder="เช่น 0812345678 หรือ +66812345678"
                 className={fieldErrors.recipientPhone ? 'border-red-500 focus:ring-red-500' : ''}
               />
               {fieldErrors.recipientPhone && (

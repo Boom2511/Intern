@@ -22,7 +22,7 @@ import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
-import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
+import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 import TicketInfoCard from './TicketInfoCard';
 
@@ -413,10 +413,23 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               </p>
             </div>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 แก้ไข
               </Button>
+              <Button variant="outline" size="sm" onClick={async () => {
+                try {
+                  const liffUrl = `${window.location.origin}/liff/tickets/${ticket.id}`;
+                  await navigator.clipboard.writeText(liffUrl);
+                  toast({ title: 'คัดลอกลิงก์ LIFF แล้ว', description: liffUrl });
+                } catch (e) {
+                  toast({ variant: 'error', title: 'คัดลอกลิงก์ไม่สำเร็จ' });
+                }
+              }}>
+                <Copy className="h-4 w-4 mr-2" /> คัดลอก
+              </Button>
+            </div>
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={loading}>

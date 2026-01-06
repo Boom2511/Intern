@@ -19,7 +19,8 @@ import { toast } from '@/hooks/use-toast';
 import { getIssueTypeLabel } from '@/config/issue-types';
 import type { IssueType } from '@prisma/client';
 import { invalidateTicketsList } from '@/lib/swr-utils';
-import { formatThaiPhone } from '@/lib/utils';
+import { displayThaiPhone } from '@/lib/utils';
+import { normalizePhoneToE164 } from '@/lib/validations';
 
 // Dynamic imports for heavy components and utilities
 const StatusHistory = lazy(() => import('@/components/liff/StatusHistory'));
@@ -66,7 +67,7 @@ export default function LiffTicketDetailPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // LIFF initialization - profile not required for initial render
-  const { profile, error: liffError } = useLiff();
+  const { profile, error: liffError } = useLiff({ requireLogin: true });
 
   // Ticket data - load immediately without waiting for profile
   const {
@@ -80,7 +81,7 @@ export default function LiffTicketDetailPage() {
     recordView,
     autoUpdateStatus,
     updateStatus,
-  } = useTicketDetail(ticketId);
+    addNote, mutate: mutateTicket } = useTicketDetail(ticketId);
 
   // 1. Load ticket data immediately (fast, pure)
   useEffect(() => {
@@ -112,7 +113,7 @@ export default function LiffTicketDetailPage() {
     try {
       // Dynamic import for image conversion utility
       const { convertImagesToWebP } = await import('@/lib/image-utils');
-      const { convertedFiles, needsServerConversion } = await convertImagesToWebP(files, 0.8);
+      const { convertedFiles, needsServerConversion } = await convertImagesToWebP(files, 0.7, 2);
 
       // Add all files (both converted and those needing server conversion)
       // Server will handle HEIC conversion on upload
@@ -155,6 +156,25 @@ export default function LiffTicketDetailPage() {
     setSubmitting(true);
 
     try {
+      // 0. Optimistic UI: add note locally and mark ticket as RESOLVED
+      const tempId = `tmp_${Date.now()}`;
+      const optimisticImages = selectedImages.map(f => URL.createObjectURL(f));
+      const optimisticNote = {
+        id: tempId,
+        content: trimmedNote,
+        createdBy: profile.displayName,
+        createdAt: new Date().toISOString(),
+        images: optimisticImages,
+        createdByLineName: profile.displayName,
+        createdByLineAvatar: profile.pictureUrl,
+      } as any;
+      addNote(optimisticNote);
+      // Optimistically set status to RESOLVED
+      await mutateTicket(
+        (current: any) => current ? { ...current, data: { ...current.data, ticket: { ...current.data.ticket, status: 'RESOLVED' } } } : current,
+        false
+      );
+
       // 1. Upload images if any
       let imageUrls: string[] = [];
       if (selectedImages.length > 0) {
@@ -188,8 +208,8 @@ export default function LiffTicketDetailPage() {
         imageUrls = uploadData.urls || [];
       }
 
-      // 2. Add note
-      const noteRes = await fetch(`/api/liff/tickets/${ticketId}/notes`, {
+      // 2. Single call: add note + update status
+      const resolveRes = await fetch(`/api/liff/tickets/${ticketId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,23 +218,20 @@ export default function LiffTicketDetailPage() {
           lineName: profile.displayName,
           lineAvatar: profile.pictureUrl,
           images: imageUrls,
+          status: 'RESOLVED',
         }),
       });
 
-      const noteData = await noteRes.json();
-      if (!noteRes.ok) {
-        throw new Error(noteData.error || 'Failed to add note');
+      const resolveData = await resolveRes.json();
+      if (!resolveRes.ok || !resolveData.success) {
+        throw new Error(resolveData.error || 'Failed to submit resolution');
       }
 
-      // 3. Update status to RESOLVED (this will reload all data including the new note)
-      const result = await updateStatus('RESOLVED', profile);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update status');
-      }
-
-      // 4. Clear form (note: updateStatus already reloaded notes from server)
+      // 3. Clear form and revalidate in background so optimistic UI stays smooth
       setActionNote('');
       setSelectedImages([]);
+      // Revalidate to replace optimistic note/status with server data
+      mutateTicket();
 
       // Show success message
       toast({
@@ -224,6 +241,8 @@ export default function LiffTicketDetailPage() {
       });
 
     } catch (err: any) {
+      // Rollback optimistic changes on error
+      await mutateTicket();
       toast({
         variant: 'error',
         title: 'เกิดข้อผิดพลาด',
@@ -399,10 +418,10 @@ export default function LiffTicketDetailPage() {
               <div className="flex-1">
                 <p className="text-xs text-gray-500 mb-0.5">เบอร์โทรศัพท์</p>
                 <a
-                  href={`tel:${(ticket.recipientPhone || '').replace(/[-\s]/g, '')}`}
+                  href={`tel:${(normalizePhoneToE164(ticket.recipientPhone || '', 'TH') || (ticket.recipientPhone || '').replace(/[-\s]/g, ''))}`}
                   className="text-sm font-medium text-blue-600 hover:underline"
                 >
-                  {formatThaiPhone(ticket.recipientPhone || '')}
+                  {displayThaiPhone(ticket.recipientPhone || '')}
                 </a>
               </div>
             </div>
