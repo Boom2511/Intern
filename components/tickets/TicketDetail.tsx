@@ -420,7 +420,9 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               </Button>
               <Button variant="outline" size="sm" onClick={async () => {
                 try {
-                  const liffUrl = `${window.location.origin}/liff/tickets/${ticket.id}`;
+                  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+                  const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
+                  const liffUrl = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
                   await navigator.clipboard.writeText(liffUrl);
                   toast({ title: 'คัดลอกลิงก์ LIFF แล้ว', description: liffUrl });
                 } catch (e) {

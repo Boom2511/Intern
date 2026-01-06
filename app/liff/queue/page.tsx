@@ -140,7 +140,12 @@ const TicketCard = React.memo(function TicketCard({ ticket, router }: { ticket: 
     prefetchTimeout.current = window.setTimeout(async () => {
       try {
         // Prefetch the page route for faster navigation
-        router.prefetch(`/liff/tickets/${ticket.id}`);
+        {
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID as string | undefined;
+      const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
+      const universal = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
+      router.prefetch(universal);
+    }
         // Prefetch SWR data for the ticket detail
         await mutate(
           `/api/liff/tickets/${ticket.id}`,
@@ -175,7 +180,12 @@ const TicketCard = React.memo(function TicketCard({ ticket, router }: { ticket: 
   const handleClick = useCallback(() => {
     // Ensure data is prefetched on click as well (in case of fast tap)
     schedulePrefetch();
-    router.push(`/liff/tickets/${ticket.id}`);
+    {
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID as string | undefined;
+      const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
+      const universal = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
+      router.push(universal);
+    }
   }, [router, ticket.id, schedulePrefetch]);
 
 

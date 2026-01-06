@@ -412,7 +412,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
         // If LINE notification failed (e.g., quota exceeded), suggest copying LIFF link
         if (data.notification && !data.notification.sent) {
-          const liffUrl = `${window.location.origin}/liff/tickets/${data.data.id}`;
+          const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+          const target = `${window.location.origin}/liff/tickets/${data.data.id}`;
+          const liffUrl = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
           try {
             toast({
               variant: 'warning',

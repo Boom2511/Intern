@@ -58,11 +58,16 @@ export function useLiff(options?: UseLiffOptions) {
         // Not in LINE app
         if (!liff.isInClient()) {
           if (options?.requireLogin) {
-            // Force login via LIFF universal flow
-            const redirect = window.location.href;
-            await new Promise(r => setTimeout(r, 200));
-            liff.login({ redirectUri: redirect });
-            return;
+            // Force open in LINE via Universal Link with loop guard
+            const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+            const url = new URL(window.location.href);
+            const alreadyRedirected = url.searchParams.get('liffRedirected') === '1';
+            if (!alreadyRedirected && liffId) {
+              const target = window.location.href;
+              const universal = `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}&liffRedirected=1`;
+              window.location.replace(universal);
+              return;
+            }
           }
           setIsReady(true);
           options?.onReady?.(null);
