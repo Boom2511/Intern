@@ -64,7 +64,9 @@ export function useLiff(options?: UseLiffOptions) {
             const alreadyRedirected = url.searchParams.get('liffRedirected') === '1';
             if (!alreadyRedirected && liffId) {
               const target = window.location.href;
-              const universal = `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}&liffRedirected=1`;
+              const u = new URL(target);
+              const state = `${u.pathname}${u.search}`;
+              const universal = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}&liffRedirected=1`;
               window.location.replace(universal);
               return;
             }

@@ -422,7 +422,9 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                 try {
                   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
                   const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
-                  const liffUrl = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
+                  const u = new URL(target);
+                  const state = `${u.pathname}${u.search}`;
+                  const liffUrl = liffId ? `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}` : target;
                   await navigator.clipboard.writeText(liffUrl);
                   toast({ title: 'คัดลอกลิงก์ LIFF แล้ว', description: liffUrl });
                 } catch (e) {

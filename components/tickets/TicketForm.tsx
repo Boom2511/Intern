@@ -414,7 +414,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         if (data.notification && !data.notification.sent) {
           const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
           const target = `${window.location.origin}/liff/tickets/${data.data.id}`;
-          const liffUrl = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
++          const u = new URL(target);
++          const state = `${u.pathname}${u.search}`;
++          const liffUrl = liffId ? `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}` : target;
           try {
             toast({
               variant: 'warning',
