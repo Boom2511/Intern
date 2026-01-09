@@ -77,8 +77,52 @@ export function LiffProvider({ children }: LiffProviderProps) {
         const inClient = liff.isInClient();
         setIsInClient(inClient);
 
-        // Not in LINE app - load as read-only
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        // Not in LINE app
         if (!inClient) {
+          if (isMobile) {
+            // 📱 Mobile Browser → Redirect to LINE App using liff.openWindow
+            const redirected = sessionStorage.getItem('liff_redirected');
+            
+            if (!redirected) {
+              sessionStorage.setItem('liff_redirected', '1');
+              console.log('[LiffProvider] Mobile browser detected - redirecting to LINE app');
+              
+              liff.openWindow({
+                url: `https://liff.line.me/${liffId}${window.location.pathname}${window.location.search}`,
+                external: false,
+              });
+              return;
+            }
+          } else {
+            // 💻 Desktop Browser → Show message or redirect to LINE Login
+            console.log('[LiffProvider] Desktop browser detected');
+            
+            // Check if LINE Channel ID is configured for Desktop Login
+            const channelId = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID;
+            
+            if (channelId) {
+              // Prevent infinite redirect loop
+              const redirected = sessionStorage.getItem('liff_desktop_redirected');
+              if (!redirected) {
+                sessionStorage.setItem('liff_desktop_redirected', '1');
+                console.log('[LiffProvider] Redirecting to LINE Login');
+                
+                // Use LINE Login OAuth
+                const currentUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+                const lineLoginUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(currentUrl)}&state=desktop_liff&scope=profile%20openid`;
+                
+                window.location.href = lineLoginUrl;
+                return;
+              }
+            } else {
+              // No Channel ID - show error message
+              setError('กรุณาเปิดผ่าน LINE App บนมือถือ (Desktop browser ไม่รองรับ)');
+              console.warn('[LiffProvider] NEXT_PUBLIC_LINE_CHANNEL_ID not configured - Desktop login disabled');
+            }
+          }
+          
           setIsReady(true);
           return;
         }

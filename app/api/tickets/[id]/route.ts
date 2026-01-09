@@ -85,6 +85,7 @@ export async function PATCH(
       changedByStaffName, // For CEC staff updates
       closeCause,
       closeSolution,
+      resolutionDetail, // Resolution detail from end user (editable by CEC)
       // Editable ticket fields
       trackingNo,
       issueType,
@@ -145,6 +146,10 @@ export async function PATCH(
         }
         updateData.closedBy = changedByStaffName || 'CEC Staff';
         updateData.closedAt = new Date();
+        // Update resolutionDetail if provided (allow CEC to edit)
+        if (resolutionDetail !== undefined) {
+          updateData.resolutionDetail = resolutionDetail;
+        }
       }
 
       // Update SLA status
@@ -161,7 +166,9 @@ export async function PATCH(
           changedByLineUserId: changedByLineUserId || null,
           changedByLineName: changedByLineName || null,
           changedByLineAvatar: changedByLineAvatar || null,
-          note: status === 'CLOSED' ? `สาเหตุ: ${closeCause || ''}\nแนวทางแก้ไข: ${closeSolution || ''}` : null,
+          note: status === 'CLOSED' 
+            ? `ผลการดำเนินการ: ${resolutionDetail || 'ไม่ระบุ'}\nสาเหตุ: ${closeCause || ''}\nแนวทางแก้ไข: ${closeSolution || ''}` 
+            : null,
         },
       });
 

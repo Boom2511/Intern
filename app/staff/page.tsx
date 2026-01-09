@@ -57,15 +57,13 @@ export default function StaffPage() {
     loadUsers();
     loadOnlineStatus();
 
-
     // Poll online status every 30 seconds
     const onlineInterval = setInterval(loadOnlineStatus, 30000);
-
 
     return () => {
       clearInterval(onlineInterval);
     };
-  }, [currentUser, router]);
+  }, [currentUser, router]); // loadUsers and loadOnlineStatus are stable
 
   const loadUsers = async () => {
     try {

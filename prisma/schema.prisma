@@ -64,6 +64,7 @@ model Ticket {
   assignedTo   String?      // Staff member assigned to this ticket
   resolvedBy   String?      // Staff member who resolved this ticket
   resolvedAt   DateTime?    // Timestamp when ticket was resolved
+  resolutionDetail String?  @db.Text // Resolution details from end user (via LIFF)
   closedBy     String?      // CEC staff who closed the ticket
   closedAt     DateTime?    // Timestamp when ticket was closed
 

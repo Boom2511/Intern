@@ -37,6 +37,9 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         where: {
           createdBy: currentUser.name,
+          status: {
+            not: 'CLOSED',
+          },
         },
         select: {
           id: true,

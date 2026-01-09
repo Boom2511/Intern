@@ -1,432 +1,271 @@
-/**
- * Reports Page
- * Generate and export Daily/Monthly reports with filters
- */
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { FileDown, Send, Loader2, Info } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FileDown, Send, Loader2, Info, Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { th } from 'date-fns/locale';
+import Link from 'next/link';
 
-export const dynamic = 'force-dynamic';
-
+// --- Types & Constants ---
 type ReportType = 'daily' | 'monthly';
 type SourceSystem = 'ALL' | 'CEC' | 'SALESFORCE';
 type Department = 'ALL' | 'DB1' | 'DB2' | 'DB3' | 'DB4' | 'DB5' | 'DB6';
 
+const DEPT_LABELS: Record<Department, string> = {
+  ALL: 'ทั้งหมด', DB1: 'DB1', DB2: 'DB2', DB3: 'DB3', DB4: 'DB4', DB5: 'นำจ่ายรถยนต์', DB6: 'บริการประชาชน',
+};
+
+// --- Sub-Component: Report Table ---
+const ReportTable = ({ data }: { data: any[] }) => (
+  <div className="overflow-x-auto border rounded-md shadow-sm">
+    <table className="min-w-full text-[11px] border-collapse bg-white">
+      <thead className="sticky top-0 z-10 bg-blue-600 text-white">
+        <tr>
+          {['ลำดับ', 'ใบงานเลขที่', 'Salesforce', 'หมายเลขสิ่งของ', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เจ้าหน้าที่', 'แผนก', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการ', 'ผลดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข'].map((h) => (
+            <th key={h} className="px-2 py-2 border-r border-blue-500 font-medium whitespace-nowrap">{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {data.map((row, i) => (
+          <tr key={i} className={`hover:bg-blue-50 border-b ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+            <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
+            <td className="px-2 py-1.5 font-medium whitespace-nowrap">
+              <Link href={`/tickets/${row.ticketId}`} className="text-blue-700 hover:text-blue-900 hover:underline" target="_blank">
+                {row.ticketNo}
+              </Link>
+            </td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.salesforceId}</td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.trackingNo}</td>
+            <td className="px-2 py-1.5 font-medium whitespace-nowrap">{row.customerName}</td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.customerPhone}</td>
+            <td className="px-2 py-1.5 max-w-[200px] truncate">{row.customerAddress}</td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.staffName}</td>
+            <td className="px-2 py-1.5 text-center">
+              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">{row.department}</span>
+            </td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.chief}</td>
+            <td className="px-2 py-1.5 whitespace-nowrap">{row.dbHead}</td>
+            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
+            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.resolutionDetail}</td>
+            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.cause}</td>
+            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.solution}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+// --- Main Page Component ---
 export default function ReportsPage() {
+  const { toast } = useToast();
   const [reportType, setReportType] = useState<ReportType>('daily');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  // Department filter removed per new requirement
-  const [sourceSystem, setSourceSystem] = useState<SourceSystem>('ALL');
-  const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1'); // LINE target only (not a data filter)
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [sendDialogOpen, setSendDialogOpen] = useState(false);
-  const { toast } = useToast();
-  const [previewCount, setPreviewCount] = useState<number | null>(null);
-  const [previewRows, setPreviewRows] = useState<any[] | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const handleConfirmSend = async () => {
-    setSendDialogOpen(false);
-    await handleSendToLine();
-  };
-  // For monthly mode: use month picker and derive start/end automatically
   const [monthYear, setMonthYear] = useState(format(new Date(), 'yyyy-MM'));
+  const [sourceSystem, setSourceSystem] = useState<SourceSystem>('ALL');
+  const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1');
+  
+  const [status, setStatus] = useState({ generating: false, sending: false, loadingPreview: false });
+  const [preview, setPreview] = useState<{ count: number | null, rows: any[] | null }>({ count: null, rows: null });
+  const [dialogs, setDialogs] = useState({ send: false, preview: false });
 
-  // Fetch preview count when filters change
-  useEffect(() => {
-    const fetchPreview = async () => {
-      setLoadingPreview(true);
-      try {
-        const response = await fetch('/api/reports/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate,
-            endDate: reportType === 'monthly' ? endDate : undefined,
-            sourceSystem,
-            includeSamples: true,
-            sampleLimit: 8,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setPreviewCount(data.count);
-          setPreviewRows(data.samples || null);
-        }
-      } catch (error) {
-        console.error('Error fetching preview:', error);
-        setPreviewCount(null);
-      } finally {
-        setLoadingPreview(false);
-      }
-    };
-
-    fetchPreview();
-  }, [reportType, startDate, endDate, sourceSystem]);
-
-  // Helper function to get department label (kept only for LINE group display)
-  const getDepartmentLabel = (dept: Department) => {
-    const labels: Record<Department, string> = {
-      ALL: 'ทั้งหมด',
-      DB1: 'DB1',
-      DB2: 'DB2',
-      DB3: 'DB3',
-      DB4: 'DB4',
-      DB5: 'นำจ่ายรถยนต์',
-      DB6: 'บริการประชาชน',
-    };
-    return labels[dept];
-  };
-
-  // LINE group list for selection (maintainable)
-  const LINE_GROUPS: { value: Department; label: string }[] = [
-    { value: 'DB1', label: getDepartmentLabel('DB1') },
-    { value: 'DB2', label: getDepartmentLabel('DB2') },
-    { value: 'DB3', label: getDepartmentLabel('DB3') },
-    { value: 'DB4', label: getDepartmentLabel('DB4') },
-    { value: 'DB5', label: getDepartmentLabel('DB5') },
-    { value: 'DB6', label: getDepartmentLabel('DB6') },
-  ];
-
-  // When monthly, derive start/end from selected monthYear
+  // Auto-calculate dates for monthly report
   useEffect(() => {
     if (reportType === 'monthly') {
-      try {
-        const [y, m] = monthYear.split('-').map(Number);
-        const first = new Date(y, m - 1, 1);
-        const last = new Date(y, m, 0);
-        setStartDate(format(first, 'yyyy-MM-dd'));
-        setEndDate(format(last, 'yyyy-MM-dd'));
-      } catch { }
+      const date = parseISO(`${monthYear}-01`);
+      setStartDate(format(startOfMonth(date), 'yyyy-MM-dd'));
+      setEndDate(format(endOfMonth(date), 'yyyy-MM-dd'));
     }
   }, [reportType, monthYear]);
 
-  // Helper function to format date range
-  const getDateRangeText = () => {
-    if (reportType === 'daily') {
-      return format(new Date(startDate), 'd MMM yyyy', { locale: th });
-    } else {
-      return format(new Date(startDate), 'MMMM yyyy', { locale: th });
-    }
-  };
+  // Fetch Preview Logic
+  useEffect(() => {
+    const fetchPreview = async () => {
+      setStatus(prev => ({ ...prev, loadingPreview: true }));
+      try {
+        const res = await fetch('/api/reports/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem, includeSamples: true, sampleLimit: 9999 }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPreview({ count: data.count, rows: data.samples });
+        }
+      } catch (e) { console.error(e); }
+      finally { setStatus(prev => ({ ...prev, loadingPreview: false })); }
+    };
+    fetchPreview();
+  }, [startDate, endDate, sourceSystem, reportType]);
 
-  const handleDownload = async () => {
-    // Validate date range for monthly reports
-    if (reportType === 'monthly' && endDate < startDate) {
-      alert('วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มต้น');
-      return;
-    }
+  const dateRangeText = useMemo(() => {
+    const date = new Date(startDate);
+    return reportType === 'daily' ? format(date, 'd MMM yyyy', { locale: th }) : format(date, 'MMMM yyyy', { locale: th });
+  }, [startDate, reportType]);
 
-    setIsGenerating(true);
+  const handleAction = async (actionType: 'download' | 'send') => {
+    const isDownload = actionType === 'download';
+    setStatus(prev => ({ ...prev, [isDownload ? 'generating' : 'sending']: true }));
+
     try {
-      const response = await fetch('/api/reports/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reportType,
-          startDate,
-          endDate: reportType === 'monthly' ? endDate : undefined,
-          sourceSystem,
-        }),
-      });
+      const endpoint = isDownload ? '/api/reports/generate' : '/api/reports/send-to-line';
+      const body = { reportType, startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem, ...(isDownload ? {} : { lineGroupDepartment }) };
+      
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('Action failed');
 
-      if (!response.ok) {
-        throw new Error('Failed to generate report');
+      if (isDownload) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Generate filename with Thai date format
+        const date = new Date(startDate);
+        const thaiDateStr = format(date, 'd MMM yyyy', { locale: th });
+        const reportTypeText = reportType === 'daily' ? 'ประจำวันที่' : 'ประจำเดือน';
+        a.download = `รายงาน${reportTypeText} ${thaiDateStr} เรื่องร้องเรียน ปณศ.บางนา.xlsx`;
+        a.click();
+        toast({ title: 'สำเร็จ', description: 'ดาวน์โหลดรายงานเรียบร้อย' });
+      } else {
+        const data = await res.json();
+        toast({ title: 'ส่งสำเร็จ', description: `ส่งไปยังกลุ่ม LINE เรียบร้อย (${data.ticketCount} รายการ)` });
+        setDialogs(prev => ({ ...prev, send: false }));
       }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast({ title: 'ดาวน์โหลดสำเร็จ', description: 'รายงานถูกดาวน์โหลดเรียบร้อยแล้ว' });
-    } catch (error: any) {
-      console.error('Error downloading report:', error);
-      toast({ variant: 'error', title: 'สร้างรายงานไม่สำเร็จ', description: error?.message || 'เกิดข้อผิดพลาดในการสร้างรายงาน' });
+    } catch (e: any) {
+      toast({ variant: 'error', title: 'ไม่สำเร็จ', description: e.message });
     } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSendToLine = async () => {
-    // Validate date range for monthly reports
-    if (reportType === 'monthly' && endDate < startDate) {
-      alert('วันที่สิ้นสุดต้องมากกว่าวันที่เริ่มต้น');
-      return;
-    }
-
-    setIsSending(true);
-    try {
-      const response = await fetch('/api/reports/send-to-line', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reportType,
-          startDate,
-          endDate: reportType === 'monthly' ? endDate : undefined,
-          sourceSystem,
-          lineGroupDepartment, // Send to this LINE group
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send report');
-      }
-
-      toast({
-        title: 'ส่งรายงานสำเร็จ',
-        description: `รายงานถูกส่งไปยัง LINE Group แล้ว (จำนวน: ${data.ticketCount} รายการ, ขนาดไฟล์: ${data.fileSizeMB} MB)`,
-      });
-    } catch (error: any) {
-      console.error('Error sending report to LINE:', error);
-      toast({ variant: 'error', title: 'ส่งรายงานไม่สำเร็จ', description: error?.message || 'เกิดข้อผิดพลาดในการส่งรายงาน' });
-    } finally {
-      setIsSending(false);
+      setStatus(prev => ({ ...prev, [isDownload ? 'generating' : 'sending']: false }));
     }
   };
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8">สร้างรายงาน</h1>
+    <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+      <h1 className="text-2xl font-bold">สร้างรายงานระบบ</h1>
 
       <Card>
-        <CardHeader>
-          <CardTitle>ตัวกรองรายงาน</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Report Type */}
-          <div className="space-y-2">
-            <Label htmlFor="reportType">ประเภทรายงาน</Label>
-            <Select
-              value={reportType}
-              onValueChange={(value) => setReportType(value as ReportType)}
-            >
-              <SelectTrigger id="reportType">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily">รายงานประจำวัน (Daily)</SelectItem>
-                <SelectItem value="monthly">รายงานประจำเดือน (Monthly)</SelectItem>
-              </SelectContent>
-            </Select>
+        <CardHeader><CardTitle className="text-lg">ตัวกรองรายงาน</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label>ประเภท</Label>
+              <Select value={reportType} onValueChange={(v: ReportType) => setReportType(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">รายวัน</SelectItem>
+                  <SelectItem value="monthly">รายเดือน</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{reportType === 'daily' ? 'วันที่' : 'เดือน'}</Label>
+              <input
+                type={reportType === 'daily' ? 'date' : 'month'}
+                value={reportType === 'daily' ? startDate : monthYear}
+                aria-label='ประเภทรายงาน'
+                onChange={(e) => reportType === 'daily' ? setStartDate(e.target.value) : setMonthYear(e.target.value)}
+                className="w-full px-3 py-1.5 border rounded-md text-sm shadow-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>แหล่งข้อมูล</Label>
+              <Select value={sourceSystem} onValueChange={(v: SourceSystem) => setSourceSystem(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">ทั้งหมด</SelectItem>
+                  <SelectItem value="CEC">CEC</SelectItem>
+                  <SelectItem value="SALESFORCE">Salesforce</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Date Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {reportType === 'daily' ? (
-              <div className="space-y-2">
-                <Label htmlFor="startDate">วันที่</Label>
-                <input
-                  id="startDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  aria-label="วันที่"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+          {/* Preview Info Box */}
+          <div className={`p-4 rounded-lg border transition-all ${status.loadingPreview ? 'bg-gray-50 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex gap-2 text-blue-900">
+                {status.loadingPreview ? <Loader2 className="h-5 w-5 animate-spin" /> : <Info className="h-5 w-5" />}
+                <div>
+                  <p className="font-semibold text-sm">สรุปรายการ: {preview.count ?? 0} รายการ</p>
+                  <p className="text-xs text-blue-700">{dateRangeText} | {sourceSystem}</p>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="monthYear">เดือน</Label>
-                <input
-                  id="monthYear"
-                  type="month"
-                  value={monthYear}
-                  onChange={(e) => setMonthYear(e.target.value)}
-                  aria-label="เดือน"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              {preview.rows && preview.rows.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setDialogs(p => ({ ...p, preview: true }))} className="text-blue-700 hover:bg-blue-100">
+                  <Maximize2 className="h-4 w-4 mr-1" /> ขยายจอ
+                </Button>
+              )}
+            </div>
+            
+            {preview.rows && preview.rows.length > 0 && (
+              <div className="-mx-2"><ReportTable data={preview.rows} /></div>
             )}
           </div>
 
-
-          {/* Source System Filter */}
-          <div className="space-y-2">
-            <Label htmlFor="sourceSystem">แหล่งที่มา</Label>
-            <Select
-              value={sourceSystem}
-              onValueChange={(value) => setSourceSystem(value as SourceSystem)}
-            >
-              <SelectTrigger id="sourceSystem">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">ทั้งหมด</SelectItem>
-                <SelectItem value="CEC">CEC </SelectItem>
-                <SelectItem value="SALESFORCE">Salesforce</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-
-          {/* Preview Section */}
-          {loadingPreview ? (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">กำลังโหลดตัวอย่าง...</span>
-              </div>
-            </div>
-          ) : previewCount !== null ? (
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-blue-900 mb-1">ตัวอย่างรายงาน</h4>
-                  <p className="text-sm text-blue-800">
-                    รายงานนี้มีทั้งหมด <span className="font-bold">{previewCount}</span> รายการ
-                    {', '}
-                    ช่วงวันที่: <span className="font-medium">{getDateRangeText()}</span>
-                    แหล่งที่มา: <span className="font-medium">{sourceSystem === 'ALL' ? 'ทั้งหมด' : sourceSystem}</span>
-                  </p>
-
-                  {previewRows && previewRows.length > 0 && (
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="w-full text-sm border border-blue-200 bg-white">
-                        <thead>
-                          <tr className="bg-blue-100 text-blue-900">
-                            <th className="px-3 py-2 border border-blue-200 text-left">ใบงานเลขที่</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">ชื่อลูกค้า</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">แผนก</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">ผู้ควบคุม</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">หัวหน้า DB</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">ความต้องการลูกค้า</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">ผลการดำเนินการ</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">สาเหตุ</th>
-                            <th className="px-3 py-2 border border-blue-200 text-left">แนวทางแก้ไข</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {previewRows.map((row, i) => (
-                            <tr key={i} className="hover:bg-blue-50">
-                              <td className="px-3 py-2 border border-blue-100">{row.ticketNo}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.customerName}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.department}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.chief}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.dbHead}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.description}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.status}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.cause}</td>
-                              <td className="px-3 py-2 border border-blue-100">{row.solution}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 pt-4">
-            <Button
-              onClick={handleDownload}
-              disabled={isGenerating || isSending}
-              className="flex-1"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  กำลังสร้างรายงาน...
-                </>
-              ) : (
-                <>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  ดาวน์โหลดรายงาน
-                </>
-              )}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button onClick={() => handleAction('download')} disabled={status.generating || status.sending} className="flex-1">
+              {status.generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+              ดาวน์โหลด Excel
             </Button>
 
-            <Dialog
-              open={sendDialogOpen}
-              onOpenChange={(open) => {
-                if (!isSending) setSendDialogOpen(open);
-              }}
-            >
+            <Dialog open={dialogs.send} onOpenChange={(o) => !status.sending && setDialogs(p => ({ ...p, send: o }))}>
               <DialogTrigger asChild>
-                <Button
-                  disabled={isGenerating || isSending}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      กำลังส่ง...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-2 h-4 w-4" />
-                      LINE Group
-                    </>
-                  )}
+                <Button variant="outline" disabled={status.generating || status.sending} className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-50">
+                  {status.sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  ส่งเข้า LINE Group
                 </Button>
               </DialogTrigger>
-              <DialogContent onInteractOutside={(e) => { if (isSending) { e.preventDefault(); } }}>
-                <DialogHeader>
-                  <DialogTitle>เลือกกลุ่ม LINE ที่จะส่ง</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <Label htmlFor="lineGroup">กลุ่ม LINE</Label>
-                  <Select
-                    value={lineGroupDepartment}
-                    onValueChange={(value) => setLineGroupDepartment(value as Department)}
-                  >
-                    <SelectTrigger id="lineGroup">
-                      <SelectValue placeholder="เลือกกลุ่ม LINE" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LINE_GROUPS.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <DialogContent>
+                <DialogHeader><DialogTitle>เลือกกลุ่มเป้าหมาย</DialogTitle></DialogHeader>
+                <div className="py-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label>กลุ่ม LINE แผนก</Label>
+                    <Select value={lineGroupDepartment} onValueChange={(v: Department) => setLineGroupDepartment(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(DEPT_LABELS).filter(([k]) => k !== 'ALL').map(([val, label]) => (
+                          <SelectItem key={val} value={val}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <DialogFooter className="pt-4">
-                  <Button
-                    onClick={handleConfirmSend}
-                    disabled={isSending || !lineGroupDepartment}
-                  >
-                    ยืนยันส่งไปยัง LINE {getDepartmentLabel(lineGroupDepartment)}
+                <DialogFooter>
+                  <Button onClick={() => handleAction('send')} disabled={status.sending} className="w-full">
+                    ยืนยันส่งข้อมูล ({preview.count} รายการ)
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
-
-
         </CardContent>
       </Card>
+
+      {/* Full Preview Dialog */}
+      <Dialog open={dialogs.preview} onOpenChange={(o) => setDialogs(p => ({ ...p, preview: o }))}>
+        <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-6 border-b">
+            <DialogTitle>ตัวอย่างข้อมูลฉบับเต็ม</DialogTitle>
+            <p className="text-sm text-muted-foreground">{dateRangeText} | {preview.count} รายการ</p>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden p-6">
+            <ReportTable data={preview.rows || []} />
+          </div>
+          <DialogFooter className="p-4 border-t">
+            <Button variant="outline" onClick={() => setDialogs(p => ({ ...p, preview: false }))}>ปิดหน้าต่าง</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

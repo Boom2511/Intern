@@ -182,11 +182,24 @@ export function validateSalesforceId(salesforceId: string): string | null {
  * - Parcel: CP123456789TH (13 chars)
  * - General format: 2 letters + 9 digits + 2 letters
  * Also supports other courier formats (10-20 alphanumeric characters)
+ * Validation rules:
+ * - No spaces allowed
+ * - No Thai characters allowed
+ * - Only A-Z and 0-9 allowed (no special characters including ()-*&%$#@, etc.)
  */
 export function validateTrackingNumber(trackingNo: string): string | null {
   if (!trackingNo) return null;
 
-  // Remove whitespace
+  // Check for spaces
+  if (/\s/.test(trackingNo)) {
+    return 'เลขพัสดุต้องไม่มีช่องว่าง';
+  }
+
+  // Check for Thai characters (Unicode range for Thai: \u0E00-\u0E7F)
+  if (/[\u0E00-\u0E7F]/.test(trackingNo)) {
+    return 'เลขพัสดุต้องไม่มีภาษาไทย';
+  }
+
   const trimmed = trackingNo.trim().toUpperCase();
 
   // Check minimum length
@@ -199,15 +212,64 @@ export function validateTrackingNumber(trackingNo: string): string | null {
     return 'เลขพัสดุต้องไม่เกิน 30 ตัวอักษร';
   }
 
-  // Check for valid characters (alphanumeric and hyphens only)
-  if (!/^[A-Z0-9-]+$/.test(trimmed)) {
-    return 'เลขพัสดุต้องประกอบด้วยตัวอักษร A-Z, ตัวเลข 0-9 และเครื่องหมาย - เท่านั้น';
+  // Check for valid characters (alphanumeric only, no special characters at all)
+  if (!/^[A-Z0-9]+$/.test(trimmed)) {
+    return 'เลขพัสดุต้องประกอบด้วยตัวอักษร A-Z และตัวเลข 0-9 เท่านั้น (ไม่อนุญาตให้ใช้อักษรพิเศษ เช่น ()-*&%$#@ หรืออักษรไทย)';
   }
 
   // Optional: Check for Thai postal format (2 letters + 9 digits + 2 letters)
   const thaiPostalFormat = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
   if (trimmed.length === 13 && !thaiPostalFormat.test(trimmed)) {
     return 'เลขพัสดุไทย 13 ตัวอักษรต้องอยู่ในรูปแบบ: 2 ตัวอักษร + 9 ตัวเลข + 2 ตัวอักษร (เช่น EM123456789TH)';
+  }
+
+  return null;
+}
+
+/**
+ * Validate Zone ID format
+ * Format examples: REG10260EVD0001, ZNE10260EVD1001, EMS10260EVD1001
+ * General pattern: 3 letters + 5 digits + 3 letters + 4 digits
+ * Validation rules:
+ * - No spaces allowed
+ * - No Thai characters allowed
+ * - Only A-Z and 0-9 allowed (no special characters)
+ */
+export function validateZoneId(zoneId: string): string | null {
+  if (!zoneId) return null;
+
+  // Check for spaces
+  if (/\s/.test(zoneId)) {
+    return 'Zone ID ต้องไม่มีช่องว่าง';
+  }
+
+  // Check for Thai characters (Unicode range for Thai: \u0E00-\u0E7F)
+  if (/[\u0E00-\u0E7F]/.test(zoneId)) {
+    return 'Zone ID ต้องไม่มีภาษาไทย';
+  }
+
+  const trimmed = zoneId.trim().toUpperCase();
+
+  // Check minimum length
+  if (trimmed.length < 10) {
+    return 'Zone ID ต้องมีอย่างน้อย 10 ตัวอักษร';
+  }
+
+  // Check maximum length
+  if (trimmed.length > 20) {
+    return 'Zone ID ต้องไม่เกิน 20 ตัวอักษร';
+  }
+
+  // Check for valid characters (alphanumeric only, no special characters including hyphens)
+  if (!/^[A-Z0-9]+$/.test(trimmed)) {
+    return 'Zone ID ต้องประกอบด้วยตัวอักษร A-Z และตัวเลข 0-9 เท่านั้น (ไม่อนุญาตให้ใช้อักษรพิเศษ)';
+  }
+
+  // Optional: Check for common Zone ID format (3 letters + numbers + letters + numbers)
+  // Example: REG10260EVD0001, ZNE10260EVD1001, EMS10260EVD1001
+  const commonFormat = /^[A-Z]{3}\d{5}[A-Z]{3}\d{4}$/;
+  if (trimmed.length === 15 && !commonFormat.test(trimmed)) {
+    return 'Zone ID รูปแบบ 15 ตัวอักษรต้องอยู่ในรูปแบบ: 3 ตัวอักษร + 5 ตัวเลข + 3 ตัวอักษร + 4 ตัวเลข (เช่น REG10260EVD0001)';
   }
 
   return null;

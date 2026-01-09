@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { UserCog, UploadCloud, ChevronRight } from 'lucide-react';
+import { UserCog, UploadCloud, ChevronRight, Network } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 
@@ -54,6 +54,9 @@ export default function SettingsPage() {
               </Link>
               <Link href="/settings/import/zone-employee" className={`block px-3 py-2 rounded text-gray-800 ${isActive('/settings/import/zone-employee') ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
                 <span className="inline-flex items-center gap-2"><UploadCloud className="w-4 h-4" /> Import: Zone-Employee</span>
+              </Link>
+              <Link href="/settings/zone-tree" className={`block px-3 py-2 rounded text-gray-800 ${isActive('/settings/zone-tree') ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
+                <span className="inline-flex items-center gap-2"><Network className="w-4 h-4" /> Zone Organization Tree</span>
               </Link>
             </nav>
           </nav>

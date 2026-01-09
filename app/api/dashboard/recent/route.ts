@@ -16,8 +16,13 @@ export async function GET() {
   try {
     // Parallel queries for recent data
     const [recentTickets, recentActivities] = await Promise.all([
-      // Recent tickets
+      // Recent tickets (excluding CLOSED tickets)
       prisma.ticket.findMany({
+        where: {
+          status: {
+            not: 'CLOSED',
+          },
+        },
         take: 10,
         orderBy: { createdAt: 'desc' },
         select: {

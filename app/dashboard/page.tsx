@@ -16,6 +16,7 @@ import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useDashboardDepartments } from '@/hooks/useDashboardDepartments';
 import { useDashboardRecent } from '@/hooks/useDashboardRecent';
 import { useDashboardMyStats } from '@/hooks/useDashboardMyStats';
+import { useDashboardMyActivities } from '@/hooks/useDashboardMyActivities';
 import { useEffect, useState } from 'react';
 import { getStatusLabel, formatThaiDate } from '@/lib/utils';
 import { getIssueTypeLabel } from '@/config/issue-types';
@@ -39,15 +40,17 @@ export default function DashboardPage() {
   const { departments, statusBreakdown, departmentStatusChart, isLoading: departmentsLoading, isError: departmentsError, isValidating: departmentsValidating } = useDashboardDepartments(departmentRange);
   const { recentTickets, recentActivities, isLoading: recentLoading, isError: recentError, isValidating: recentValidating } = useDashboardRecent();
   const { myStats, isLoading: myStatsLoading, isError: myStatsError, isValidating: myStatsValidating } = useDashboardMyStats(viewMode === 'mine');
+  const { myActivities, isLoading: myActivitiesLoading, isError: myActivitiesError, isValidating: myActivitiesValidating } = useDashboardMyActivities(viewMode === 'mine');
 
   // Overall loading/error states
-  const isAnyValidating = summaryValidating || departmentsValidating || recentValidating || myStatsValidating;
+  const isAnyValidating = summaryValidating || departmentsValidating || recentValidating || myStatsValidating || myActivitiesValidating;
 
   // Update time every minute
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000);
+    }, 60000); // 60 seconds
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -84,6 +87,7 @@ export default function DashboardPage() {
   };
 
   const displayRecentTickets = viewMode === 'mine' ? (myStats?.recentTickets || []) : (recentTickets || []);
+  const displayActivities = viewMode === 'mine' ? (myActivities || []) : (recentActivities || []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -362,12 +366,12 @@ export default function DashboardPage() {
           {/* Team Activity - Takes 1 column */}
           <Card>
             <CardHeader>
-              <CardTitle>Team Activity</CardTitle>
+              <CardTitle>{viewMode === 'mine' ? 'กิจกรรมของฉัน' : 'Team Activity'}</CardTitle>
             </CardHeader>
             <CardContent>
-              {recentActivities && recentActivities.length > 0 ? (
+              {displayActivities && displayActivities.length > 0 ? (
                 <div className="space-y-4">
-                  {recentActivities.map((activity: any) => (
+                  {displayActivities.map((activity: any) => (
                     <Link key={activity.id} href={`/tickets/${activity.ticketId}`} className="block hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-colors">
                       <div className="flex gap-3">
                         <div className="flex-shrink-0">

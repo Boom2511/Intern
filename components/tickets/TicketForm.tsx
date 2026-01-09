@@ -28,6 +28,7 @@ import {
   validatePhone,
   validateSalesforceId,
   validateTrackingNumber,
+  validateZoneId,
 } from '@/lib/validations';
 
 interface TicketFormData {
@@ -109,6 +110,8 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     recipientAddress: '',
     description: '',
   });
+
+  const hasThaiChar = (text: string) => /[ก-๙]/.test(text);
 
   const issueTypeOptions = getIssueTypeOptions();
   const allDepartmentOptions = getDepartmentOptions();
@@ -249,6 +252,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         break;
       case 'trackingNo':
         error = validateTrackingNumber(value);
+        break;
+      case 'zoneId':
+        error = validateZoneId(value);
         break;
       case 'recipientName':
         if (!value) error = 'กรุณากรอกชื่อผู้รับ';
@@ -401,7 +407,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         // Success toast
         try {
           toast({ title: 'สร้าง Ticket สำเร็จ', description: `หมายเลข ${data.data.ticketNo}` });
-        } catch {}
+        } catch { }
 
         // Show zone status message if applicable
         if (data.zoneStatus === 'NEW_ZONE') {
@@ -428,7 +434,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                     try {
                       await navigator.clipboard.writeText(liffUrl);
                       toast({ title: 'คัดลอกลิงก์แล้ว', description: liffUrl });
-                    } catch {}
+                    } catch { }
                   }}
                   className="ml-2 text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
                 >
@@ -436,7 +442,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 </button>
               ),
             });
-          } catch {}
+          } catch { }
         }
 
         // Invalidate tickets list and dashboard cache to show new ticket
@@ -601,11 +607,39 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               <Input
                 value={formData.trackingNo || ''}
                 onChange={(e) => {
-                  setFormData({ ...formData, trackingNo: e.target.value.toUpperCase() });
+                  const rawValue = e.target.value;
+                  if (hasThaiChar(rawValue)) {
+                    setFieldErrors(prev => ({
+                      ...prev,
+                      trackingNo: 'กรุณาเปลี่ยน Keyboard เป็นภาษาอังกฤษ'
+                    }));
+                    return; // ไม่ต้อง set ค่าเข้า state
+                  }
+                  // Filter out any non-alphanumeric characters
+                  const filtered = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                  setFormData({ ...formData, trackingNo: filtered });
                   // Clear error when typing
                   if (fieldErrors.trackingNo) {
                     setFieldErrors(prev => ({ ...prev, trackingNo: '' }));
                   }
+                }}
+                onKeyDown={(e) => {
+                  // Block special characters and Thai characters
+                  // Allow: A-Z, a-z, 0-9, Backspace, Delete, Arrow keys, Tab, Enter, Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                  const key = e.key;
+                  const isAlphanumeric = /^[A-Za-z0-9]$/.test(key);
+                  const isControlKey = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter'].includes(key);
+                  const isCtrlCmd = e.ctrlKey || e.metaKey;
+
+                  if (!isAlphanumeric && !isControlKey && !isCtrlCmd) {
+                    e.preventDefault();
+                  }
+                }}
+                onFocus={() => {
+                  setFieldErrors(prev => ({
+                    ...prev,
+                    trackingNo: 'อนุญาตเฉพาะภาษาอังกฤษ (A-Z, 0-9)'
+                  }));
                 }}
                 onBlur={(e) => validateField('trackingNo', e.target.value)}
                 placeholder="เช่น EM123456789TH"
@@ -623,15 +657,42 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Zone ID
               </label>
               <div className="relative">
                 <Input
                   value={formData.zoneId || ''}
-                  onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
+                  onChange={(e) => {
+                    // Filter out any non-alphanumeric characters
+                    const filtered = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                    setFormData({ ...formData, zoneId: filtered });
+                    // Clear error when typing
+                    if (fieldErrors.zoneId) {
+                      setFieldErrors(prev => ({ ...prev, zoneId: '' }));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Block special characters and Thai characters
+                    // Allow: A-Z, a-z, 0-9, Backspace, Delete, Arrow keys, Tab, Enter, Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                    const key = e.key;
+                    const isAlphanumeric = /^[A-Za-z0-9]$/.test(key);
+                    const isControlKey = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter'].includes(key);
+                    const isCtrlCmd = e.ctrlKey || e.metaKey;
+
+                    if (!isAlphanumeric && !isControlKey && !isCtrlCmd) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onFocus={() => {
+                  setFieldErrors(prev => ({
+                    ...prev,
+                    zoneId: 'อนุญาตเฉพาะภาษาอังกฤษ (A-Z, 0-9)'
+                  }));
+                }}
+                  onBlur={(e) => validateField('zoneId', e.target.value)}
                   placeholder="เช่น REG10260EVD0001"
-                  className="pr-10"
+                  className={`pr-10 ${fieldErrors.zoneId ? 'border-red-500 focus:ring-red-500' : ''}`}
                 />
                 {loadingZone && (
                   <div className="absolute right-3 top-2.5">
@@ -640,8 +701,15 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 )}
               </div>
 
+              {fieldErrors.zoneId && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {fieldErrors.zoneId}
+                </p>
+              )}
+
               {/* Loading State Text */}
-              {loadingZone && (
+              {loadingZone && !fieldErrors.zoneId && (
                 <p className="text-xs text-blue-600 mt-2 flex items-center animate-pulse">
                   กำลังดึงข้อมูลโซน...
                 </p>
@@ -680,10 +748,10 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
                                     className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${isStaff
-                                        ? "bg-blue-50 text-blue-600 border-blue-100"
-                                        : isChief
-                                          ? "bg-amber-50 text-amber-600 border-amber-100"
-                                          : "bg-purple-50 text-purple-600 border-purple-100"
+                                      ? "bg-blue-50 text-blue-600 border-blue-100"
+                                      : isChief
+                                        ? "bg-amber-50 text-amber-600 border-amber-100"
+                                        : "bg-purple-50 text-purple-600 border-purple-100"
                                       }`}
                                   >
                                     {staffZone || "N/A"}
@@ -877,7 +945,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       if (pn && pn.isValid()) {
                         setFormData(prev => ({ ...prev, recipientPhone: pn.formatNational() }));
                       }
-                    } catch {}
+                    } catch { }
                   }
                   validateField('recipientPhone', value);
                 }}

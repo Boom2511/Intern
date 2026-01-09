@@ -44,6 +44,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [closeCause, setCloseCause] = useState('');
   const [closeSolution, setCloseSolution] = useState('');
+  const [resolutionDetail, setResolutionDetail] = useState('');
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -90,7 +91,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
       .catch(err => console.error('Failed to fetch current user:', err));
   }, []);
 
-  const handleStatusUpdate = async (newStatus: TicketStatus, extra?: { closeCause?: string; closeSolution?: string }) => {
+  const handleStatusUpdate = async (newStatus: TicketStatus, extra?: { closeCause?: string; closeSolution?: string; resolutionDetail?: string }) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/tickets/${ticket.id}`, {
@@ -102,6 +103,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
           changedByStaffName: currentStaffName,
           closeCause: extra?.closeCause,
           closeSolution: extra?.closeSolution,
+          resolutionDetail: extra?.resolutionDetail,
         }),
       });
 
@@ -113,6 +115,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
           setCloseDialogOpen(false);
           setCloseCause('');
           setCloseSolution('');
+          setResolutionDetail('');
         }
         toast({
           variant: 'success',
@@ -369,6 +372,18 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
             </DialogHeader>
             <div className="space-y-5">
               <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  ผลการดำเนินการ <span className="text-gray-400 text-xs"></span>
+                </label>
+                <textarea
+                  value={resolutionDetail}
+                  onChange={(e) => setResolutionDetail(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ผลการดำเนินการที่ได้รับจาก LINE (สามารถแก้ไขได้)"
+                />
+              </div>
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">สาเหตุ <span className="text-red-500">*</span></label>
                 <textarea
                   value={closeCause}
@@ -392,7 +407,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
             <DialogFooter className="mt-4 gap-2 sm:gap-3">
               <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>ยกเลิก</Button>
               <Button
-                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution })}
+                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution, resolutionDetail })}
                 disabled={!closeCause.trim() || !closeSolution.trim() || loading}
               >
                 ยืนยันปิดงาน
@@ -608,7 +623,16 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                   {status !== 'CLOSED' && (
                     <div className="pt-4">
                       <Button
-                        onClick={() => setCloseDialogOpen(true)}
+                        onClick={() => {
+                          // Pre-fill resolutionDetail from the latest end user note or ticket resolutionDetail
+                          const latestUserNote = ticket.notes
+                            ?.filter((note: any) => note.isFromEndUser)
+                            ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                          
+                          const prefillText = ticket.resolutionDetail || latestUserNote?.content || '';
+                          setResolutionDetail(prefillText);
+                          setCloseDialogOpen(true);
+                        }}
                         disabled={loading}
                         variant="outline"
                         className="w-full border-red-300 text-red-700 hover:bg-red-50"

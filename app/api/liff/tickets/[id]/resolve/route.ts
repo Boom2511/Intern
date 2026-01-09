@@ -61,6 +61,9 @@ export async function POST(
         where: { id: params.id },
         data: {
           status,
+          resolutionDetail: content, // Store resolution detail from end user
+          resolvedBy: lineName || 'LINE User',
+          resolvedAt: new Date(),
           statusHistory: {
             create: {
               fromStatus: ticket.status,

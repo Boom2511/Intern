@@ -82,18 +82,18 @@ export async function GET() {
     for (const z of zones) {
       for (const ze of z.employees) {
         const e = ze.employee;
-        const chiefName = ze.chiefOfficer?.name || '';
-        let dbHeadName = '';
+        const chiefEmployeeId = ze.chiefOfficer?.employeeId || '';
+        let dbHeadEmployeeId = '';
         // Resolve DB Head: direct if employee is DB_HEAD, else via manager chain, else from chiefOfficer chain
         if (e.role === 'DB_HEAD') {
-          dbHeadName = e.name || '';
+          dbHeadEmployeeId = e.employeeId || '';
         } else {
           const directHead = findDbHeadViaManagers(e as any);
           if (directHead) {
-            dbHeadName = directHead.name || '';
+            dbHeadEmployeeId = directHead.employeeId || '';
           } else if (ze.chiefOfficer) {
             const headFromChief = findDbHeadViaManagers(ze.chiefOfficer as any);
-            if (headFromChief) dbHeadName = headFromChief.name || '';
+            if (headFromChief) dbHeadEmployeeId = headFromChief.employeeId || '';
           }
         }
 
@@ -103,8 +103,8 @@ export async function GET() {
           z.zoneName || '',
           e.name || '',
           e.employeeId || '',
-          chiefName,
-          dbHeadName,
+          chiefEmployeeId,
+          dbHeadEmployeeId,
         ]);
       }
 
@@ -163,13 +163,88 @@ export async function POST(req: NextRequest) {
   }
 
   /* =======================
-     PHASE 1: Normalize
+     PHASE 0: Build name→employeeId lookup map
   ======================= */
 
-  const normalized: ImportRow[] = rows.map((r) => ({
-    ...r,
-    role: (r.role ?? "STAFF") as Role,
-  }));
+  const nameToEmployeeIdMap = new Map<string, string>();
+  
+  // First pass: collect all employee names and IDs
+  for (const r of rows) {
+    if (r.employeeName && r.employeeId) {
+      const normalizedName = r.employeeName.trim().toLowerCase();
+      nameToEmployeeIdMap.set(normalizedName, r.employeeId);
+      console.log(`📋 [Name Lookup] "${r.employeeName}" → ${r.employeeId}`);
+    }
+  }
+  
+  console.log(`✅ [Name Lookup] Built map with ${nameToEmployeeIdMap.size} entries`);
+
+  /* =======================
+     PHASE 1: Normalize + Auto-detect Role
+  ======================= */
+
+  const normalized: ImportRow[] = rows.map((r) => {
+    // Convert NAME to EMPLOYEE_ID if needed
+    let chiefOfficerId = r.chiefOfficerId || '';
+    let dbHeadId = r.dbHeadId || '';
+    
+    // Helper: Check if string looks like EMPLOYEE_ID (has dot or all caps with numbers)
+    const looksLikeEmployeeId = (str: string) => {
+      if (!str) return false;
+      // Pattern: contains dot (e.g., "priwan.wi") or all caps (e.g., "WICHIAN.SL")
+      return /\.[a-z]{2}$/i.test(str) || /^[A-Z]{2,}\.[A-Z]{2}$/.test(str);
+    };
+    
+    // Try to convert Chief Officer NAME → EMPLOYEE_ID
+    if (chiefOfficerId && !looksLikeEmployeeId(chiefOfficerId)) {
+      const normalizedName = chiefOfficerId.trim().toLowerCase();
+      const mappedId = nameToEmployeeIdMap.get(normalizedName);
+      if (mappedId) {
+        console.log(`🔄 [Name→ID] Chief Officer: "${chiefOfficerId}" → ${mappedId}`);
+        chiefOfficerId = mappedId;
+      } else {
+        console.warn(`⚠️ [Name→ID] Chief Officer "${chiefOfficerId}" not found in lookup map`);
+      }
+    }
+    
+    // Try to convert DB Head NAME → EMPLOYEE_ID
+    if (dbHeadId && !looksLikeEmployeeId(dbHeadId)) {
+      const normalizedName = dbHeadId.trim().toLowerCase();
+      const mappedId = nameToEmployeeIdMap.get(normalizedName);
+      if (mappedId) {
+        console.log(`🔄 [Name→ID] DB Head: "${dbHeadId}" → ${mappedId}`);
+        dbHeadId = mappedId;
+      } else {
+        console.warn(`⚠️ [Name→ID] DB Head "${dbHeadId}" not found in lookup map`);
+      }
+    }
+    
+    // Auto-detect role based on hierarchy structure
+    let detectedRole: Role = Role.STAFF; // default
+    
+    const isSelfChief = chiefOfficerId && chiefOfficerId.trim() === r.employeeId.trim();
+    const isSelfDbHead = dbHeadId && dbHeadId.trim() === r.employeeId.trim();
+    
+    if (isSelfDbHead) {
+      // If employee is their own DB_HEAD → DB_HEAD role
+      detectedRole = Role.DB_HEAD;
+    } else if (isSelfChief) {
+      // If employee is their own CHIEF → CHIEF role
+      detectedRole = Role.CHIEF;
+    } else {
+      // Otherwise → STAFF role
+      detectedRole = Role.STAFF;
+    }
+    
+    console.log(`🔍 [Auto-detect Role] ${r.employeeId}: chiefOfficerId=${chiefOfficerId}, dbHeadId=${dbHeadId} → role=${detectedRole}`);
+    
+    return {
+      ...r,
+      chiefOfficerId, // Use converted ID
+      dbHeadId,       // Use converted ID
+      role: (r.role ?? detectedRole) as Role, // Use provided role or detected role
+    };
+  });
 
   /* =======================
      PHASE 2: Validate (soft + hard)
@@ -177,16 +252,21 @@ export async function POST(req: NextRequest) {
 
   const warnings: string[] = [];
   const errors: string[] = [];
+  const invalidRowIds = new Set<string>(); // Track which rows have errors
 
   console.log('📊 [Backend Validation] Processing', normalized.length, 'rows');
   console.log('🔍 [Backend Validation] Sample row:', normalized[0]);
 
   for (const r of normalized) {
+    let hasError = false;
+    
     if (!r.zoneId || !r.zoneName) {
       errors.push(`ZONE missing (${r.employeeId})`);
+      hasError = true;
     }
     if (!r.employeeId || !r.employeeName) {
       errors.push(`EMPLOYEE missing (${r.zoneId})`);
+      hasError = true;
     }
 
     // DB_HEAD can be their own manager (top of hierarchy)
@@ -201,6 +281,12 @@ export async function POST(req: NextRequest) {
     // Only flag as error if STAFF is trying to manage themselves
     if (r.role === Role.STAFF && (hasSelfRefChief || hasSelfRefHead)) {
       errors.push(`❌ STAFF ${r.employeeId} cannot be their own manager`);
+      hasError = true;
+    }
+    
+    // Track invalid rows
+    if (hasError) {
+      invalidRowIds.add(r.employeeId);
     }
     
     // For CHIEF and DB_HEAD, self-reference is OK (they're at top of their chain)
@@ -219,17 +305,20 @@ export async function POST(req: NextRequest) {
   ======================= */
 
  if (mode === "preview") {
+    const invalidRowCount = invalidRowIds.size;
+    const validRowCount = normalized.length - invalidRowCount;
+    
     return NextResponse.json({
       success: true,
       results: { errors, warnings },
       summary: {
         totalRows: normalized.length,
-        validRows: normalized.length - errors.length,
-        invalidRows: errors.length,
+        validRows: validRowCount,
+        invalidRows: invalidRowCount,
         errors: errors.length,
         warnings: warnings.length
       },
-      canImport: errors.length === 0,
+      canImport: invalidRowCount === 0,
     });
   }
 

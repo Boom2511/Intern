@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
           },
         },
       }) : [];
-      const zoneMap = new Map<string, { chief?: string; dbHead?: string }>();
+      const zoneMap = new Map<string, { staffName?: string; chief?: string; dbHead?: string }>();
       const findDbHeadViaManagers = (start: any): any | null => {
         let current = start?.manager || null;
         const visited = new Set<number>();
@@ -79,32 +79,61 @@ export async function POST(request: NextRequest) {
       for (const z of zones) {
         const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
         const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
-        const chief = chiefEmp?.name;
-        let dbHead = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee?.name || null;
+        const dbHeadEmp = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee || null;
+        
+        let dbHead = dbHeadEmp?.name || null;
         if (!dbHead && chiefEmp) {
           const resolved = findDbHeadViaManagers(chiefEmp as any);
           if (resolved) dbHead = resolved.name;
         }
-        zoneMap.set(z.zoneId, { chief: chief || undefined, dbHead: dbHead || undefined });
+        
+        // Find STAFF employee in zone
+        const staffEmp = z.employees.find(e => e.employee.role === 'STAFF')?.employee || null;
+        
+        // Logic: same as generate route
+        let staffName: string | undefined;
+        let chief: string | undefined;
+        
+        if (dbHeadEmp) {
+          staffName = dbHeadEmp.name;
+          chief = dbHeadEmp.name;
+          dbHead = dbHeadEmp.name;
+        } else if (chiefEmp && !staffEmp) {
+          staffName = chiefEmp.name;
+          chief = dbHead || undefined;
+        } else if (staffEmp) {
+          staffName = staffEmp.name;
+          chief = chiefEmp?.name || undefined;
+        }
+        
+        zoneMap.set(z.zoneId, { staffName, chief, dbHead: dbHead || undefined });
       }
 
       samples = tickets.map((ticket) => {
         const latestClosed = (ticket as any).statusHistory?.[0];
         const note: string = latestClosed?.note || '';
-        const causeMatch = note.match(/สาเหตุ:\s*([\s\S]*?)(?:\n|$)/);
+        const resolutionMatch = note.match(/ผลการดำเนินการ:\s*([\s\S]*?)(?:\nสาเหตุ|$)/);
+        const causeMatch = note.match(/สาเหตุ:\s*([\s\S]*?)(?:\nแนวทางแก้ไข|$)/);
         const solutionMatch = note.match(/แนวทางแก้ไข:\s*([\s\S]*?)(?:\n|$)/);
+        const resolutionDetail = resolutionMatch ? resolutionMatch[1].trim() : (ticket.resolutionDetail || '-');
         const cause = causeMatch ? causeMatch[1].trim() : '-';
         const solution = solutionMatch ? solutionMatch[1].trim() : '-';
         const zoneInfo = ticket.zoneId ? zoneMap.get(ticket.zoneId) : undefined;
 
         return {
+          ticketId: ticket.id,
           ticketNo: ticket.ticketNo,
+          salesforceId: ticket.salesforceId || '-',
+          trackingNo: ticket.trackingNo || '-',
           customerName: ticket.customer.name,
+          customerPhone: ticket.customer.phone,
+          customerAddress: ticket.recipientAddress || '-',
+          staffName: zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-',
           department: ticket.department || '-',
           chief: zoneInfo?.chief || '-',
           dbHead: zoneInfo?.dbHead || '-',
           description: ticket.description,
-          status: getStatusLabel(ticket.status),
+          resolutionDetail,
           cause,
           solution,
         };

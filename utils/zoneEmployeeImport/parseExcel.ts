@@ -29,36 +29,39 @@ export function parseExcelRows(
     }
   }
 
-  return allRows.slice(1).map((row) => {
-    const zoneId = String(row[0] || '').trim();
-    const department = String(row[1] || '').trim() || undefined;
-    const zoneName = String(row[2] || '').trim();
-    const employeeName = String(row[3] || '').trim();
-    const employeeId = String(row[4] || '').trim();
-    const chiefName = String(row[5] || '').trim();
-    const headName = String(row[6] || '').trim();
+  return allRows
+    .slice(1) // Skip header row
+    .filter((row) => {
+      // Filter out empty rows - must have at least zoneId AND employeeId
+      const zoneId = String(row[0] || '').trim();
+      const employeeId = String(row[4] || '').trim();
+      return zoneId && employeeId;
+    })
+    .map((row) => {
+      const zoneId = String(row[0] || '').trim();
+      const department = String(row[1] || '').trim() || undefined;
+      const zoneName = String(row[2] || '').trim();
+      const employeeName = String(row[3] || '').trim();
+      const employeeId = String(row[4] || '').trim();
+      const chiefName = String(row[5] || '').trim();
+      const headName = String(row[6] || '').trim();
 
-    const resolve = (name?: string) =>
-      nameMap.get(name || '') ||
-      nameMapLower.get((name || '').toLowerCase()) ||
-      name;
+      const resolve = (name?: string) =>
+        nameMap.get(name || '') ||
+        nameMapLower.get((name || '').toLowerCase()) ||
+        name;
 
-    const role =
-      employeeId.startsWith('REG')
-        ? 'DB_HEAD'
-        : employeeId.startsWith('ZNE')
-        ? 'CHIEF'
-        : 'STAFF';
-
-    return {
-      zoneId,
-      department,
-      zoneName,
-      employeeName,
-      employeeId,
-      role,
-      chiefOfficerId: resolve(chiefName),
-      dbHeadId: resolve(headName),
-    };
-  });
+      // Don't set role here - let backend auto-detect
+      // Backend will detect role based on hierarchy structure
+      return {
+        zoneId,
+        department,
+        zoneName,
+        employeeName,
+        employeeId,
+        role: undefined, // Let backend auto-detect
+        chiefOfficerId: resolve(chiefName),
+        dbHeadId: resolve(headName),
+      };
+    });
 }

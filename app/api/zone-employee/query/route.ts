@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import {
   getZoneInfo,
   getZoneEmployees,
@@ -30,11 +31,131 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     const mode = searchParams.get("mode");
 
+    // If no mode, return all zones with tree structure (for tree view page)
     if (!mode) {
-      return NextResponse.json(
-        { error: "Missing 'mode' parameter" },
-        { status: 400 }
-      );
+      try {
+        console.log('🌳 [Zone Tree] Fetching zones...');
+        
+        // Get all zones with their employees
+        const zones = await prisma.zone.findMany({
+          include: {
+            employees: {
+              include: {
+                employee: {
+                  include: {
+                    manager: true,
+                    subordinates: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            zoneId: 'asc',
+          },
+        });
+
+      // Group zones by department, collect all zones for each department
+      const departmentMap = new Map();
+      const departmentZonesMap = new Map();
+      
+      zones.forEach(zone => {
+        zone.employees.forEach(ze => {
+          const dept = ze.employee.department || 'ไม่ระบุแผนก';
+          if (!departmentMap.has(dept)) {
+            departmentMap.set(dept, new Map());
+            departmentZonesMap.set(dept, []);
+          }
+          departmentMap.get(dept).set(ze.employee.id, ze.employee);
+          
+          // Store zone info for each employee
+          if (!departmentZonesMap.get(dept).find((z: any) => z.zoneId === zone.zoneId)) {
+            departmentZonesMap.get(dept).push({
+              zoneId: zone.zoneId,
+              zoneName: zone.zoneName,
+              employeeId: ze.employee.employeeId,
+            });
+          }
+        });
+      });
+
+      // Build hierarchy tree for each department
+      const zonesWithTree = Array.from(departmentMap.entries()).map(([dept, employeesMap]) => {
+        const employeeMap = new Map<number, any>();
+        const rootEmployees: any[] = [];
+
+        // First pass: create all employee nodes with zone info
+        const deptZones = departmentZonesMap.get(dept) || [];
+        Array.from(employeesMap.values()).forEach((emp: any) => {
+          const zoneInfo = deptZones.find((z: any) => z.employeeId === emp.employeeId);
+          const node = {
+            id: emp.id,
+            name: emp.name,
+            employeeId: emp.employeeId,
+            role: emp.role,
+            department: emp.department,
+            zoneName: zoneInfo?.zoneName || null,
+            zoneId: zoneInfo?.zoneId || null,
+            subordinates: [],
+          };
+          employeeMap.set(emp.id, node);
+        });
+
+        // Second pass: build hierarchy
+        Array.from(employeesMap.values()).forEach((emp: any) => {
+          const node = employeeMap.get(emp.id);
+          
+          if (node) {
+            if (emp.managerId) {
+              const manager = employeeMap.get(emp.managerId);
+              if (manager) {
+                manager.subordinates.push(node);
+              } else {
+                // Manager not in this zone, treat as root
+                rootEmployees.push(node);
+              }
+            } else {
+              // No manager, this is a root employee (likely DB_HEAD)
+              rootEmployees.push(node);
+            }
+          }
+        });
+
+        // Sort subordinates by role (DB_HEAD > CHIEF > STAFF)
+        const sortByRole = (a: any, b: any) => {
+          const roleOrder: { [key: string]: number } = { DB_HEAD: 0, CHIEF: 1, STAFF: 2 };
+          return roleOrder[a.role] - roleOrder[b.role];
+        };
+
+        const sortTree = (node: any) => {
+          node.subordinates.sort(sortByRole);
+          node.subordinates.forEach(sortTree);
+        };
+
+        rootEmployees.sort(sortByRole);
+        rootEmployees.forEach(sortTree);
+
+        return {
+          zoneId: dept,
+          zoneName: dept,
+          department: dept,
+          employees: rootEmployees,
+        };
+      });
+
+        console.log('✅ [Zone Tree] Successfully built', zonesWithTree.length, 'zones');
+        
+        return NextResponse.json({
+          success: true,
+          zones: zonesWithTree,
+        });
+      } catch (error) {
+        console.error('❌ [Zone Tree] Error:', error);
+        return NextResponse.json(
+          { success: false, error: 'Failed to build zone tree: ' + (error as Error).message },
+          { status: 500 }
+        );
+      }
     }
 
     // Get zone information (complete with hierarchy)

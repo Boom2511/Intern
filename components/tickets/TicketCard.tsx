@@ -13,14 +13,18 @@ import { getIssueTypeLabel } from '@/config/issue-types';
 
 interface TicketCardProps {
   ticket: TicketWithCustomer;
+  router?: any; // For LIFF queue page navigation
 }
 
-export default function TicketCard({ ticket }: TicketCardProps) {
+export default function TicketCard({ ticket, router }: TicketCardProps) {
   const notesCount = ticket.notes?.length || 0;
   const hasUserUpdate = ticket.notes?.some(n => n.isFromEndUser);
 
+  // If router is provided (from LIFF queue), use LIFF route
+  const href = router ? `/liff/tickets/${ticket.id}` : `/tickets/${ticket.id}`;
+
   return (
-    <Link href={`/tickets/${ticket.id}`} className="block group">
+    <Link href={href} className="block group">
       <Card className="hover:border-blue-400 transition-all duration-200 shadow-sm hover:shadow-md">
         <CardContent className="p-4">
           {/* Top Row: Ticket No & Status */}

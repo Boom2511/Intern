@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       { width: 30 }, // แนวทางแก้ไข
     ];
 
-    // Build a zone map to fill ผู้ควบคุม/หัวหน้า DB if zoneId exists
+    // Build a zone map to fill ชื่อเจ้าหน้าที่/ผู้ควบคุม/หัวหน้า DB from zoneId
     const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
     const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
       where: { zoneId: { in: zoneIds } },
@@ -149,14 +149,15 @@ export async function POST(request: NextRequest) {
         },
       },
     }) : [];
-    const zoneMap = new Map<string, { chief?: string; dbHead?: string }>();
+    const zoneMap = new Map<string, { staffName?: string; chief?: string; dbHead?: string }>();
     for (const z of zones) {
       const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
       const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
-      const chief = chiefEmp?.name;
-      let dbHead = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee?.name || null;
+      const dbHeadEmp = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee || null;
+      
+      // Find DB_HEAD via manager chain if not directly in zone
+      let dbHead = dbHeadEmp?.name || null;
       if (!dbHead && chiefEmp) {
-        // Fallback: if DB_HEAD not directly assigned to zone, try manager chain from chief
         let current: any = (chiefEmp as any).manager || null;
         const visited = new Set<number>();
         while (current && !visited.has(current.id)) {
@@ -165,18 +166,49 @@ export async function POST(request: NextRequest) {
           current = current.manager || null;
         }
       }
-      zoneMap.set(z.zoneId, { chief: chief || undefined, dbHead: dbHead || undefined });
+      
+      // Find STAFF employee in zone
+      const staffEmp = z.employees.find(e => e.employee.role === 'STAFF')?.employee || null;
+      
+      // Logic: 
+      // If zone has DB_HEAD → all 3 columns = DB_HEAD name
+      // If zone has CHIEF → staffName = CHIEF, chief = DB_HEAD, dbHead = DB_HEAD
+      // If zone has STAFF → staffName = STAFF, chief = CHIEF, dbHead = DB_HEAD
+      let staffName: string | undefined;
+      let chief: string | undefined;
+      
+      if (dbHeadEmp) {
+        // Zone has DB_HEAD → all 3 are same
+        staffName = dbHeadEmp.name;
+        chief = dbHeadEmp.name;
+        dbHead = dbHeadEmp.name;
+      } else if (chiefEmp && !staffEmp) {
+        // Zone has CHIEF (no STAFF) → staffName = CHIEF, others = DB_HEAD
+        staffName = chiefEmp.name;
+        chief = dbHead || undefined;
+      } else if (staffEmp) {
+        // Zone has STAFF → staffName = STAFF, chief = CHIEF, dbHead = DB_HEAD
+        staffName = staffEmp.name;
+        chief = chiefEmp?.name || undefined;
+        // dbHead already set from above
+      }
+      
+      zoneMap.set(z.zoneId, { staffName, chief, dbHead: dbHead || undefined });
     }
 
     // Data rows
     tickets.forEach((ticket, index) => {
       const latestClosed = (ticket as any).statusHistory?.[0];
       const note: string = latestClosed?.note || '';
-      const causeMatch = note.match(/สาเหตุ:\s*([\s\S]*?)(?:\n|$)/);
+      const resolutionMatch = note.match(/ผลการดำเนินการ:\s*([\s\S]*?)(?:\nสาเหตุ|$)/);
+      const causeMatch = note.match(/สาเหตุ:\s*([\s\S]*?)(?:\nแนวทางแก้ไข|$)/);
       const solutionMatch = note.match(/แนวทางแก้ไข:\s*([\s\S]*?)(?:\n|$)/);
+      const resolutionDetail = resolutionMatch ? resolutionMatch[1].trim() : (ticket.resolutionDetail || '-');
       const cause = causeMatch ? causeMatch[1].trim() : '-';
       const solution = solutionMatch ? solutionMatch[1].trim() : '-';
 
+      const zoneInfo = ticket.zoneId ? zoneMap.get(ticket.zoneId) : undefined;
+      
       const row = worksheet.addRow([
         index + 1,
         ticket.ticketNo,
@@ -185,12 +217,12 @@ export async function POST(request: NextRequest) {
         ticket.customer.name,
         ticket.customer.phone,
         ticket.recipientAddress || '-',
-        ticket.assignedTo || ticket.createdBy || '-',
+        zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-', // ชื่อเจ้าหน้าที่ from zoneId
         ticket.department || '-',
-        (ticket.zoneId && zoneMap.get(ticket.zoneId || '')?.chief) || '-', // ผู้ควบคุม = Chief
-        (ticket.zoneId && zoneMap.get(ticket.zoneId || '')?.dbHead) || '-', // หัวหน้า DB = DB_head
+        zoneInfo?.chief || '-', // ผู้ควบคุม
+        zoneInfo?.dbHead || '-', // หัวหน้า DB
         ticket.description, // ความต้องการลูกค้า
-        getStatusLabel(ticket.status), // ผลการดำเนินการ (แสดงภาษาไทย)
+        resolutionDetail, // ผลการดำเนินการ from end user or CEC input
         cause, // สาเหตุ from CEC input before close
         solution, // แนวทางแก้ไข from CEC input before close
       ]);

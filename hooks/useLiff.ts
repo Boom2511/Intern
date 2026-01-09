@@ -55,20 +55,52 @@ export function useLiff(options?: UseLiffOptions) {
         await liff.init({ liffId });
         setLiffInitialized(true);
 
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
         // Not in LINE app
         if (!liff.isInClient()) {
           if (options?.requireLogin) {
-            // Force open in LINE via Universal Link with loop guard
-            const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-            const url = new URL(window.location.href);
-            const alreadyRedirected = url.searchParams.get('liffRedirected') === '1';
-            if (!alreadyRedirected && liffId) {
-              const target = window.location.href;
-              const u = new URL(target);
-              const state = `${u.pathname}${u.search}`;
-              const universal = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}&liffRedirected=1`;
-              window.location.replace(universal);
-              return;
+            if (isMobile) {
+              // 📱 Mobile Browser → Redirect to LINE App using liff.openWindow
+              const redirected = sessionStorage.getItem('liff_redirected');
+              
+              if (!redirected) {
+                sessionStorage.setItem('liff_redirected', '1');
+                console.log('[useLiff] Mobile browser detected - redirecting to LINE app');
+                
+                liff.openWindow({
+                  url: `https://liff.line.me/${liffId}${window.location.pathname}${window.location.search}`,
+                  external: false,
+                });
+                return;
+              }
+            } else {
+              // 💻 Desktop Browser → Show message or redirect to LINE Login
+              console.log('[useLiff] Desktop browser detected');
+              
+              // Check if LINE Channel ID is configured for Desktop Login
+              const channelId = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID;
+              
+              if (channelId) {
+                const redirected = sessionStorage.getItem('liff_desktop_redirected');
+                if (!redirected) {
+                  sessionStorage.setItem('liff_desktop_redirected', '1');
+                  console.log('[useLiff] Redirecting to LINE Login');
+                  
+                  // Use LINE Login OAuth
+                  const currentUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+                  const lineLoginUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(currentUrl)}&state=desktop_liff&scope=profile%20openid`;
+                  
+                  window.location.href = lineLoginUrl;
+                  return;
+                }
+              } else {
+                // No Channel ID - show error message
+                const err = 'กรุณาเปิดผ่าน LINE App บนมือถือ (Desktop browser ไม่รองรับ)';
+                setError(err);
+                options?.onError?.(err);
+                console.warn('[useLiff] NEXT_PUBLIC_LINE_CHANNEL_ID not configured - Desktop login disabled');
+              }
             }
           }
           setIsReady(true);
