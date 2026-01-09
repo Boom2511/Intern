@@ -145,7 +145,7 @@ export function useZoneEmployeeImport() {
                 setImporting(false);
                 setImportProgress(0);
                 toast({ 
-                  variant: 'destructive',
+                  variant: 'error',
                   title: 'Import ล้มเหลว',
                   description: data.message
                 });
@@ -182,7 +182,7 @@ export function useZoneEmployeeImport() {
         setImporting(false);
         setImportProgress(0);
         toast({ 
-          variant: 'destructive',
+          variant: 'error',
           title: 'เกิดข้อผิดพลาด',
           description: error.message || 'ไม่สามารถ Import ได้'
         });
