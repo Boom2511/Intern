@@ -185,7 +185,9 @@ const TicketCard = React.memo(function TicketCard({ ticket, router }: { ticket: 
     {
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID as string | undefined;
       const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
-      const universal = liffId ? `https://liff.line.me/${liffId}?redirect=${encodeURIComponent(target)}` : target;
+      const u = new URL(target);
+      const state = `${u.pathname}${u.search}`;
+      const universal = liffId ? `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}` : target;
       router.push(universal);
     }
   }, [router, ticket.id, schedulePrefetch]);

@@ -5,6 +5,7 @@ import { useZoneEmployeeImport } from '@/hooks/useZoneEmployeeImport';
 import { ValidationResult } from '@/types/zoneEmployee';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ImportProgressModal } from '@/components/ImportProgressModal';
 import { Upload, FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle, XCircle, Download, Info, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -103,6 +104,12 @@ export default function ZoneEmployeeImportPage() {
     } catch (err) {
       // hook จัดการ toast แล้ว แต่อาจจะใส่เพิ่มตรงนี้ได้
     }
+  };
+
+  // 4. Close modal and reset
+  const handleCloseModal = () => {
+    setImportSuccess(false);
+    hook.clear();
   };
 
   const getStatusBadge = (result: ValidationResult) => {
@@ -209,7 +216,7 @@ export default function ZoneEmployeeImportPage() {
           )}
 
           {/* Validation Table (ดึงจาก hook.validationResults) */}
-          {hook.validationResults && hook.validationResults.length > 0 && !importSuccess && (
+          {hook.validationResults && hook.validationResults.length > 0 && !hook.importing && !importSuccess && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">ผลการตรวจสอบ</h3>
@@ -254,16 +261,17 @@ export default function ZoneEmployeeImportPage() {
             </div>
           )}
 
-          {/* Success State */}
-          {importSuccess && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-              <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
-              <h3 className="text-lg font-semibold text-green-900">Import สำเร็จ!</h3>
-              <Button onClick={() => { hook.clear(); setImportSuccess(false); }} variant="outline" className="mt-4">
-                Import ไฟล์ใหม่
-              </Button>
-            </div>
-          )}
+          {/* Import Progress Modal */}
+          <ImportProgressModal
+            open={hook.importing || importSuccess}
+            importing={hook.importing}
+            progress={hook.importProgress}
+            phase={hook.importPhase}
+            message={hook.importMessage}
+            success={importSuccess}
+            onCancel={hook.cancelImport}
+            onClose={handleCloseModal}
+          />
         </CardContent>
       </Card>
     </div>
