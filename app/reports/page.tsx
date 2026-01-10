@@ -14,7 +14,6 @@ import Link from 'next/link';
 
 // --- Types & Constants ---
 type ReportType = 'daily' | 'monthly';
-type SourceSystem = 'ALL' | 'CEC' | 'SALESFORCE';
 type Department = 'ALL' | 'DB1' | 'DB2' | 'DB3' | 'DB4' | 'DB5' | 'DB6';
 
 const DEPT_LABELS: Record<Department, string> = {
@@ -22,46 +21,52 @@ const DEPT_LABELS: Record<Department, string> = {
 };
 
 // --- Sub-Component: Report Table ---
-const ReportTable = ({ data }: { data: any[] }) => (
-  <div className="overflow-x-auto border rounded-md shadow-sm">
-    <table className="min-w-full text-[11px] border-collapse bg-white">
-      <thead className="sticky top-0 z-10 bg-blue-600 text-white">
-        <tr>
-          {['ลำดับ', 'ใบงานเลขที่', 'Salesforce', 'หมายเลขสิ่งของ', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เจ้าหน้าที่', 'แผนก', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการ', 'ผลดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข'].map((h) => (
-            <th key={h} className="px-2 py-2 border-r border-blue-500 font-medium whitespace-nowrap">{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((row, i) => (
-          <tr key={i} className={`hover:bg-blue-50 border-b ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-            <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
-            <td className="px-2 py-1.5 font-medium whitespace-nowrap">
-              <Link href={`/tickets/${row.ticketId}`} className="text-blue-700 hover:text-blue-900 hover:underline" target="_blank">
-                {row.ticketNo}
-              </Link>
-            </td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.salesforceId}</td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.trackingNo}</td>
-            <td className="px-2 py-1.5 font-medium whitespace-nowrap">{row.customerName}</td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.customerPhone}</td>
-            <td className="px-2 py-1.5 max-w-[200px] truncate">{row.customerAddress}</td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.staffName}</td>
-            <td className="px-2 py-1.5 text-center">
-              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">{row.department}</span>
-            </td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.chief}</td>
-            <td className="px-2 py-1.5 whitespace-nowrap">{row.dbHead}</td>
-            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
-            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.resolutionDetail}</td>
-            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.cause}</td>
-            <td className="px-2 py-1.5 max-w-[150px] truncate">{row.solution}</td>
+const ReportTable = ({ data, showSalesforceId = true }: { data: any[], showSalesforceId?: boolean }) => {
+  const headers = ['ลำดับ', 'ใบงานเลขที่'];
+  if (showSalesforceId) headers.push('Salesforce');
+  headers.push('หมายเลขสิ่งของ', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เจ้าหน้าที่', 'แผนก', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการ', 'ผลดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข');
+
+  return (
+    <div className="overflow-x-auto border rounded-md shadow-sm">
+      <table className="min-w-full text-[11px] border-collapse bg-white">
+        <thead className="sticky top-0 z-10 bg-blue-600 text-white">
+          <tr>
+            {headers.map((h) => (
+              <th key={h} className="px-2 py-2 border-r border-blue-500 font-medium whitespace-nowrap">{h}</th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} className={`hover:bg-blue-50 border-b ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+              <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
+              <td className="px-2 py-1.5 font-medium whitespace-nowrap">
+                <Link href={`/tickets/${row.ticketId}`} className="text-blue-700 hover:text-blue-900 hover:underline" target="_blank">
+                  {row.ticketNo}
+                </Link>
+              </td>
+              {showSalesforceId && <td className="px-2 py-1.5 whitespace-nowrap">{row.salesforceId}</td>}
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.trackingNo}</td>
+              <td className="px-2 py-1.5 font-medium whitespace-nowrap">{row.customerName}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.customerPhone}</td>
+              <td className="px-2 py-1.5 max-w-[200px] truncate">{row.customerAddress}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.staffName}</td>
+              <td className="px-2 py-1.5 text-center">
+                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">{row.department}</span>
+              </td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.chief}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.dbHead}</td>
+              <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
+              <td className="px-2 py-1.5 max-w-[150px] truncate">{row.resolutionDetail}</td>
+              <td className="px-2 py-1.5 max-w-[150px] truncate">{row.cause}</td>
+              <td className="px-2 py-1.5 max-w-[150px] truncate">{row.solution}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 // --- Main Page Component ---
 export default function ReportsPage() {
@@ -70,12 +75,12 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [monthYear, setMonthYear] = useState(format(new Date(), 'yyyy-MM'));
-  const [sourceSystem, setSourceSystem] = useState<SourceSystem>('ALL');
   const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1');
   
   const [status, setStatus] = useState({ generating: false, sending: false, loadingPreview: false });
-  const [preview, setPreview] = useState<{ count: number | null, rows: any[] | null }>({ count: null, rows: null });
+  const [preview, setPreview] = useState<{ count: number | null, cec: any[] | null, salesforce: any[] | null }>({ count: null, cec: null, salesforce: null });
   const [dialogs, setDialogs] = useState({ send: false, preview: false });
+  const [activeTab, setActiveTab] = useState<'CEC' | 'SALESFORCE'>('CEC');
 
   // Auto-calculate dates for monthly report
   useEffect(() => {
@@ -94,17 +99,19 @@ export default function ReportsPage() {
         const res = await fetch('/api/reports/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem, includeSamples: true, sampleLimit: 9999 }),
+          body: JSON.stringify({ startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem: 'ALL', includeSamples: true, sampleLimit: 9999 }),
         });
         if (res.ok) {
           const data = await res.json();
-          setPreview({ count: data.count, rows: data.samples });
+          const cecTickets = data.samples?.filter((t: any) => t.channel === 'CEC') || [];
+          const salesforceTickets = data.samples?.filter((t: any) => t.channel === 'SALESFORCE') || [];
+          setPreview({ count: data.count, cec: cecTickets, salesforce: salesforceTickets });
         }
       } catch (e) { console.error(e); }
       finally { setStatus(prev => ({ ...prev, loadingPreview: false })); }
     };
     fetchPreview();
-  }, [startDate, endDate, sourceSystem, reportType]);
+  }, [startDate, endDate, reportType]);
 
   const dateRangeText = useMemo(() => {
     const date = new Date(startDate);
@@ -117,7 +124,7 @@ export default function ReportsPage() {
 
     try {
       const endpoint = isDownload ? '/api/reports/generate' : '/api/reports/send-to-line';
-      const body = { reportType, startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem, ...(isDownload ? {} : { lineGroupDepartment }) };
+      const body = { reportType, startDate, endDate: reportType === 'monthly' ? endDate : undefined, ...(isDownload ? {} : { lineGroupDepartment }) };
       
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error('Action failed');
@@ -153,7 +160,7 @@ export default function ReportsPage() {
       <Card>
         <CardHeader><CardTitle className="text-lg">ตัวกรองรายงาน</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>ประเภท</Label>
               <Select value={reportType} onValueChange={(v: ReportType) => setReportType(v)}>
@@ -175,18 +182,6 @@ export default function ReportsPage() {
                 className="w-full px-3 py-1.5 border rounded-md text-sm shadow-sm"
               />
             </div>
-
-            <div className="space-y-1.5">
-              <Label>แหล่งข้อมูล</Label>
-              <Select value={sourceSystem} onValueChange={(v: SourceSystem) => setSourceSystem(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">ทั้งหมด</SelectItem>
-                  <SelectItem value="CEC">CEC</SelectItem>
-                  <SelectItem value="SALESFORCE">Salesforce</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           {/* Preview Info Box */}
@@ -195,19 +190,51 @@ export default function ReportsPage() {
               <div className="flex gap-2 text-blue-900">
                 {status.loadingPreview ? <Loader2 className="h-5 w-5 animate-spin" /> : <Info className="h-5 w-5" />}
                 <div>
-                  <p className="font-semibold text-sm">สรุปรายการ: {preview.count ?? 0} รายการ</p>
-                  <p className="text-xs text-blue-700">{dateRangeText} | {sourceSystem}</p>
+                  <p className="font-semibold text-sm">สรุปรายการ: {preview.count ?? 0} รายการ (CEC: {preview.cec?.length ?? 0}, Salesforce: {preview.salesforce?.length ?? 0})</p>
+                  <p className="text-xs text-blue-700">{dateRangeText} | รายงานจะแยกเป็น 2 sheets (CEC, Salesforce)</p>
                 </div>
               </div>
-              {preview.rows && preview.rows.length > 0 && (
+              {((preview.cec && preview.cec.length > 0) || (preview.salesforce && preview.salesforce.length > 0)) && (
                 <Button variant="ghost" size="sm" onClick={() => setDialogs(p => ({ ...p, preview: true }))} className="text-blue-700 hover:bg-blue-100">
                   <Maximize2 className="h-4 w-4 mr-1" /> ขยายจอ
                 </Button>
               )}
             </div>
             
-            {preview.rows && preview.rows.length > 0 && (
-              <div className="-mx-2"><ReportTable data={preview.rows} /></div>
+            {/* Tabs for CEC and Salesforce */}
+            {((preview.cec && preview.cec.length > 0) || (preview.salesforce && preview.salesforce.length > 0)) && (
+              <div className="space-y-3">
+                <div className="flex gap-2 border-b">
+                  <button
+                    onClick={() => setActiveTab('CEC')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      activeTab === 'CEC'
+                        ? 'text-blue-700 border-b-2 border-blue-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    CEC ({preview.cec?.length ?? 0})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('SALESFORCE')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      activeTab === 'SALESFORCE'
+                        ? 'text-blue-700 border-b-2 border-blue-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Salesforce ({preview.salesforce?.length ?? 0})
+                  </button>
+                </div>
+                <div className="-mx-2">
+                  {activeTab === 'CEC' && preview.cec && preview.cec.length > 0 && (
+                    <ReportTable data={preview.cec} showSalesforceId={false} />
+                  )}
+                  {activeTab === 'SALESFORCE' && preview.salesforce && preview.salesforce.length > 0 && (
+                    <ReportTable data={preview.salesforce} showSalesforceId={true} />
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -256,10 +283,38 @@ export default function ReportsPage() {
         <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-6 border-b">
             <DialogTitle>ตัวอย่างข้อมูลฉบับเต็ม</DialogTitle>
-            <p className="text-sm text-muted-foreground">{dateRangeText} | {preview.count} รายการ</p>
+            <p className="text-sm text-muted-foreground">{dateRangeText} | {preview.count} รายการ (CEC: {preview.cec?.length ?? 0}, Salesforce: {preview.salesforce?.length ?? 0})</p>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden p-6">
-            <ReportTable data={preview.rows || []} />
+          <div className="flex-1 overflow-auto p-6 space-y-4">
+            {/* Tabs for full preview */}
+            <div className="flex gap-2 border-b sticky top-0 bg-white z-10 pb-2">
+              <button
+                onClick={() => setActiveTab('CEC')}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'CEC'
+                    ? 'text-blue-700 border-b-2 border-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                CEC ({preview.cec?.length ?? 0})
+              </button>
+              <button
+                onClick={() => setActiveTab('SALESFORCE')}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'SALESFORCE'
+                    ? 'text-blue-700 border-b-2 border-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Salesforce ({preview.salesforce?.length ?? 0})
+              </button>
+            </div>
+            {activeTab === 'CEC' && preview.cec && preview.cec.length > 0 && (
+              <ReportTable data={preview.cec} showSalesforceId={false} />
+            )}
+            {activeTab === 'SALESFORCE' && preview.salesforce && preview.salesforce.length > 0 && (
+              <ReportTable data={preview.salesforce} showSalesforceId={true} />
+            )}
           </div>
           <DialogFooter className="p-4 border-t">
             <Button variant="outline" onClick={() => setDialogs(p => ({ ...p, preview: false }))}>ปิดหน้าต่าง</Button>

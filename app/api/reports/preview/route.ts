@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
           resolutionDetail,
           cause,
           solution,
+          channel: ticket.channel,
         };
       });
     }

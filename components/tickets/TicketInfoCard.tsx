@@ -16,6 +16,7 @@ import { getIssueTypeLabel, getIssueTypeOptions } from '@/config/issue-types';
 import { TicketWithRelations } from '@/types';
 import { IssueType } from '@prisma/client';
 import { cn, displayThaiPhone } from '@/lib/utils';
+import { formatSalesforceId } from '@/lib/validations';
 
 interface TicketInfoCardProps {
   ticket: TicketWithRelations;
@@ -120,11 +121,38 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                   <div className="space-y-1">
                     <Input
                       value={editForm.salesforceId}
-                      onChange={(e) => onFormChange({ salesforceId: e.target.value })}
-                      placeholder="Salesforce ID (ถ้ามี)"
+                      onChange={(e) => {
+                        // Filter out special characters, only allow C, numbers, and hyphen
+                        const filtered = e.target.value.replace(/[^C0-9\-]/gi, '').toUpperCase();
+                        // Limit to 12 characters max (C-0123456789)
+                        const limited = filtered.substring(0, 12);
+                        onFormChange({ salesforceId: limited });
+                      }}
+                      onKeyDown={(e) => {
+                        // Block special characters like (){}[]|*&^%$#@!
+                        const key = e.key;
+                        const isValidChar = /^[C0-9\-]$/i.test(key);
+                        const isControlKey = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter'].includes(key);
+                        const isCtrlCmd = e.ctrlKey || e.metaKey;
+
+                        if (!isValidChar && !isControlKey && !isCtrlCmd) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Auto-format with hyphen on blur
+                        const formatted = formatSalesforceId(e.target.value);
+                        onFormChange({ salesforceId: formatted });
+                      }}
+                      placeholder="เช่น C-0123456789 หรือ C0123456789"
                       className={cn("w-full", errors.salesforceId && "border-red-500 focus-visible:ring-red-500")}
                     />
                     {errors.salesforceId && <p className="text-xs text-red-500">{errors.salesforceId}</p>}
+                    {!errors.salesforceId && editForm.salesforceId && (
+                      <p className="text-xs text-gray-500">
+                        รูปแบบ: C ตามด้วยตัวเลข 10 หลัก (ไม่อนุญาตอักขระพิเศษ)
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <span className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-1.5 rounded border border-gray-200">

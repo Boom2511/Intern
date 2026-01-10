@@ -27,6 +27,7 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import {
   validatePhone,
   validateSalesforceId,
+  formatSalesforceId,
   validateTrackingNumber,
   validateZoneId,
 } from '@/lib/validations';
@@ -571,14 +572,35 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 <Input
                   value={formData.salesforceId || ''}
                   onChange={(e) => {
-                    setFormData({ ...formData, salesforceId: e.target.value });
+                    // Filter out special characters, only allow C, numbers, and hyphen
+                    const filtered = e.target.value.replace(/[^C0-9\-]/gi, '').toUpperCase();
+                    // Limit to 12 characters max (C-0123456789)
+                    const limited = filtered.substring(0, 12);
+                    setFormData({ ...formData, salesforceId: limited });
                     // Clear error when typing
                     if (fieldErrors.salesforceId) {
                       setFieldErrors(prev => ({ ...prev, salesforceId: '' }));
                     }
                   }}
-                  onBlur={(e) => validateField('salesforceId', e.target.value)}
-                  placeholder="กรอกหมายเลข Salesforce (15 หรือ 18 ตัวอักษร)"
+                  onKeyDown={(e) => {
+                    // Block special characters like (){}[]|*&^%$#@!
+                    // Allow: C, 0-9, hyphen, Backspace, Delete, Arrow keys, Tab, Enter, Ctrl commands
+                    const key = e.key;
+                    const isValidChar = /^[C0-9\-]$/i.test(key);
+                    const isControlKey = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter'].includes(key);
+                    const isCtrlCmd = e.ctrlKey || e.metaKey;
+
+                    if (!isValidChar && !isControlKey && !isCtrlCmd) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Auto-format with hyphen on blur
+                    const formatted = formatSalesforceId(e.target.value);
+                    setFormData({ ...formData, salesforceId: formatted });
+                    validateField('salesforceId', formatted);
+                  }}
+                  placeholder="เช่น C-0123456789 หรือ C0123456789"
                   className={fieldErrors.salesforceId ? 'border-red-500 focus:ring-red-500' : ''}
                 />
                 {fieldErrors.salesforceId && (

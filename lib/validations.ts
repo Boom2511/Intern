@@ -152,26 +152,54 @@ export function validatePhone(phone: string): string | null {
 
 /**
  * Validate Salesforce ID format
- * Salesforce ID is typically 15 or 18 characters alphanumeric
- * Format: [0-9a-zA-Z]{15,18}
+ * Format: C-0123456789 (letter C + hyphen + 10 digits)
+ * Example: C-0123456789
+ * Accepts both C0123456789 (11 chars) and C-0123456789 (12 chars)
  */
 export function validateSalesforceId(salesforceId: string): string | null {
   if (!salesforceId) return null;
 
   // Remove whitespace
-  const trimmed = salesforceId.trim();
+  const trimmed = salesforceId.trim().toUpperCase();
 
-  // Check length (15 or 18 characters)
-  if (trimmed.length !== 15 && trimmed.length !== 18) {
-    return 'Salesforce ID ต้องมี 15 หรือ 18 ตัวอักษร';
+  // Check for valid characters only (C, hyphen, and digits)
+  if (!/^[C\-0-9]+$/.test(trimmed)) {
+    return 'Salesforce ID อนุญาตเฉพาะ C, -, และตัวเลข 0-9 เท่านั้น';
   }
 
-  // Check format (alphanumeric only)
-  if (!/^[0-9a-zA-Z]{15,18}$/.test(trimmed)) {
-    return 'Salesforce ID ต้องประกอบด้วยตัวอักษรและตัวเลขเท่านั้น';
+  // Accept both formats: C0123456789 (11) or C-0123456789 (12)
+  // Remove hyphen for validation
+  const normalized = trimmed.replace(/-/g, '');
+
+  // Check length (must be C + 10 digits = 11 characters after removing hyphen)
+  if (normalized.length !== 11) {
+    return 'Salesforce ID ต้องมี C ตามด้วยตัวเลข 10 หลัก (เช่น C-0123456789)';
+  }
+
+  // Check format: must start with 'C' followed by exactly 10 digits
+  if (!/^C\d{10}$/.test(normalized)) {
+    return 'Salesforce ID ต้องขึ้นต้นด้วย C ตามด้วยตัวเลข 10 หลัก (เช่น C-0123456789)';
   }
 
   return null;
+}
+
+/**
+ * Format Salesforce ID with auto-hyphen
+ * Converts C0123456789 to C-0123456789
+ */
+export function formatSalesforceId(salesforceId: string): string {
+  if (!salesforceId) return '';
+  
+  // Remove all non-alphanumeric characters and convert to uppercase
+  const cleaned = salesforceId.replace(/[^C0-9]/gi, '').toUpperCase();
+  
+  // If starts with C and has digits after it, add hyphen
+  if (cleaned.startsWith('C') && cleaned.length > 1) {
+    return 'C-' + cleaned.substring(1);
+  }
+  
+  return cleaned;
 }
 
 /**
