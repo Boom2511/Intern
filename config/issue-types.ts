@@ -43,6 +43,12 @@ export const SLA_CONFIG: Record<IssueType, IssueTypeConfig> = {
     label: 'ขอแก้ไขจ่าหน้า',
     description: 'ขอแก้ไขจ่าหน้าพัสดุ',
   },
+  RECEIPT_TRACKING: {
+    slaHours: 24,
+    priority: 'MEDIUM',
+    label: 'ติดตามใบตอบรับ/ขอใบแทนใบตอบรับ',
+    description: 'ติดตามหรือขอใบแทนใบตอบรับพัสดุ',
+  },
   OTHER: {
     slaHours: 24,
     priority: 'MEDIUM',

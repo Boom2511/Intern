@@ -172,6 +172,7 @@ enum IssueType {
   SERVICE_COMPLAINT   // ร้องเรียนบริการ
   RETURN_REQUEST      // ขอถอนคืน
   ADDRESS_CORRECTION  // ขอแก้ไขจ่าหน้า
+  RECEIPT_TRACKING    // ติดตามใบตอบรับ/ขอใบแทนใบตอบรับ
   OTHER               // อื่นๆ
 }
 
