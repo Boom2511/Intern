@@ -33,7 +33,10 @@ export async function GET() {
     let totalTickets = 0;
     statusCounts.forEach((item) => {
       statusMap[item.status] = item._count;
-      totalTickets += item._count;
+      // Only count tickets that are not closed or resolved
+      if (item.status !== 'CLOSED' && item.status !== 'RESOLVED') {
+        totalTickets += item._count;
+      }
     });
 
     const newTickets = statusMap['NEW'] || 0;

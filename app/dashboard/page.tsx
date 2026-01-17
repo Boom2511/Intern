@@ -223,8 +223,8 @@ export default function DashboardPage() {
                         <CheckCircle className="h-6 w-6 text-green-600" />
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 mb-1">แก้ไขแล้ว / Total</p>
-                    <p className="text-3xl font-bold">{displayStats.resolvedTickets} / {displayStats.totalTickets}</p>
+                    <p className="text-sm text-gray-600 mb-1">แก้ไขแล้ว</p>
+                    <p className="text-3xl font-bold">{displayStats.resolvedTickets}</p>
                   </CardContent>
                 </Card>
               </Link>

@@ -386,6 +386,19 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       return;
     }
 
+    // Validate salesforce ID if channel is SALESFORCE
+    if (formData.channel === 'SALESFORCE') {
+      if (!formData.salesforceId || !formData.salesforceId.trim()) {
+        setErrors(['กรุณากรอกหมายเลข Salesforce']);
+        return;
+      }
+      const salesforceError = validateSalesforceId(formData.salesforceId);
+      if (salesforceError) {
+        setErrors([salesforceError]);
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -567,7 +580,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
             {formData.channel === 'SALESFORCE' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  หมายเลข Salesforce
+                  หมายเลข Salesforce <span className="text-red-500">*</span>
                 </label>
                 <Input
                   value={formData.salesforceId || ''}
@@ -657,12 +670,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                     e.preventDefault();
                   }
                 }}
-                onFocus={() => {
-                  setFieldErrors(prev => ({
-                    ...prev,
-                    trackingNo: 'อนุญาตเฉพาะภาษาอังกฤษ (A-Z, 0-9)'
-                  }));
-                }}
+                
                 onBlur={(e) => validateField('trackingNo', e.target.value)}
                 placeholder="เช่น EM123456789TH"
                 className={fieldErrors.trackingNo ? 'border-red-500 focus:ring-red-500' : ''}
@@ -706,12 +714,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       e.preventDefault();
                     }
                   }}
-                  onFocus={() => {
-                  setFieldErrors(prev => ({
-                    ...prev,
-                    zoneId: 'อนุญาตเฉพาะภาษาอังกฤษ (A-Z, 0-9)'
-                  }));
-                }}
+                  
                   onBlur={(e) => validateField('zoneId', e.target.value)}
                   placeholder="เช่น REG10260EVD0001"
                   className={`pr-10 ${fieldErrors.zoneId ? 'border-red-500 focus:ring-red-500' : ''}`}
