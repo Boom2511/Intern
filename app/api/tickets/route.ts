@@ -318,7 +318,8 @@ export async function POST(request: NextRequest) {
             data: {
               ticketNo,
               customerId: customer.id,
-              channel,
+              // Auto-set channel based on salesforceId
+              channel: salesforceId ? 'SALESFORCE' : channel,
               issueType,
               issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
               department: department || null,

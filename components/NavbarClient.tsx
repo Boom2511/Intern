@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Ticket, Menu, UserCog, LogOut, User, FlaskConical, FileText, Settings, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { SessionUser } from '@/lib/auth';
 
@@ -103,9 +103,11 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
 
             <Link
               href="/tickets/new"
-              className="bg-white text-blue-600 hover:bg-gray-100 px-4 py-2 rounded-md font-medium transition"
+              className="bg-white text-blue-600 hover:bg-gray-100 px-3 lg:px-4 py-2 rounded-md font-medium transition flex items-center gap-1.5"
             >
-              สร้าง Ticket ใหม่
+              <Plus className="h-4 w-4" />
+              <span className="hidden lg:inline">สร้าง Ticket ใหม่</span>
+              <span className="lg:hidden">Ticket</span>
             </Link>
 
             {/* User Info and Logout */}
@@ -133,10 +135,19 @@ export default function NavbarClient({ currentUser }: NavbarClientProps) {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button type="button" className="md:hidden text-white" title="เมนู">
-            <Menu className="h-6 w-6 text-white" />
-          </button>
+          {/* Mobile Actions */}
+          <div className="md:hidden flex items-center gap-2">
+            <Link
+              href="/tickets/new"
+              className="bg-white text-blue-600 hover:bg-gray-100 p-2 rounded-md transition"
+              title="สร้าง Ticket ใหม่"
+            >
+              <Plus className="h-5 w-5" />
+            </Link>
+            <button type="button" className="text-white" title="เมนู">
+              <Menu className="h-6 w-6 text-white" />
+            </button>
+          </div>
         </div>
       </div>
     </nav>

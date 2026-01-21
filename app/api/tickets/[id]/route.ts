@@ -300,6 +300,13 @@ export async function PATCH(
     if (salesforceId !== undefined) {
       trackFieldChange('salesforceId', ticket.salesforceId, salesforceId || null);
       updateData.salesforceId = salesforceId || null;
+      
+      // Auto-update channel based on salesforceId
+      const newChannel = salesforceId ? 'SALESFORCE' : 'CEC';
+      if (ticket.channel !== newChannel) {
+        trackFieldChange('channel', ticket.channel, newChannel);
+        updateData.channel = newChannel;
+      }
     }
 
     // Update the ticket
