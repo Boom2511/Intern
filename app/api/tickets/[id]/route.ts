@@ -280,14 +280,33 @@ export async function PATCH(
     if (recipientName !== undefined) {
       trackFieldChange('recipientName', ticket.recipientName, recipientName);
       updateData.recipientName = recipientName;
+      
+      // Also update customer's name (keep Customer as single source of truth)
+      if (recipientName && recipientName.trim()) {
+        await prisma.customer.update({
+          where: { id: ticket.customerId },
+          data: { name: recipientName },
+        });
+      }
     }
     if (recipientPhone !== undefined) {
       trackFieldChange('recipientPhone', ticket.recipientPhone, recipientPhone);
       updateData.recipientPhone = recipientPhone;
+      
+      // Note: Phone is unique key in Customer, so we don't auto-update it
+      // to avoid conflicts. Customer phone should remain stable.
     }
     if (recipientAddress !== undefined) {
       trackFieldChange('recipientAddress', ticket.recipientAddress, recipientAddress);
       updateData.recipientAddress = recipientAddress;
+      
+      // Also update customer's address (keep Customer as single source of truth)
+      if (recipientAddress && recipientAddress.trim()) {
+        await prisma.customer.update({
+          where: { id: ticket.customerId },
+          data: { address: recipientAddress },
+        });
+      }
     }
     if (description !== undefined) {
       trackFieldChange('description', ticket.description, description);

@@ -17,6 +17,7 @@ model Customer {
   id        String   @id @default(cuid())
   name      String
   phone     String   @unique  // Unique phone number for searching existing customers
+  address   String?  @db.Text // Customer address - nullable for backward compatibility
   tickets   Ticket[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -42,6 +43,8 @@ model Ticket {
   // Customer & Recipient
   customerId      String
   customer        Customer  @relation(fields: [customerId], references: [id])
+  // Legacy recipient fields - kept for backward compatibility
+  // New tickets should use customer.name, customer.phone, customer.address
   recipientName   String    @default("")
   recipientPhone  String    @default("")
   recipientAddress String   @default("") @db.Text

@@ -18,6 +18,7 @@ import { IssueType } from '@prisma/client';
 import { cn, displayThaiPhone } from '@/lib/utils';
 import { formatSalesforceId, validatePhone, normalizePhoneToE164 } from '@/lib/validations';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { getRecipientName, getRecipientPhone, getRecipientAddress } from '@/lib/recipient-utils';
 
 interface TicketInfoCardProps {
   ticket: TicketWithRelations;
@@ -49,6 +50,11 @@ interface TicketInfoCardProps {
 
 export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {}, onFormChange }: TicketInfoCardProps) {
   const issueTypeOptions = getIssueTypeOptions();
+  
+  // Get recipient info with fallback (Customer first, then Ticket legacy fields)
+  const displayName = getRecipientName(ticket);
+  const displayPhone = getRecipientPhone(ticket);
+  const displayAddress = getRecipientAddress(ticket);
 
   return (
     <Card className="shadow-sm border-gray-200">
@@ -252,7 +258,7 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                     </div>
                   ) : (
                     <div className="font-mono text-gray-900">
-                      {ticket.recipientName}
+                      {displayName}
                     </div>
                   )}
                 </div>
@@ -303,7 +309,7 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                     </div>
                   ) : (
                     <div className="font-mono text-gray-900">
-                      {displayThaiPhone(ticket.recipientPhone)}
+                      {displayThaiPhone(displayPhone)}
                     </div>
                   )}
                 </div>
@@ -328,7 +334,7 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                     </div>
                   ) : (
                     <div className="font-mono text-gray-900">
-                      {ticket.recipientAddress}
+                      {displayAddress}
                     </div>
                   )}
                 </div>

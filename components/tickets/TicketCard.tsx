@@ -10,6 +10,7 @@ import { formatThaiDate } from '@/lib/utils';
 import { Clock, MapPin, MessageSquare, Package, Ticket, User } from 'lucide-react';
 import { getDepartmentLabel } from '@/config/departments';
 import { getIssueTypeLabel } from '@/config/issue-types';
+import { getRecipientName } from '@/lib/recipient-utils';
 
 interface TicketCardProps {
   ticket: TicketWithCustomer;
@@ -19,6 +20,9 @@ interface TicketCardProps {
 export default function TicketCard({ ticket, router }: TicketCardProps) {
   const notesCount = ticket.notes?.length || 0;
   const hasUserUpdate = ticket.notes?.some(n => n.isFromEndUser);
+  
+  // Get recipient name with fallback (Customer first, then Ticket legacy field)
+  const recipientName = getRecipientName(ticket);
 
   // If router is provided (from LIFF queue), use LIFF route
   const href = router ? `/liff/tickets/${ticket.id}` : `/tickets/${ticket.id}`;
@@ -81,10 +85,10 @@ export default function TicketCard({ ticket, router }: TicketCardProps) {
                   </div>
                 )}
 
-                {ticket.recipientName && (
+                {recipientName && (
                   <div className="flex items-center gap-1 text-[11px] text-slate-500">
                     <User className="h-3.5 w-3.5" />
-                    <span className="line-clamp-1">{ticket.recipientName}</span>
+                    <span className="line-clamp-1">{recipientName}</span>
                   </div>
                 )}
              </div>

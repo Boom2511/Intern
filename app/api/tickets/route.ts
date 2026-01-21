@@ -206,16 +206,36 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
+      // Update customer address if provided (always keep customer data up-to-date)
+      if (recipientAddress && recipientAddress.trim()) {
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: { 
+            name: customerName, // Also update name in case it changed
+            address: recipientAddress 
+          },
+        });
+      }
     } else {
       // Try to find existing customer by phone
       customer = await prisma.customer.findUnique({ where: { phone: cleanPhone } });
 
       if (!customer) {
-        // Create new customer
+        // Create new customer with address
         customer = await prisma.customer.create({
           data: {
             name: customerName,
             phone: cleanPhone,
+            address: recipientAddress || null,
+          },
+        });
+      } else {
+        // Update existing customer's name and address
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            name: customerName,
+            address: recipientAddress || customer.address, // Keep existing if not provided
           },
         });
       }
@@ -325,6 +345,8 @@ export async function POST(request: NextRequest) {
               department: department || null,
               trackingNo: trackingNo || null,
               zoneId: zoneId || null,
+              // Legacy fields - populate for backward compatibility
+              // But primary source is now customer.name, customer.phone, customer.address
               recipientName,
               recipientPhone,
               recipientAddress,
