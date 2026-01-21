@@ -345,11 +345,12 @@ export async function POST(request: NextRequest) {
               department: department || null,
               trackingNo: trackingNo || null,
               zoneId: zoneId || null,
-              // Legacy fields - populate for backward compatibility
-              // But primary source is now customer.name, customer.phone, customer.address
-              recipientName,
-              recipientPhone,
-              recipientAddress,
+              // Store recipient info as snapshot at ticket creation time
+              // This preserves historical data even if customer info changes later
+              // Use customer data as source (which was just updated above)
+              recipientName: customer.name,
+              recipientPhone: customer.phone,
+              recipientAddress: customer.address || recipientAddress,
               description,
               salesforceId: salesforceId || null,
               priority,
