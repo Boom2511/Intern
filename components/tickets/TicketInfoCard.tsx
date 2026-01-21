@@ -16,7 +16,8 @@ import { getIssueTypeLabel, getIssueTypeOptions } from '@/config/issue-types';
 import { TicketWithRelations } from '@/types';
 import { IssueType } from '@prisma/client';
 import { cn, displayThaiPhone } from '@/lib/utils';
-import { formatSalesforceId } from '@/lib/validations';
+import { formatSalesforceId, validatePhone, normalizePhoneToE164 } from '@/lib/validations';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 interface TicketInfoCardProps {
   ticket: TicketWithRelations;
@@ -266,12 +267,39 @@ export default function TicketInfoCard({ ticket, isEditing, editForm, errors = {
                   {isEditing ? (
                     <div className="space-y-1">
                       <Input
+                        type="tel"
                         value={editForm.recipientPhone}
-                        onChange={(e) => onFormChange({ recipientPhone: e.target.value })}
-                        placeholder="เบอร์โทรศัพท์"
+                        onChange={(e) => {
+                          // Allow digits, +, space, -
+                          const value = e.target.value.replace(/[^\d+\-\s]/g, '');
+                          onFormChange({ recipientPhone: value });
+                        }}
+                        onBlur={(e) => {
+                          // Validate and format nicely for UX after blur
+                          const value = e.target.value;
+                          const error = validatePhone(value);
+                          if (!error) {
+                            // If valid, format to national display with spaces (e.g., 081 234 5678)
+                            try {
+                              const pn = parsePhoneNumberFromString(value, 'TH');
+                              if (pn && pn.isValid()) {
+                                // Format: 081 234 5678 or 02 345 6789
+                                const national = pn.formatNational();
+                                const withSpaces = national.replace(/-/g, ' ');
+                                onFormChange({ recipientPhone: withSpaces });
+                              }
+                            } catch { }
+                          }
+                        }}
+                        placeholder="เช่น 0812345678 หรือ +66812345678"
                         className={cn(errors.recipientPhone && "border-red-500 focus-visible:ring-red-500")}
                       />
                       {errors.recipientPhone && <p className="text-xs text-red-500">{errors.recipientPhone}</p>}
+                      {!errors.recipientPhone && editForm.recipientPhone && (
+                        <p className="text-xs text-gray-500">
+                          รูปแบบ: 0812345678 หรือ +66812345678
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="font-mono text-gray-900">

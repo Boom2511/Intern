@@ -407,6 +407,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         ...formData,
         customerName: formData.recipientName,
         customerPhone: phoneE164,
+        recipientPhone: phoneE164, // Also normalize recipientPhone to E.164
       };
 
       const response = await fetch('/api/tickets', {
@@ -964,11 +965,14 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                   const value = e.target.value;
                   const error = validatePhone(value);
                   if (!error) {
-                    // If valid, format to national display (e.g., 081-234-5678 or 02-345-6789)
+                    // If valid, format to national display with spaces (e.g., 081 234 5678)
                     try {
                       const pn = parsePhoneNumberFromString(value, 'TH');
                       if (pn && pn.isValid()) {
-                        setFormData(prev => ({ ...prev, recipientPhone: pn.formatNational() }));
+                        // Format: 081 234 5678 or 02 345 6789
+                        const national = pn.formatNational();
+                        const withSpaces = national.replace(/-/g, ' ');
+                        setFormData(prev => ({ ...prev, recipientPhone: withSpaces }));
                       }
                     } catch { }
                   }

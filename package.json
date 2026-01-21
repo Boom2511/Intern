@@ -10,7 +10,9 @@
     "postinstall": "node scripts/check-env.js && prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "migrate:images": "ts-node --project tsconfig.json scripts/migrate-images.ts"
+    "migrate:images": "ts-node --project tsconfig.json scripts/migrate-images.ts",
+    "migrate:phones": "tsx scripts/migrate-recipient-phones-to-e164.ts",
+    "check:phones": "tsx scripts/check-phone-formats.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

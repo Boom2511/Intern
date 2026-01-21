@@ -11,6 +11,7 @@ import { th } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { lineService } from '@/lib/line';
 import { getDepartmentLineGroup } from '@/config/departments';
+import { displayThaiPhone } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Vercel function timeout
@@ -155,8 +156,8 @@ export async function POST(request: NextRequest) {
         ticket.ticketNo,
         ticket.salesforceId || '-',
         ticket.trackingNo || '-',
-        ticket.customer.name,
-        ticket.customer.phone,
+        ticket.recipientName, // ใช้ recipientName จาก Ticket แทน customer.name
+        ticket.recipientPhone, // ใช้ recipientPhone จาก Ticket - แสดงเป็น +66XXXXXXXXX (E.164)
         ticket.recipientAddress || '-',
         ticket.assignedTo || ticket.createdBy || '-',
         ticket.department || '-',

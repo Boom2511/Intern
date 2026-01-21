@@ -35,11 +35,24 @@ export function invalidateDashboardStats() {
 }
 
 /**
+ * Invalidate reports preview cache
+ * Call this after ticket updates to refresh report data
+ */
+export function invalidateReports() {
+  mutate(
+    (key) => typeof key === 'string' && key.startsWith('/api/reports/preview'),
+    undefined,
+    { revalidate: true }
+  );
+}
+
+/**
  * Invalidate all ticket-related caches including dashboard
  */
 export function invalidateAllTickets() {
   invalidateTicketsList();
   invalidateDashboardStats();
+  invalidateReports();
   // Also invalidate any ticket detail pages
   mutate(
     (key) => typeof key === 'string' && key.startsWith('/api/tickets/'),

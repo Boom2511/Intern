@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getStatusLabel } from '@/lib/utils';
+import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
           ticketNo: ticket.ticketNo,
           salesforceId: ticket.salesforceId || '-',
           trackingNo: ticket.trackingNo || '-',
-          customerName: ticket.customer.name,
-          customerPhone: ticket.customer.phone,
+          customerName: ticket.recipientName, // ชื่อผู้รับจาก Ticket (แก้ไขได้)
+          customerPhone: ticket.recipientPhone, // เบอร์ผู้รับจาก Ticket (แก้ไขได้) - แสดงเป็น +66XXXXXXXXX (E.164)
           customerAddress: ticket.recipientAddress || '-',
           staffName: zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-',
           department: ticket.department || '-',

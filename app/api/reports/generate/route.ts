@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
-import { getStatusLabel } from '@/lib/utils';
+import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -218,8 +218,8 @@ export async function POST(request: NextRequest) {
         if (includeSalesforceId) rowData.push(ticket.salesforceId || '-');
         rowData.push(
           ticket.trackingNo || '-',
-          ticket.customer.name,
-          ticket.customer.phone,
+          ticket.recipientName, // ชื่อผู้รับจาก Ticket (แก้ไขได้)
+          ticket.recipientPhone, // เบอร์ผู้รับจาก Ticket (แก้ไขได้) - แสดงเป็น +66XXXXXXXXX (E.164)
           ticket.recipientAddress || '-',
           zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-', // ชื่อเจ้าหน้าที่ from zoneId
           ticket.department || '-',
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
         const row = worksheet.addRow(rowData);
 
         // Apply borders to all cells
-        row.eachCell((cell) => {
+        row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: 'thin' },
             left: { style: 'thin' },
@@ -242,6 +242,14 @@ export async function POST(request: NextRequest) {
             right: { style: 'thin' },
           };
           cell.alignment = { vertical: 'top', wrapText: true };
+          
+          // Force phone number column to be text format to prevent Excel auto-formatting
+          // Column 6 (without Salesforce) or Column 7 (with Salesforce) = customerPhone
+          const phoneColNumber = includeSalesforceId ? 6 : 5;
+          if (colNumber === phoneColNumber) {
+            cell.numFmt = '@'; // Text format
+            cell.alignment = { vertical: 'top', wrapText: true, horizontal: 'left' };
+          }
         });
       });
     };

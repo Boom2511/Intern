@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import useSWR from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -11,6 +12,7 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { th } from 'date-fns/locale';
 import Link from 'next/link';
+import { displayThaiPhone } from '@/lib/utils';
 
 // --- Types & Constants ---
 type ReportType = 'daily' | 'monthly';
@@ -48,7 +50,7 @@ const ReportTable = ({ data, showSalesforceId = true }: { data: any[], showSales
               {showSalesforceId && <td className="px-2 py-1.5 whitespace-nowrap">{row.salesforceId}</td>}
               <td className="px-2 py-1.5 whitespace-nowrap">{row.trackingNo}</td>
               <td className="px-2 py-1.5 font-medium whitespace-nowrap">{row.customerName}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.customerPhone}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap font-mono">{row.customerPhone}</td>
               <td className="px-2 py-1.5 max-w-[200px] truncate">{row.customerAddress}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">{row.staffName}</td>
               <td className="px-2 py-1.5 text-center">
@@ -77,8 +79,7 @@ export default function ReportsPage() {
   const [monthYear, setMonthYear] = useState(format(new Date(), 'yyyy-MM'));
   const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1');
   
-  const [status, setStatus] = useState({ generating: false, sending: false, loadingPreview: false });
-  const [preview, setPreview] = useState<{ count: number | null, cec: any[] | null, salesforce: any[] | null }>({ count: null, cec: null, salesforce: null });
+  const [status, setStatus] = useState({ generating: false, sending: false });
   const [dialogs, setDialogs] = useState({ send: false, preview: false });
   const [activeTab, setActiveTab] = useState<'CEC' | 'SALESFORCE'>('CEC');
 
@@ -91,27 +92,37 @@ export default function ReportsPage() {
     }
   }, [reportType, monthYear]);
 
-  // Fetch Preview Logic
-  useEffect(() => {
-    const fetchPreview = async () => {
-      setStatus(prev => ({ ...prev, loadingPreview: true }));
-      try {
-        const res = await fetch('/api/reports/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ startDate, endDate: reportType === 'monthly' ? endDate : undefined, sourceSystem: 'ALL', includeSamples: true, sampleLimit: 9999 }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const cecTickets = data.samples?.filter((t: any) => t.channel === 'CEC') || [];
-          const salesforceTickets = data.samples?.filter((t: any) => t.channel === 'SALESFORCE') || [];
-          setPreview({ count: data.count, cec: cecTickets, salesforce: salesforceTickets });
-        }
-      } catch (e) { console.error(e); }
-      finally { setStatus(prev => ({ ...prev, loadingPreview: false })); }
-    };
-    fetchPreview();
-  }, [startDate, endDate, reportType]);
+  // Fetch Preview using SWR (auto-refreshes on data changes)
+  const previewKey = `/api/reports/preview?start=${startDate}&end=${endDate}&type=${reportType}`;
+  const { data: previewData, isLoading: loadingPreview } = useSWR(
+    previewKey,
+    async () => {
+      const res = await fetch('/api/reports/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          startDate, 
+          endDate: reportType === 'monthly' ? endDate : undefined, 
+          sourceSystem: 'ALL', 
+          includeSamples: true, 
+          sampleLimit: 9999 
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to fetch preview');
+      return res.json();
+    },
+    {
+      refreshInterval: 30000, // Auto-refresh every 30 seconds
+      revalidateOnFocus: true, // Refresh when user returns to tab
+    }
+  );
+
+  const preview = useMemo(() => {
+    if (!previewData) return { count: null, cec: null, salesforce: null };
+    const cecTickets = previewData.samples?.filter((t: any) => t.channel === 'CEC') || [];
+    const salesforceTickets = previewData.samples?.filter((t: any) => t.channel === 'SALESFORCE') || [];
+    return { count: previewData.count, cec: cecTickets, salesforce: salesforceTickets };
+  }, [previewData]);
 
   const dateRangeText = useMemo(() => {
     const date = new Date(startDate);
@@ -185,10 +196,10 @@ export default function ReportsPage() {
           </div>
 
           {/* Preview Info Box */}
-          <div className={`p-4 rounded-lg border transition-all ${status.loadingPreview ? 'bg-gray-50 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
+          <div className={`p-4 rounded-lg border transition-all ${loadingPreview ? 'bg-gray-50 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
             <div className="flex justify-between items-start mb-3">
               <div className="flex gap-2 text-blue-900">
-                {status.loadingPreview ? <Loader2 className="h-5 w-5 animate-spin" /> : <Info className="h-5 w-5" />}
+                {loadingPreview ? <Loader2 className="h-5 w-5 animate-spin" /> : <Info className="h-5 w-5" />}
                 <div>
                   <p className="font-semibold text-sm">สรุปรายการ: {preview.count ?? 0} รายการ (CEC: {preview.cec?.length ?? 0}, Salesforce: {preview.salesforce?.length ?? 0})</p>
                   <p className="text-xs text-blue-700">{dateRangeText} | รายงานจะแยกเป็น 2 sheets (CEC, Salesforce)</p>

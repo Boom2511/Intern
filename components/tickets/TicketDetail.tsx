@@ -23,7 +23,8 @@ import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
 import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy } from 'lucide-react';
-import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
+import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } from '@/lib/swr-utils';
+import { validatePhone, normalizePhoneToE164 } from '@/lib/validations';
 import TicketInfoCard from './TicketInfoCard';
 
 interface TicketDetailProps {
@@ -126,9 +127,10 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
         if (mutate) {
           mutate();
         }
-        // Invalidate tickets list and dashboard to show updated status
+        // Invalidate tickets list, dashboard, and reports to show updated data
         invalidateTicketsList();
         invalidateDashboardStats();
+        invalidateReports();
       } else {
         toast({
           variant: 'error',
@@ -172,9 +174,10 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
         if (mutate) {
           mutate();
         }
-        // Invalidate tickets list and dashboard to show updated department
+        // Invalidate tickets list, dashboard, and reports to show updated data
         invalidateTicketsList();
         invalidateDashboardStats();
+        invalidateReports();
       } else {
         toast({
           variant: 'error',
@@ -244,12 +247,68 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   };
 
   const handleSaveEdit = async () => {
+    // Validate required fields
+    if (!editForm.recipientName.trim()) {
+      toast({
+        variant: 'error',
+        title: 'ข้อมูลไม่ครบ',
+        description: 'กรุณากรอกชื่อผู้รับ',
+      });
+      return;
+    }
+
+    if (!editForm.recipientPhone.trim()) {
+      toast({
+        variant: 'error',
+        title: 'ข้อมูลไม่ครบ',
+        description: 'กรุณากรอกเบอร์โทรศัพท์ผู้รับ',
+      });
+      return;
+    }
+
+    if (!editForm.recipientAddress.trim()) {
+      toast({
+        variant: 'error',
+        title: 'ข้อมูลไม่ครบ',
+        description: 'กรุณากรอกที่อยู่ผู้รับ',
+      });
+      return;
+    }
+
+    // Validate phone number
+    const phoneError = validatePhone(editForm.recipientPhone);
+    if (phoneError) {
+      toast({
+        variant: 'error',
+        title: 'เบอร์โทรศัพท์ไม่ถูกต้อง',
+        description: phoneError,
+      });
+      return;
+    }
+
+    // Normalize phone to E.164 format before sending
+    const phoneE164 = normalizePhoneToE164(editForm.recipientPhone, 'TH');
+    if (!phoneE164) {
+      toast({
+        variant: 'error',
+        title: 'เบอร์โทรศัพท์ไม่ถูกต้อง',
+        description: 'ไม่สามารถแปลงเบอร์โทรศัพท์ได้',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
+      // Send normalized phone number
+      const submitData = {
+        ...editForm,
+        recipientPhone: phoneE164,
+      };
+
       const response = await fetch(`/api/tickets/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(submitData),
       });
 
       const data = await response.json();
@@ -265,9 +324,10 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
         if (mutate) {
           mutate();
         }
-        // Invalidate tickets list and dashboard to show updated data
+        // Invalidate tickets list, dashboard, and reports to show updated data
         invalidateTicketsList();
         invalidateDashboardStats();
+        invalidateReports();
       } else {
         toast({
           variant: 'error',

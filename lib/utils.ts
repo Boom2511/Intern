@@ -86,16 +86,16 @@ export function formatThaiPhone(phone: string): string {
   return phone;
 }
 
-// Display helper for E.164 Thai numbers: +66XXXXXXXXX => 0xx-xxx-xxxx or 0x-xxx-xxxx
+// Display helper for E.164 Thai numbers: +66XXXXXXXXX => 0xx xxx xxxx or 0x xxx xxxx
 export function displayThaiPhone(e164: string): string {
   if (!e164 || typeof e164 !== 'string') return '';
   if (!e164.startsWith('+66')) return e164;
   const n = '0' + e164.slice(3);
   if (n.length === 10) {
-    return n.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return n.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
   }
   if (n.length === 9) {
-    return n.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3');
+    return n.replace(/(\d{2})(\d{3})(\d{4})/, '$1 $2 $3');
   }
   return n;
 }
