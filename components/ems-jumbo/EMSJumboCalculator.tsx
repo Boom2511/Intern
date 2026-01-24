@@ -46,15 +46,37 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
   // Form state
   const [modelId, setModelId] = useState('');
   const [actualWeight, setActualWeight] = useState('');
-  const [width, setWidth] = useState('');
-  const [length, setLength] = useState('');
-  const [height, setHeight] = useState('');
+  const [size, setSize] = useState({
+    width: '',
+    length: '',
+    height: '',
+  });
   const [destinationInput, setDestinationInput] = useState<string>('');
   const [province, setProvince] = useState<string>('');
   const [zone, setZone] = useState<number>(1);
   const [pickupService, setPickupService] = useState(false); // รับฝาก
   const [deliveryService, setDeliveryService] = useState(false); // นำจ่าย
   const [insuranceAmount, setInsuranceAmount] = useState(''); // วงเงินรับประกัน
+
+  // Helper function to format fixed decimal
+  const formatFixedDecimal = (raw: string, decimals = 2) => {
+    if (!raw) return '';
+    const num = parseInt(raw, 10);
+    return (num / Math.pow(10, decimals)).toFixed(decimals);
+  };
+
+  // Calculate volumetric weight (cm³ / 5000)
+  const calculateVolumetricWeight = useMemo(() => {
+    const w = parseFloat(formatFixedDecimal(size.width)) || 0;
+    const l = parseFloat(formatFixedDecimal(size.length)) || 0;
+    const h = parseFloat(formatFixedDecimal(size.height)) || 0;
+    
+    if (w > 0 && l > 0 && h > 0) {
+      const volumetricKg = (w * l * h) / 6000;
+      return volumetricKg.toFixed(2);
+    }
+    return '0.00';
+  }, [size.width, size.length, size.height]);
 
   // Prepare model options for Combobox (memoized)
   const modelOptions: ComboboxOption[] = useMemo(() =>
@@ -173,9 +195,9 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
     mode,
     modelId,
     actualWeight,
-    width,
-    length,
-    height,
+    width: size.width,
+    length: size.length,
+    height: size.height,
     province,
     zone,
     pickupService,
@@ -217,17 +239,17 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
           zone,
         };
       } else {
-        if (!actualWeight || !width || !length || !height) {
+        if (!actualWeight || !size.width || !size.length || !size.height) {
           setError('กรุณากรอกข้อมูลให้ครบถ้วน');
           return;
         }
 
         input = {
           mode: 'weight',
-          actualWeight: parseFloat(actualWeight) / 1000, // Convert grams to kg
-          width: parseFloat(width),
-          length: parseFloat(length),
-          height: parseFloat(height),
+          actualWeight: parseFloat(formatFixedDecimal(actualWeight)) / 1000, // Convert grams to kg
+          width: parseFloat(formatFixedDecimal(size.width)),
+          length: parseFloat(formatFixedDecimal(size.length)),
+          height: parseFloat(formatFixedDecimal(size.height)),
           zone,
         };
       }
@@ -268,9 +290,7 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
   const handleReset = () => {
     setModelId('');
     setActualWeight('');
-    setWidth('');
-    setLength('');
-    setHeight('');
+    setSize({ width: '', length: '', height: '' });
     setDestinationInput('');
     setProvince('');
     setZone(1);
@@ -374,32 +394,75 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
                   <Label htmlFor="actualWeight" className="text-xs font-medium">น้ำหนักรวม (กรัม)</Label>
                   <Input
                     id="actualWeight"
-                    type="number"
-                    value={actualWeight}
-                    onChange={(e) => setActualWeight(e.target.value)}
-                    placeholder="0000"
-                    className="h-11 font-mono text-sm placeholder:text-sm"
+                    type="text"
+                    inputMode="numeric"
+                    value={formatFixedDecimal(actualWeight)}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '');
+                      setActualWeight(digitsOnly);
+                    }}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    placeholder="0.00"
+                    className="h-11 font-mono text-sm tabular-nums text-right"
                   />
                   {actualWeight && parseFloat(actualWeight) > 0 && (
-                    <p className="text-xs text-slate-500 font-medium">
-                      = {(parseFloat(actualWeight) / 1000).toFixed(2)} กิโลกรัม
+                    <p className="text-xs text-blue-500 font-medium">
+                     น้ำหนักจริงสิ่งของ = {(parseFloat(formatFixedDecimal(actualWeight)) / 1000).toFixed(2)} กิโลกรัม
                     </p>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">กว้าง (ซม.)</Label>
-                    <Input type="number" value={width} onChange={(e) => setWidth(e.target.value)} placeholder="00.00" className="h-11 font-mono text-sm placeholder:text-sm" />
+                    <Input 
+                      type="text" 
+                      inputMode="numeric"
+                      value={formatFixedDecimal(size.width)} 
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setSize(prev => ({ ...prev, width: digitsOnly }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()} 
+                      placeholder="0.00" 
+                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">ยาว (ซม.)</Label>
-                    <Input type="number" value={length} onChange={(e) => setLength(e.target.value)} placeholder="00.00" className="h-11 font-mono text-sm placeholder:text-sm" />
+                    <Input 
+                      type="text" 
+                      inputMode="numeric"
+                      value={formatFixedDecimal(size.length)} 
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setSize(prev => ({ ...prev, length: digitsOnly }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()} 
+                      placeholder="0.00" 
+                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">สูง (ซม.)</Label>
-                    <Input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="00.00" className="h-11 font-mono text-sm placeholder:text-sm" />
+                    <Input 
+                      type="text" 
+                      inputMode="numeric"
+                      value={formatFixedDecimal(size.height)} 
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '');
+                        setSize(prev => ({ ...prev, height: digitsOnly }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()} 
+                      placeholder="0.00" 
+                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                    />
                   </div>
                 </div>
+                {size.width && size.length && size.height && parseFloat(calculateVolumetricWeight) > 0 && (
+                  <p className="text-xs text-blue-500 font-medium">
+                    น้ำหนักปริมาตร = {calculateVolumetricWeight} กิโลกรัม
+                  </p>
+                )}
               </div>
             )}
           </section>
@@ -426,6 +489,7 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
                 type="number"
                 value={insuranceAmount}
                 onChange={(e) => setInsuranceAmount(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
                 placeholder="0 - 200,000"
                 className="bg-white font-mono text-sm placeholder:text-sm h-11"
               />
