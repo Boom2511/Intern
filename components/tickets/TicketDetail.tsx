@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, C
 import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } from '@/lib/swr-utils';
 import { validatePhone, normalizePhoneToE164 } from '@/lib/validations';
 import TicketInfoCard from './TicketInfoCard';
+import CaptureTicketImageLiff from '../liff/CaptureTicketImageLiff';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -46,6 +47,9 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const [closeCause, setCloseCause] = useState('');
   const [closeSolution, setCloseSolution] = useState('');
   const [resolutionDetail, setResolutionDetail] = useState('');
+  
+  // Ref for capturing the ticket content as image
+  const ticketContentRef = useRef<HTMLDivElement>(null);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -422,7 +426,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-4 md:p-6">
+      <div className="max-w-7xl mx-auto p-4 md:p-6" ref={ticketContentRef}>
         {/* Close Ticket Dialog */}
         <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
           <DialogContent className="sm:max-w-lg">
@@ -488,27 +492,35 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               </p>
             </div>
             {!isEditing ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                แก้ไข
-              </Button>
-              <Button variant="outline" size="sm" onClick={async () => {
-                try {
-                  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-                  const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
-                  const u = new URL(target);
-                  const state = `${u.pathname}${u.search}`;
-                  const liffUrl = liffId ? `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}` : target;
-                  await navigator.clipboard.writeText(liffUrl);
-                  toast({ title: 'คัดลอกลิงก์ LIFF แล้ว', description: liffUrl });
-                } catch (e) {
-                  toast({ variant: 'error', title: 'คัดลอกลิงก์ไม่สำเร็จ' });
-                }
-              }}>
-                <Copy className="h-4 w-4 mr-2" /> คัดลอก
-              </Button>
-            </div>
+                  <Edit className="h-4 w-4 mr-2" />
+                  แก้ไข
+                </Button>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  try {
+                    const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+                    const target = `${window.location.origin}/liff/tickets/${ticket.id}`;
+                    const u = new URL(target);
+                    const state = `${u.pathname}${u.search}`;
+                    const liffUrl = liffId ? `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(state)}` : target;
+                    await navigator.clipboard.writeText(liffUrl);
+                    toast({ title: 'คัดลอกลิงก์ LIFF แล้ว', description: liffUrl });
+                  } catch (e) {
+                    toast({ variant: 'error', title: 'คัดลอกลิงก์ไม่สำเร็จ' });
+                  }
+                }}>
+                  <Copy className="h-4 w-4 mr-2" /> คัดลอก
+                </Button>
+                {/* Share as Image Button - Mobile Card */}
+                <CaptureTicketImageLiff 
+                  ticket={ticket}
+                  notes={allNotes}
+                  statusHistory={statusHistory}
+                  views={ticket.views || []}
+                  className="hidden sm:block"
+                />
+              </div>
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={loading}>
