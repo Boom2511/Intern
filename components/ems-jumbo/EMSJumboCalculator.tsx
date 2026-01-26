@@ -58,24 +58,17 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
   const [deliveryService, setDeliveryService] = useState(false); // นำจ่าย
   const [insuranceAmount, setInsuranceAmount] = useState(''); // วงเงินรับประกัน
 
-  // Helper function to format fixed decimal
-  const formatFixedDecimal = (raw: string, decimals = 2) => {
-    if (!raw) return '';
-    const num = parseInt(raw, 10);
-    return (num / Math.pow(10, decimals)).toFixed(decimals);
-  };
-
-  // Calculate volumetric weight (cm³ / 5000)
+  // Calculate volumetric weight (cm³ / 6000)
   const calculateVolumetricWeight = useMemo(() => {
-    const w = parseFloat(formatFixedDecimal(size.width)) || 0;
-    const l = parseFloat(formatFixedDecimal(size.length)) || 0;
-    const h = parseFloat(formatFixedDecimal(size.height)) || 0;
-    
+    const w = parseFloat(size.width) || 0;
+    const l = parseFloat(size.length) || 0;
+    const h = parseFloat(size.height) || 0;
+
     if (w > 0 && l > 0 && h > 0) {
       const volumetricKg = (w * l * h) / 6000;
       return volumetricKg.toFixed(2);
     }
-    return '0.00';
+    return '0';
   }, [size.width, size.length, size.height]);
 
   // Prepare model options for Combobox (memoized)
@@ -246,10 +239,10 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
 
         input = {
           mode: 'weight',
-          actualWeight: parseFloat(formatFixedDecimal(actualWeight)) / 1000, // Convert grams to kg
-          width: parseFloat(formatFixedDecimal(size.width)),
-          length: parseFloat(formatFixedDecimal(size.length)),
-          height: parseFloat(formatFixedDecimal(size.height)),
+          actualWeight: parseFloat(actualWeight), // Weight in kg
+          width: parseFloat(size.width),
+          length: parseFloat(size.length),
+          height: parseFloat(size.height),
           zone,
         };
       }
@@ -265,7 +258,8 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
       }
 
       // Calculate pickup/delivery fees
-      const baseFee = calculationResult.totalPrice;
+      // Use basePrice (without surcharge) as the base for pickup/delivery calculation
+      const baseFee = calculationResult.basePrice;
       const serviceResult = calculateTotalWithServices(baseFee, pickupService, deliveryService);
 
       // Calculate insurance fee
@@ -273,10 +267,11 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
       const insuranceResult = calculateTotalWithInsurance(serviceResult.total, insurance);
 
       // Update result with all service fees
-      calculationResult.totalPrice = insuranceResult.total;
+      // Total = basePrice + surcharge + pickup + delivery + insurance
+      calculationResult.totalPrice = calculationResult.basePrice + calculationResult.surcharge + serviceResult.pickupFee + serviceResult.deliveryFee + insuranceResult.insuranceFee;
       calculationResult.details.pickupFee = serviceResult.pickupFee;
       calculationResult.details.deliveryFee = serviceResult.deliveryFee;
-      calculationResult.details.baseFee = serviceResult.baseFee;
+      calculationResult.details.baseFee = calculationResult.basePrice; // Store the actual base price (without surcharge)
       calculationResult.details.insuranceFee = insuranceResult.insuranceFee;
       calculationResult.details.insuranceAmount = insuranceResult.insuranceAmount;
 
@@ -391,70 +386,83 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
             ) : (
               <div className="grid gap-4">
                 <div className="grid grid-cols-1 gap-2">
-                  <Label htmlFor="actualWeight" className="text-xs font-medium">น้ำหนักรวม (กรัม)</Label>
+                  <Label htmlFor="actualWeight" className="text-xs font-medium">น้ำหนักรวม (กิโลกรัม)</Label>
                   <Input
                     id="actualWeight"
                     type="text"
-                    inputMode="numeric"
-                    value={formatFixedDecimal(actualWeight)}
+                    inputMode="decimal"
+                    value={actualWeight}
                     onChange={(e) => {
-                      const digitsOnly = e.target.value.replace(/\D/g, '');
-                      setActualWeight(digitsOnly);
+                      const value = e.target.value;
+                      // Allow numbers and decimal point only
+                      if (value === '' || /^[0-9.]*$/.test(value)) {
+                        // Prevent multiple decimal points
+                        if ((value.match(/\./g) || []).length <= 1) {
+                          setActualWeight(value);
+                        }
+                      }
                     }}
                     onWheel={(e) => e.currentTarget.blur()}
-                    placeholder="0.00"
-                    className="h-11 font-mono text-sm tabular-nums text-right"
+                    placeholder="0"
+                    className="h-11 font-mono text-sm tabular-nums "
                   />
-                  {actualWeight && parseFloat(actualWeight) > 0 && (
-                    <p className="text-xs text-blue-500 font-medium">
-                     น้ำหนักจริงสิ่งของ = {(parseFloat(formatFixedDecimal(actualWeight)) / 1000).toFixed(2)} กิโลกรัม
-                    </p>
-                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">กว้าง (ซม.)</Label>
-                    <Input 
-                      type="text" 
-                      inputMode="numeric"
-                      value={formatFixedDecimal(size.width)} 
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={size.width}
                       onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setSize(prev => ({ ...prev, width: digitsOnly }));
+                        const value = e.target.value;
+                        if (value === '' || /^[0-9.]*$/.test(value)) {
+                          if ((value.match(/\./g) || []).length <= 1) {
+                            setSize(prev => ({ ...prev, width: value }));
+                          }
+                        }
                       }}
-                      onWheel={(e) => e.currentTarget.blur()} 
-                      placeholder="0.00" 
-                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                      onWheel={(e) => e.currentTarget.blur()}
+                      placeholder="0"
+                      className="h-11 font-mono text-sm tabular-nums "
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">ยาว (ซม.)</Label>
-                    <Input 
-                      type="text" 
-                      inputMode="numeric"
-                      value={formatFixedDecimal(size.length)} 
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={size.length}
                       onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setSize(prev => ({ ...prev, length: digitsOnly }));
+                        const value = e.target.value;
+                        if (value === '' || /^[0-9.]*$/.test(value)) {
+                          if ((value.match(/\./g) || []).length <= 1) {
+                            setSize(prev => ({ ...prev, length: value }));
+                          }
+                        }
                       }}
-                      onWheel={(e) => e.currentTarget.blur()} 
-                      placeholder="0.00" 
-                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                      onWheel={(e) => e.currentTarget.blur()}
+                      placeholder="0"
+                      className="h-11 font-mono text-sm tabular-nums "
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-medium">สูง (ซม.)</Label>
-                    <Input 
-                      type="text" 
-                      inputMode="numeric"
-                      value={formatFixedDecimal(size.height)} 
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={size.height}
                       onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '');
-                        setSize(prev => ({ ...prev, height: digitsOnly }));
+                        const value = e.target.value;
+                        if (value === '' || /^[0-9.]*$/.test(value)) {
+                          if ((value.match(/\./g) || []).length <= 1) {
+                            setSize(prev => ({ ...prev, height: value }));
+                          }
+                        }
                       }}
-                      onWheel={(e) => e.currentTarget.blur()} 
-                      placeholder="0.00" 
-                      className="h-11 font-mono text-sm tabular-nums text-right" 
+                      onWheel={(e) => e.currentTarget.blur()}
+                      placeholder="0"
+                      className="h-11 font-mono text-sm tabular-nums "
                     />
                   </div>
                 </div>
@@ -484,14 +492,27 @@ export function EMSJumboCalculator({ isOpen, onClose, initialMode = 'weight' }: 
               </label>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium">วงเงินรับประกันสินค้า (บาท)</Label>
+              <Label className="text-xs font-medium">
+                วงเงินรับประกันสินค้า (บาท)
+              </Label>
               <Input
-                type="number"
-                value={insuranceAmount}
-                onChange={(e) => setInsuranceAmount(e.target.value)}
-                onWheel={(e) => e.currentTarget.blur()}
+                type="text"
+                inputMode="numeric"
                 placeholder="0 - 200,000"
-                className="bg-white font-mono text-sm placeholder:text-sm h-11"
+                value={insuranceAmount}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, '');
+
+                  if (raw === '') {
+                    setInsuranceAmount('');
+                    return;
+                  }
+
+                  const num = Math.min(Number(raw), 200000);
+                  setInsuranceAmount(num.toString());
+                }}
+                onWheel={(e) => e.currentTarget.blur()}
+                className="bg-white font-mono text-sm h-11"
               />
             </div>
           </section>
@@ -585,7 +606,6 @@ const ResultSummary = React.memo(
               <PriceLine
                 label="ค่าบริการส่วนเกินขนาด (Surcharge)"
                 value={result.surcharge}
-
               />
               <PriceLine
                 label="บริการรับฝาก ณ ที่อยู่ (Pickup Service)"
@@ -596,16 +616,17 @@ const ResultSummary = React.memo(
                 value={result.details.deliveryFee || 0}
               />
 
-              {result.details.insuranceFee && result.details.insuranceFee > 0 && (
-                <div className="py-2 space-y-1">
-                  <PriceLine
-                    label="ค่าประกันสินค้า (Insurance)"
-                    value={result.details.insuranceFee}
-                  />
-                  <p className="text-[11px] text-blue-500 text-right font-medium italic">
-                    *วงเงินคุ้มครอง{" "}
-                    {result.details.insuranceAmount?.toLocaleString()} บาท
-                  </p>
+              {(result.details.insuranceFee ?? 0) > 0 && (
+                <div className="flex justify-between items-center py-2 border-t border-slate-100">
+                  <span className="text-sm text-slate-500">ค่าประกันสินค้า (Insurance)</span>
+                  <div className="text-right">
+                    <span className="font-mono tabular-nums font-semibold text-sm">
+                      ฿{result.details.insuranceFee?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <p className="text-[11px] text-blue-500 font-medium italic mt-0.5">
+                      *วงเงินคุ้มครอง {result.details.insuranceAmount?.toLocaleString()} บาท
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

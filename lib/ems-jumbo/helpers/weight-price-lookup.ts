@@ -16,25 +16,25 @@ export function findWeightPriceByZone(
   zone: number,
   chargeableWeight: number
 ): number | null {
-  if (zone < 1 || zone > 10) {
-    throw new Error('Zone ต้องอยู่ระหว่าง 1-10');
-  }
+  if (zone < 1 || zone > 10) throw new Error('Zone ต้องอยู่ระหว่าง 1-10');
+  if (chargeableWeight < 0) throw new Error('น้ำหนักต้องไม่ติดลบ');
 
-  if (chargeableWeight < 0) {
-    throw new Error('น้ำหนักต้องไม่ติดลบ');
-  }
-
-  // หาช่วงน้ำหนักที่ตรงกับน้ำหนักที่ส่งเข้ามา
-  const priceEntry = EMS_WEIGHT_PRICE_TABLE.find(
+  // Logic: weight must be GREATER THAN OR EQUAL to min and LESS THAN max
+  // Example: 30.0kg to 39.9kg falls into the 30-40 tier
+  // 30.0 uses rate 30, 40.0 uses rate 40
+  let priceEntry = EMS_WEIGHT_PRICE_TABLE.find(
     entry => chargeableWeight >= entry.minWeight && chargeableWeight < entry.maxWeight
   );
 
+  // Handle the edge case if weight exceeds the max in table
+  // or if no entry is found
   if (!priceEntry) {
-    // ถ้าเกินช่วงสูงสุด ให้ใช้ช่วงสุดท้าย
     const lastEntry = EMS_WEIGHT_PRICE_TABLE[EMS_WEIGHT_PRICE_TABLE.length - 1];
-    if (chargeableWeight >= lastEntry.maxWeight) {
-      return getZonePrice(lastEntry, zone);
+    // If weight is >= last entry's minWeight, use last entry
+    if (chargeableWeight >= lastEntry.minWeight) {
+       return getZonePrice(lastEntry, zone);
     }
+    
     return null;
   }
 
