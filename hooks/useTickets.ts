@@ -48,11 +48,12 @@ export function useTickets(options: UseTicketsOptions = {}) {
     url,
     {
       refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
-      revalidateOnFocus: true, // Refresh when user returns to tab
+      revalidateOnFocus: false, // Disabled - use manual refresh button instead
       revalidateOnReconnect: true, // Refresh when network reconnects
-      dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
+      dedupingInterval: 2000, // Reduced to 2s for faster updates
       shouldRetryOnError: true,
       errorRetryCount: 3,
+      keepPreviousData: true, // Keep previous data while revalidating (smoother UX)
     }
   );
 

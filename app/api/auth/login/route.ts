@@ -43,11 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create session
-    await setSessionCookie(user.id);
-
-    // Clear any old session verification markers
-    // Note: This is a server-side hint, actual clearing happens client-side
+    // Create session with explicit cookie setting
     const response = NextResponse.json({
       success: true,
       user: {
@@ -57,7 +53,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Add header to signal client to clear old session data
+    // Set session cookie on response (ensures it's set before redirect)
+    await setSessionCookie(user.id);
+
+    // Add cache control headers to prevent stale auth state
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     response.headers.set('X-Session-Refreshed', 'true');
 
     return response;

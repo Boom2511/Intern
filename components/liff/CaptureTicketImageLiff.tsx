@@ -467,11 +467,7 @@ export default function CaptureTicketImageLiff({
 
   return (
     <div className={`relative inline-flex items-center ${className}`}>
-      {/* Beta Badge - วางลอยด้านบน */}
-      <span className="absolute -top-2 -right-2 z-10 px-1.5 py-0.5 text-[9px] font-bold text-white bg-red-500 rounded-full border-2 border-white shadow-sm">
-        BETA
-      </span>
-
+      
       <Button
         onClick={handleDownload}
         disabled={isCapturing}

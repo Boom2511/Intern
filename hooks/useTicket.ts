@@ -16,11 +16,12 @@ export function useTicket(ticketId: string | null, options: UseTicketOptions = {
     ticketId ? `/api/tickets/${ticketId}` : null,
     {
       refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
-      revalidateOnFocus: true,
+      revalidateOnFocus: false, // Disabled - updates via mutate() after changes
       revalidateOnReconnect: true,
-      dedupingInterval: 5000,
+      dedupingInterval: 2000, // Reduced to 2s for faster updates
       shouldRetryOnError: true,
       errorRetryCount: 3,
+      keepPreviousData: true, // Keep previous data while revalidating
     }
   );
 

@@ -27,6 +27,7 @@ import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } fr
 import { validatePhone, normalizePhoneToE164 } from '@/lib/validations';
 import TicketInfoCard from './TicketInfoCard';
 import CaptureTicketImageLiff from '../liff/CaptureTicketImageLiff';
+import { useUser } from '@/providers/UserProvider';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -36,11 +37,12 @@ interface TicketDetailProps {
 
 export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const { toast } = useToast();
+  const { user } = useUser(); // Get user from context instead of API call
   const [status, setStatus] = useState<TicketStatus>(ticket.status);
   const [department, setDepartment] = useState<string | null>(ticket.department || null);
   const [newNote, setNewNote] = useState('');
   const [loading, setLoading] = useState(false);
-  const [currentStaffName, setCurrentStaffName] = useState<string>('Staff');
+  const [currentStaffName, setCurrentStaffName] = useState<string>(user?.name || 'Staff');
   const [isEditing, setIsEditing] = useState(false);
   const [expandedEdits, setExpandedEdits] = useState<Set<string>>(new Set());
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -84,17 +86,12 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
     });
   }, [ticket]);
 
-  // Fetch current staff user info
+  // Update staff name when user context changes
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user?.name) {
-          setCurrentStaffName(data.user.name);
-        }
-      })
-      .catch(err => console.error('Failed to fetch current user:', err));
-  }, []);
+    if (user?.name) {
+      setCurrentStaffName(user.name);
+    }
+  }, [user]);
 
   const handleStatusUpdate = async (newStatus: TicketStatus, extra?: { closeCause?: string; closeSolution?: string; resolutionDetail?: string }) => {
     setLoading(true);

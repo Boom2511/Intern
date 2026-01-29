@@ -47,9 +47,12 @@ export function UserProvider({ user, children }: UserProviderProps) {
       return;
     }
 
-    // Verify session with server
+    // Verify session with server (debounced to prevent multiple checks)
+    let mounted = true;
     const checkSession = async () => {
       const isValid = await verifySession();
+
+      if (!mounted) return; // Component unmounted, skip redirect
 
       if (!isValid) {
         // Session expired - redirect to login
@@ -58,7 +61,13 @@ export function UserProvider({ user, children }: UserProviderProps) {
       }
     };
 
-    checkSession();
+    // Small delay to prevent race condition on initial load
+    const timer = setTimeout(checkSession, 300);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
   }, [user, pathname, router]);
 
   return (

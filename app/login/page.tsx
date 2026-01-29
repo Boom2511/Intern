@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,18 @@ function LoginForm() {
     ? 'เซสชันของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง'
     : '';
 
+  // Clear any stale session data on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.clear();
+        console.log('[Login] Cleared session storage on mount');
+      } catch (e) {
+        console.warn('[Login] Failed to clear session storage:', e);
+      }
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -33,6 +45,7 @@ function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        credentials: 'include', // Ensure cookies are sent/received
       });
 
       const data = await response.json();
@@ -45,20 +58,24 @@ function LoginForm() {
       if (typeof window !== 'undefined') {
         try {
           sessionStorage.clear();
-          console.log('[Login] Cleared session storage');
+          localStorage.removeItem('swr-cache'); // Clear SWR cache
+          console.log('[Login] Cleared session and cache storage');
         } catch (e) {
-          console.warn('[Login] Failed to clear session storage:', e);
+          console.warn('[Login] Failed to clear storage:', e);
         }
       }
 
-      // Redirect to original destination or dashboard
-      router.push(redirectTo);
-      router.refresh();
+      // Wait a bit to ensure cookie is set before redirecting
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Use window.location for full page reload to ensure fresh session
+      // This prevents race conditions with router.push + router.refresh
+      window.location.href = redirectTo;
     } catch (err: any) {
       setError(err.message || 'Login failed');
-    } finally {
       setLoading(false);
     }
+    // Don't set loading to false if successful - we're redirecting
   };
 
   return (

@@ -98,15 +98,21 @@ export async function GET(request: NextRequest) {
     // Get total count for pagination
     const totalCount = await prisma.ticket.count({ where });
 
-    // Fetch tickets with customer relation
+    // Fetch tickets with customer relation (optimized for list view)
+    // Note: Removed notes include to improve performance
+    // Notes can be fetched separately if needed in detail view
     const tickets = await prisma.ticket.findMany({
       where,
       include: {
-        customer: true,
-        notes: {
-          orderBy: { createdAt: 'desc' },
-          take: 1, // Only get latest note for list view
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            // Exclude address to reduce payload size in list view
+          },
         },
+        // Removed notes - not needed in list view, saves significant DB queries
       },
       orderBy: {
         createdAt: 'desc',

@@ -22,22 +22,30 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Get pagination params for notes/history (optional)
+    const searchParams = request.nextUrl.searchParams;
+    const notesLimit = parseInt(searchParams.get('notesLimit') || '20', 10);
+    const historyLimit = parseInt(searchParams.get('historyLimit') || '10', 10);
+
     const ticket = await prisma.ticket.findUnique({
       where: { id: params.id },
       include: {
         customer: true,
         notes: {
           orderBy: { createdAt: 'desc' },
+          take: notesLimit, // Limit notes with pagination support
         },
         statusHistory: {
           orderBy: { createdAt: 'desc' },
+          take: historyLimit, // Limit status history
         },
         fieldEdits: {
           orderBy: { editedAt: 'desc' },
+          take: historyLimit, // Limit field edits
         },
         views: {
           orderBy: { viewedAt: 'desc' },
-          take: 50,
+          take: 20, // Reduced from 50 to 20
         },
       },
     });

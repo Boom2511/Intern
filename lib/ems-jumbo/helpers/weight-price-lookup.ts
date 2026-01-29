@@ -8,6 +8,12 @@ import { EMS_WEIGHT_PRICE_TABLE } from '../data/weight-price-table';
 /**
  * หาราคาจากน้ำหนักและ Zone
  * 
+ * Logic: น้ำหนักเกินช่วงให้ใช้ราคาช่วงถัดไป
+ * - น้ำหนัก <= 30kg → ใช้ราคาช่วง 30kg
+ * - น้ำหนัก 30.01-40kg → ใช้ราคาช่วง 40kg (ช่วงถัดไป)
+ * - น้ำหนัก 40.01-50kg → ใช้ราคาช่วง 50kg (ช่วงถัดไป)
+ * - และต่อไปเรื่อยๆ
+ * 
  * @param zone - Zone ปลายทาง (1-10)
  * @param chargeableWeight - น้ำหนักที่ใช้คิดราคา (กิโลกรัม)
  * @returns ราคาตามตาราง (บาท) หรือ null ถ้าไม่พบ
@@ -19,26 +25,34 @@ export function findWeightPriceByZone(
   if (zone < 1 || zone > 10) throw new Error('Zone ต้องอยู่ระหว่าง 1-10');
   if (chargeableWeight < 0) throw new Error('น้ำหนักต้องไม่ติดลบ');
 
-  // Logic: weight must be GREATER THAN OR EQUAL to min and LESS THAN max
-  // Example: 30.0kg to 39.9kg falls into the 30-40 tier
-  // 30.0 uses rate 30, 40.0 uses rate 40
-  let priceEntry = EMS_WEIGHT_PRICE_TABLE.find(
-    entry => chargeableWeight >= entry.minWeight && chargeableWeight < entry.maxWeight
+  // Logic: ถ้าน้ำหนักเกินช่วง ให้ใช้ราคาช่วงถัดไป
+  // ตัวอย่าง: 31kg เกิน 30kg → หาช่วงที่น้ำหนักอยู่ แล้วใช้ราคาช่วงถัดไป
+  
+  // หาช่วงที่น้ำหนักอยู่
+  const currentIndex = EMS_WEIGHT_PRICE_TABLE.findIndex(
+    entry => chargeableWeight > entry.minWeight && chargeableWeight <= entry.maxWeight
   );
 
-  // Handle the edge case if weight exceeds the max in table
-  // or if no entry is found
-  if (!priceEntry) {
-    const lastEntry = EMS_WEIGHT_PRICE_TABLE[EMS_WEIGHT_PRICE_TABLE.length - 1];
-    // If weight is >= last entry's minWeight, use last entry
-    if (chargeableWeight >= lastEntry.minWeight) {
-       return getZonePrice(lastEntry, zone);
-    }
-    
-    return null;
+  // ถ้าน้ำหนัก <= ช่วงแรก ให้ใช้ราคาช่วงแรก
+  if (chargeableWeight <= EMS_WEIGHT_PRICE_TABLE[0].maxWeight) {
+    return getZonePrice(EMS_WEIGHT_PRICE_TABLE[0], zone);
   }
 
-  return getZonePrice(priceEntry, zone);
+  // ถ้าไม่เจอช่วง (น้ำหนักเกินตาราง) ให้ใช้ราคาช่วงสุดท้าย
+  if (currentIndex === -1) {
+    const lastEntry = EMS_WEIGHT_PRICE_TABLE[EMS_WEIGHT_PRICE_TABLE.length - 1];
+    return getZonePrice(lastEntry, zone);
+  }
+
+  // ถ้าน้ำหนักอยู่ในช่วง ให้ใช้ราคาของช่วงถัดไป
+  // ยกเว้นถ้าเป็นช่วงสุดท้ายแล้ว
+  const nextIndex = currentIndex + 1;
+  if (nextIndex < EMS_WEIGHT_PRICE_TABLE.length) {
+    return getZonePrice(EMS_WEIGHT_PRICE_TABLE[nextIndex], zone);
+  }
+
+  // ถ้าเป็นช่วงสุดท้ายแล้ว ใช้ราคาช่วงสุดท้าย
+  return getZonePrice(EMS_WEIGHT_PRICE_TABLE[currentIndex], zone);
 }
 
 /**
