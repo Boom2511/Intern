@@ -22,12 +22,16 @@ import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getStatusLabel } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
-import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy } from 'lucide-react';
+import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy, Zap, Loader2 } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } from '@/lib/swr-utils';
 import { validatePhone, normalizePhoneToE164 } from '@/lib/validations';
 import TicketInfoCard from './TicketInfoCard';
 import CaptureTicketImageLiff from '../liff/CaptureTicketImageLiff';
 import { useUser } from '@/providers/UserProvider';
+import QuickAnswerButtons from './QuickAnswerButtons';
+import type { QuickAnswerTemplate } from '@/config/quick-answers';
+import { Textarea } from '../ui/textarea';
+import { Label } from '../ui/label';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -49,7 +53,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const [closeCause, setCloseCause] = useState('');
   const [closeSolution, setCloseSolution] = useState('');
   const [resolutionDetail, setResolutionDetail] = useState('');
-  
+
   // Ref for capturing the ticket content as image
   const ticketContentRef = useRef<HTMLDivElement>(null);
 
@@ -426,52 +430,73 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
       <div className="max-w-7xl mx-auto p-4 md:p-6" ref={ticketContentRef}>
         {/* Close Ticket Dialog */}
         <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-base">ระบุสาเหตุและแนวทางแก้ไขก่อนปิดงาน</DialogTitle>
-              <p className="text-xs text-gray-500 mt-1">ข้อมูลนี้จะถูกบันทึกในประวัติสถานะของใบงาน</p>
+          <DialogContent className="sm:max-w-3xl max-h-[95vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="p-6 pb-2">
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="text-green-500 h-5 w-5" />
+                ยืนยันการปิดงาน (Close Ticket)
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  ผลการดำเนินการ <span className="text-gray-400 text-xs"></span>
-                </label>
-                <textarea
-                  value={resolutionDetail}
-                  onChange={(e) => setResolutionDetail(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="ผลการดำเนินการที่ได้รับจาก LINE (สามารถแก้ไขได้)"
-                />
+
+            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    ผลการดำเนินการ <span className="text-gray-400 text-xs"></span>
+                  </label>
+                  <textarea
+                    value={resolutionDetail}
+                    onChange={(e) => setResolutionDetail(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="ผลการดำเนินการที่ได้รับจาก LINE (สามารถแก้ไขได้)"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">สาเหตุ <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    value={closeCause}
+                    onChange={(e) => setCloseCause(e.target.value)}
+                    className="min-h-[100px] text-xs md:text-sm"
+                    placeholder="ระบุสาเหตุ..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">แนวทางแก้ไข <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    value={closeSolution}
+                    onChange={(e) => setCloseSolution(e.target.value)}
+                    className="min-h-[100px] text-xs md:text-sm"
+                    placeholder="ระบุแนวทางแก้ไข..."
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">สาเหตุ <span className="text-red-500">*</span></label>
-                <textarea
-                  value={closeCause}
-                  onChange={(e) => setCloseCause(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="ระบุสาเหตุของปัญหา..."
+              <section>
+                
+                <QuickAnswerButtons
+                  onSelectAnswer={(template) => {
+                    setCloseCause(template.cause);
+                    setCloseSolution(template.solution);
+                  }}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">แนวทางแก้ไข <span className="text-red-500">*</span></label>
-                <textarea
-                  value={closeSolution}
-                  onChange={(e) => setCloseSolution(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="ระบุแนวทางแก้ไข..."
-                />
-              </div>
+              </section>
             </div>
-            <DialogFooter className="mt-4 gap-2 sm:gap-3">
-              <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>ยกเลิก</Button>
+            
+
+            <DialogFooter className="p-6 bg-gray-50 border-t gap-3">
+              <Button variant="ghost" onClick={() => setCloseDialogOpen(false)}>
+                ยกเลิก
+              </Button>
               <Button
-                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution, resolutionDetail })}
+                size="lg"
+                className="px-8 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-100"
+                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution })}
                 disabled={!closeCause.trim() || !closeSolution.trim() || loading}
               >
-                ยืนยันปิดงาน
+                {loading ? <Loader2 className="animate-spin mr-2" /> : null}
+                บันทึกและปิดงาน
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -510,7 +535,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                   <Copy className="h-4 w-4 mr-2" /> คัดลอก
                 </Button>
                 {/* Share as Image Button - Mobile Card */}
-                <CaptureTicketImageLiff 
+                <CaptureTicketImageLiff
                   ticket={ticket}
                   notes={allNotes}
                   statusHistory={statusHistory}
@@ -644,75 +669,75 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
-                  {/* Status Stats */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-600">สถานะปัจจุบัน</span>
-                      <StatusBadge status={status} />
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-600">ผู้สร้าง</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {(ticket as any).createdBy || 'CEC Staff'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-gray-600">ผู้เข้าชม</span>
-                      <span className="text-sm font-semibold text-gray-900">
-                        {ticket.views?.length || 0}
-                      </span>
-                    </div>
+                {/* Status Stats */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-600">สถานะปัจจุบัน</span>
+                    <StatusBadge status={status} />
                   </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-600">ผู้สร้าง</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {(ticket as any).createdBy || 'CEC Staff'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-600">ผู้เข้าชม</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {ticket.views?.length || 0}
+                    </span>
+                  </div>
+                </div>
 
-                  {/* Department Select */}
-                  <div className="pt-4 border-t">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      แผนกรับผิดชอบ
-                    </label>
-                    <Select
-                      value={department || 'none'}
-                      onValueChange={handleDepartmentUpdate}
+                {/* Department Select */}
+                <div className="pt-4 border-t">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    แผนกรับผิดชอบ
+                  </label>
+                  <Select
+                    value={department || 'none'}
+                    onValueChange={handleDepartmentUpdate}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="เลือกแผนก" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ยังไม่เลือกแผนก</SelectItem>
+                      {departmentOptions.map((dept) => (
+                        <SelectItem key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Close Ticket Button */}
+                {status !== 'CLOSED' && (
+                  <div className="pt-4">
+                    <Button
+                      onClick={() => {
+                        // Pre-fill resolutionDetail from the latest end user note or ticket resolutionDetail
+                        const latestUserNote = ticket.notes
+                          ?.filter((note: any) => note.isFromEndUser)
+                          ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+                        const prefillText = ticket.resolutionDetail || latestUserNote?.content || '';
+                        setResolutionDetail(prefillText);
+                        setCloseDialogOpen(true);
+                      }}
                       disabled={loading}
+                      variant="outline"
+                      className="w-full border-red-300 text-red-700 hover:bg-red-50"
+                      size="sm"
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="เลือกแผนก" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">ยังไม่เลือกแผนก</SelectItem>
-                        {departmentOptions.map((dept) => (
-                          <SelectItem key={dept.value} value={dept.value}>
-                            {dept.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      ปิด Ticket
+                    </Button>
                   </div>
-
-                  {/* Close Ticket Button */}
-                  {status !== 'CLOSED' && (
-                    <div className="pt-4">
-                      <Button
-                        onClick={() => {
-                          // Pre-fill resolutionDetail from the latest end user note or ticket resolutionDetail
-                          const latestUserNote = ticket.notes
-                            ?.filter((note: any) => note.isFromEndUser)
-                            ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-                          
-                          const prefillText = ticket.resolutionDetail || latestUserNote?.content || '';
-                          setResolutionDetail(prefillText);
-                          setCloseDialogOpen(true);
-                        }}
-                        disabled={loading}
-                        variant="outline"
-                        className="w-full border-red-300 text-red-700 hover:bg-red-50"
-                        size="sm"
-                      >
-                        ปิด Ticket
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Timeline Card */}
             <Card className="shadow-sm border-gray-200">
