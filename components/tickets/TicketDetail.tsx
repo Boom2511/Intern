@@ -441,15 +441,13 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
             <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    ผลการดำเนินการ <span className="text-gray-400 text-xs"></span>
-                  </label>
-                  <textarea
+                  <Label className="text-sm">ผลการดำเนินการ  <span className="text-red-500">*</span></Label>
+                  <Textarea
                     value={resolutionDetail}
                     onChange={(e) => setResolutionDetail(e.target.value)}
                     rows={3}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="ผลการดำเนินการที่ได้รับจาก LINE (สามารถแก้ไขได้)"
+                    placeholder="ผลการดำเนินการที่ได้รับจากด้านนำจ่าย..."
                   />
                 </div>
 
@@ -492,8 +490,8 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               <Button
                 size="lg"
                 className="px-8 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-100"
-                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution })}
-                disabled={!closeCause.trim() || !closeSolution.trim() || loading}
+                onClick={() => handleStatusUpdate('CLOSED', { closeCause, closeSolution, resolutionDetail  })}
+                disabled={!closeCause.trim() || !closeSolution.trim() || !resolutionDetail.trim() || loading}
               >
                 {loading ? <Loader2 className="animate-spin mr-2" /> : null}
                 บันทึกและปิดงาน
