@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
-import { formatThaiDate, formatRelativeTime, getStatusLabel } from '@/lib/utils';
+import { formatThaiDate, formatRelativeTime, getStatusLabel, cn } from '@/lib/utils';
 import { getDepartmentOptions } from '@/config/departments';
 import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy, Zap, Loader2 } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } from '@/lib/swr-utils';
@@ -32,6 +32,7 @@ import QuickAnswerButtons from './QuickAnswerButtons';
 import type { QuickAnswerTemplate } from '@/config/quick-answers';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
+import { hasPermission, Permission } from '@/lib/permissions';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -53,6 +54,11 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
   const [closeCause, setCloseCause] = useState('');
   const [closeSolution, setCloseSolution] = useState('');
   const [resolutionDetail, setResolutionDetail] = useState('');
+
+  // Check if user has permission to edit tickets
+  const canEditTickets = user?.role ? hasPermission(user.role, Permission.EDIT_TICKETS) : false;
+  // USER role should only see notes/comments section
+  const isViewOnlyUser = !canEditTickets;
 
   // Ref for capturing the ticket content as image
   const ticketContentRef = useRef<HTMLDivElement>(null);
@@ -511,12 +517,18 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                 สร้างเมื่อวันที่ {formatThaiDate(ticket.createdAt)}
               </p>
             </div>
+            {/* Action buttons - Show Copy & Capture for all users, Edit only for users with permission */}
             {!isEditing ? (
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  แก้ไข
-                </Button>
+                {/* Edit button - Only for users with EDIT_TICKETS permission */}
+                {canEditTickets && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    แก้ไข
+                  </Button>
+                )}
+                
+                {/* Copy button - Available for all users */}
                 <Button variant="outline" size="sm" onClick={async () => {
                   try {
                     const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -532,7 +544,8 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                 }}>
                   <Copy className="h-4 w-4 mr-2" /> คัดลอก
                 </Button>
-                {/* Share as Image Button - Mobile Card */}
+                
+                {/* Capture Image button - Available for all users */}
                 <CaptureTicketImageLiff
                   ticket={ticket}
                   notes={allNotes}
@@ -559,11 +572,14 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Ticket Information Card */}
+          <div className={cn(
+            "space-y-6",
+            canEditTickets ? "lg:col-span-2" : "lg:col-span-2"
+          )}>
+            {/* Ticket Information Card - Always show, but read-only for view-only users */}
             <TicketInfoCard
               ticket={ticket}
-              isEditing={isEditing}
+              isEditing={canEditTickets && isEditing}
               editForm={editForm}
               onFormChange={(updates) => setEditForm({ ...editForm, ...updates })}
             />
@@ -573,7 +589,7 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               <CardHeader className="bg-white border-b border-gray-200 pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
                   <MessageSquare className="h-5 w-5 text-gray-700" />
-                  บันทึก
+                  {isViewOnlyUser ? 'ตอบผลการดำเนินการ' : 'บันทึก'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
@@ -652,99 +668,134 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
                     ))
                   )}
                 </div>
+
+                {/* Add Note Input - Show for all users (moved to bottom) */}
+                <div className="mt-6 pt-6 border-t">
+                  <div className="space-y-3">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder={isViewOnlyUser ? "กรอกผลการดำเนินการ..." : "เพิ่มบันทึก..."}
+                      rows={3}
+                      className="w-full"
+                    />
+                    <div className="flex justify-end">
+                      <Button 
+                        onClick={handleAddNote}
+                        disabled={!newNote.trim() || loading}
+                        size="sm"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            กำลังบันทึก...
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            {isViewOnlyUser ? 'ส่งผลการดำเนินการ' : 'เพิ่มบันทึก'}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Right Sidebar */}
           <div className="space-y-6">
-            {/* Statistics Card */}
-            <Card className="shadow-sm border-gray-200">
-              <CardHeader className="bg-white border-b border-gray-200 pb-4">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
-                  สถานะ
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                {/* Status Stats */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">สถานะปัจจุบัน</span>
-                    <StatusBadge status={status} />
+            {/* Statistics Card - Only for users with edit permission */}
+            {canEditTickets && (
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="bg-white border-b border-gray-200 pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                    สถานะ
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-4">
+                  {/* Status Stats */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">สถานะปัจจุบัน</span>
+                      <StatusBadge status={status} />
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">ผู้สร้าง</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {(ticket as any).createdBy || 'CEC Staff'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">ผู้เข้าชม</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {ticket.views?.length || 0}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">ผู้สร้าง</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {(ticket as any).createdBy || 'CEC Staff'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">ผู้เข้าชม</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {ticket.views?.length || 0}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Department Select */}
-                <div className="pt-4 border-t">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    แผนกรับผิดชอบ
-                  </label>
-                  <Select
-                    value={department || 'none'}
-                    onValueChange={handleDepartmentUpdate}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="เลือกแผนก" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ยังไม่เลือกแผนก</SelectItem>
-                      {departmentOptions.map((dept) => (
-                        <SelectItem key={dept.value} value={dept.value}>
-                          {dept.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Close Ticket Button */}
-                {status !== 'CLOSED' && (
-                  <div className="pt-4">
-                    <Button
-                      onClick={() => {
-                        // Pre-fill resolutionDetail from the latest end user note or ticket resolutionDetail
-                        const latestUserNote = ticket.notes
-                          ?.filter((note: any) => note.isFromEndUser)
-                          ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-
-                        const prefillText = ticket.resolutionDetail || latestUserNote?.content || '';
-                        setResolutionDetail(prefillText);
-                        setCloseDialogOpen(true);
-                      }}
+                  {/* Department Select */}
+                  <div className="pt-4 border-t">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      แผนกรับผิดชอบ
+                    </label>
+                    <Select
+                      value={department || 'none'}
+                      onValueChange={handleDepartmentUpdate}
                       disabled={loading}
-                      variant="outline"
-                      className="w-full border-red-300 text-red-700 hover:bg-red-50"
-                      size="sm"
                     >
-                      ปิด Ticket
-                    </Button>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="เลือกแผนก" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ยังไม่เลือกแผนก</SelectItem>
+                        {departmentOptions.map((dept) => (
+                          <SelectItem key={dept.value} value={dept.value}>
+                            {dept.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Timeline Card */}
+                  {/* Close Ticket Button */}
+                  {status !== 'CLOSED' && (
+                    <div className="pt-4">
+                      <Button
+                        onClick={() => {
+                          // Pre-fill resolutionDetail - prioritize LINE user notes first
+                          const lineUserNotes = ticket.notes
+                            ?.filter((note: any) => note.isFromEndUser)
+                            ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                          // Get the latest LINE user note, or fallback to existing resolutionDetail, or empty
+                          const prefillText = lineUserNotes?.[0]?.content || ticket.resolutionDetail || '';
+                          setResolutionDetail(prefillText);
+                          setCloseDialogOpen(true);
+                        }}
+                        disabled={loading}
+                        variant="outline"
+                        className="w-full border-red-300 text-red-700 hover:bg-red-50"
+                        size="sm"
+                      >
+                        ปิด Ticket
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Timeline Card - Show for all users */}
             <Card className="shadow-sm border-gray-200">
-              <CardHeader className="bg-white border-b border-gray-200 pb-4">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                  <History className="h-5 w-5 text-purple-600" />
-                  Timeline
-                </CardTitle>
-              </CardHeader>
+                <CardHeader className="bg-white border-b border-gray-200 pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <History className="h-5 w-5 text-purple-600" />
+                    Timeline
+                  </CardTitle>
+                </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-4">
                   {/* Status History Timeline Items */}
@@ -900,47 +951,47 @@ export default function TicketDetail({ ticket, mutate }: TicketDetailProps) {
               </CardContent>
             </Card>
 
-            {/* View History */}
-            {ticket.views && ticket.views.length > 0 && (
-              <Card className="shadow-sm border-gray-200">
-                <CardHeader className="bg-white border-b border-gray-200 pb-4">
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <User className="h-5 w-5 text-purple-600" />
-                    ผู้เข้าชม
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-3">
-                    {ticket.views.slice(0, 5).map((view) => (
-                      <div key={view.id} className="flex items-center gap-3">
-                        {view.viewerAvatar ? (
-                          <Image
-                            src={view.viewerAvatar}
-                            alt={view.viewerName}
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                            <span className="text-xs font-medium text-purple-700">
-                              {view.viewerName.charAt(0).toUpperCase()}
-                            </span>
+            {/* View History - Only for users with edit permission */}
+            {canEditTickets && ticket.views && ticket.views.length > 0 && (
+                <Card className="shadow-sm border-gray-200">
+                  <CardHeader className="bg-white border-b border-gray-200 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                      <User className="h-5 w-5 text-purple-600" />
+                      ผู้เข้าชม
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      {ticket.views.slice(0, 5).map((view) => (
+                        <div key={view.id} className="flex items-center gap-3">
+                          {view.viewerAvatar ? (
+                            <Image
+                              src={view.viewerAvatar}
+                              alt={view.viewerName}
+                              width={32}
+                              height={32}
+                              className="w-8 h-8 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              <span className="text-xs font-medium text-purple-700">
+                                {view.viewerName.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {view.viewerName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {formatRelativeTime(view.viewedAt)}
+                            </p>
                           </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {view.viewerName}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatRelativeTime(view.viewedAt)}
-                          </p>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
             )}
           </div>
         </div>

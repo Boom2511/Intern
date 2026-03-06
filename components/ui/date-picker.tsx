@@ -26,11 +26,15 @@ export function DateRangePicker({
 }: DateRangePickerProps) {
   // Get today's date in Thailand timezone (GMT+7)
   const getTodayInThailand = () => {
+    // Get current time in UTC
     const now = new Date();
-    const thailandOffset = 7 * 60; // GMT+7 in minutes
-    const localOffset = now.getTimezoneOffset();
-    const thailandTime = new Date(now.getTime() + (thailandOffset + localOffset) * 60 * 1000);
-    return thailandTime.toISOString().split('T')[0];
+    // Convert to Thailand time (UTC+7)
+    const thailandTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    // Format as YYYY-MM-DD
+    const year = thailandTime.getFullYear();
+    const month = String(thailandTime.getMonth() + 1).padStart(2, '0');
+    const day = String(thailandTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const today = getTodayInThailand();

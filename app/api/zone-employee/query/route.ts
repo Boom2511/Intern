@@ -85,17 +85,20 @@ export async function GET(req: NextRequest) {
         const rootEmployees: any[] = [];
 
         // First pass: create all employee nodes with zone info
-        const deptZones = departmentZonesMap.get(dept) || [];
         Array.from(employeesMap.values()).forEach((emp: any) => {
-          const zoneInfo = deptZones.find((z: any) => z.employeeId === emp.employeeId);
+          // Find the zone assignment for this employee
+          const zoneAssignment = zones.find(zone => 
+            zone.employees.some(ze => ze.employee.id === emp.id)
+          );
+          
           const node = {
             id: emp.id,
             name: emp.name,
             employeeId: emp.employeeId,
             role: emp.role,
             department: emp.department,
-            zoneName: zoneInfo?.zoneName || null,
-            zoneId: zoneInfo?.zoneId || null,
+            zoneName: zoneAssignment?.zoneName || null,
+            zoneId: zoneAssignment?.zoneId || null,
             subordinates: [],
           };
           employeeMap.set(emp.id, node);

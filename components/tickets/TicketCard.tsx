@@ -15,9 +15,10 @@ import { getRecipientName } from '@/lib/recipient-utils';
 interface TicketCardProps {
   ticket: TicketWithCustomer;
   router?: any; // For LIFF queue page navigation
+  readOnly?: boolean;
 }
 
-export default function TicketCard({ ticket, router }: TicketCardProps) {
+export default function TicketCard({ ticket, router, readOnly = false }: TicketCardProps) {
   const notesCount = ticket.notes?.length || 0;
   const hasUserUpdate = ticket.notes?.some(n => n.isFromEndUser);
   

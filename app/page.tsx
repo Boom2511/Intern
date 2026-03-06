@@ -1,22 +1,47 @@
 /**
  * Home Page
  * Handles LIFF redirect if liff.state is present
+ * Redirects USER role to their tickets page
  * Otherwise shows landing page with overview and quick actions
  */
 
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Ticket, LayoutDashboard, Plus, Search } from 'lucide-react';
 import VConsole from '@/components/VConsole';
+import { useUser } from '@/providers/UserProvider';
 
 function HomeContent() {
+  const router = useRouter();
+  const { user } = useUser();
+
+  // Redirect USER role to their dashboard
+  useEffect(() => {
+    if (user && user.role === 'USER'as any) {
+      router.push('/user/dashboard');
+    }
+  }, [user, router]);
+
   // NOTE: LIFF redirect now handled by middleware.ts for better performance
   // If you reach this page with liff.state, middleware should have redirected you
   // If you see this page, it means middleware redirect didn't work
+
+  // Don't render content if redirecting
+  if (user && user.role === 'USER' as any) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">กำลังนำทางไปยังหน้า Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

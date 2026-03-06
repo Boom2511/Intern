@@ -38,12 +38,13 @@ interface RecentResponse {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function useDashboardRecent() {
-  const { data, error, isLoading, isValidating } = useSWR<RecentResponse>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<RecentResponse>(
     '/api/dashboard/recent',
     fetcher,
     {
-      refreshInterval: 30000, // Auto-refresh every 30s
+      refreshInterval: 0, // Disabled - use manual mutate instead
       revalidateOnFocus: true,
+      revalidateOnReconnect: true,
       dedupingInterval: 10000, // 10 seconds
     }
   );
@@ -54,5 +55,6 @@ export function useDashboardRecent() {
     isLoading,
     isError: error,
     isValidating,
+    mutate, // For manual refresh
   };
 }

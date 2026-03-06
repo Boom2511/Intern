@@ -12,9 +12,10 @@ import { TicketWithCustomer } from '@/types';
 interface TicketListProps {
   tickets: TicketWithCustomer[];
   initialStatus?: string;
+  readOnly?: boolean;
 }
 
-export default function TicketList({ tickets }: TicketListProps) {
+export default function TicketList({ tickets, readOnly = false }: TicketListProps) {
   return (
     <div className="space-y-4">
       {/* Ticket Cards */}
@@ -25,7 +26,7 @@ export default function TicketList({ tickets }: TicketListProps) {
       ) : (
         <div className="grid gap-4">
           {tickets.map(ticket => (
-            <TicketCard key={ticket.id} ticket={ticket} />
+            <TicketCard key={ticket.id} ticket={ticket} readOnly={readOnly} />
           ))}
         </div>
       )}

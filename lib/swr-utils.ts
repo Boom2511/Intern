@@ -31,7 +31,18 @@ export function invalidateTicketDetail(ticketId: string) {
  * Call this after ticket status changes to update dashboard
  */
 export function invalidateDashboardStats() {
+  // Invalidate all dashboard-related endpoints
   mutate('/api/dashboard/stats');
+  mutate('/api/dashboard/recent');
+  mutate('/api/dashboard/my-activities');
+  mutate('/api/dashboard/user-stats');
+  mutate('/api/dashboard/summary');
+  mutate('/api/dashboard/trends');
+  mutate(
+    (key) => typeof key === 'string' && key.startsWith('/api/dashboard/'),
+    undefined,
+    { revalidate: true }
+  );
 }
 
 /**

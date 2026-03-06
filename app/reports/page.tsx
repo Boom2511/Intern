@@ -92,9 +92,9 @@ export default function ReportsPage() {
     }
   }, [reportType, monthYear]);
 
-  // Fetch Preview using SWR (auto-refreshes on data changes)
+  // Fetch Preview using SWR (manual refresh via mutate)
   const previewKey = `/api/reports/preview?start=${startDate}&end=${endDate}&type=${reportType}`;
-  const { data: previewData, isLoading: loadingPreview } = useSWR(
+  const { data: previewData, isLoading: loadingPreview, mutate: mutatePreview } = useSWR(
     previewKey,
     async () => {
       const res = await fetch('/api/reports/preview', {
@@ -112,8 +112,9 @@ export default function ReportsPage() {
       return res.json();
     },
     {
-      refreshInterval: 30000, // Auto-refresh every 30 seconds
+      refreshInterval: 0, // Disabled - use manual refresh via date changes
       revalidateOnFocus: true, // Refresh when user returns to tab
+      revalidateOnReconnect: true,
     }
   );
 

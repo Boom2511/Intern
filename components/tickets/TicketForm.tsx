@@ -209,15 +209,13 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
               setZoneEmployees(zoneData);
 
-              // Auto-fill department if found
-              if (zoneData.department && !formData.department) {
-
+              // Auto-fill department if found (always update to match zone's department)
+              if (zoneData.department) {
                 const deptCode = getDepartmentCode(zoneData.department);
                 setFormData(prev => ({
                   ...prev,
                   department: deptCode || undefined,
                 }));
-
               }
 
             } else {
@@ -238,7 +236,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
     // Debounce the API call
     const timer = setTimeout(loadZoneEmployees, 500);
     return () => clearTimeout(timer);
-  }, [formData.zoneId, formData.department]);
+  }, [formData.zoneId]); // ลบ formData.department ออก เพื่อไม่ให้ fetch ซ้ำเมื่อ auto-fill department
 
   // Real-time field validation on blur
   const validateField = (field: string, value: any) => {
@@ -467,7 +465,22 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         // Redirect to ticket detail page on success
         router.push(`/tickets/${data.data.id}`);
       } else {
-        setErrors([data.error || 'เกิดข้อผิดพลาดในการสร้าง Ticket']);
+        // Handle duplicate tracking number error (409 Conflict)
+        if (response.status === 409 && data.error === 'DUPLICATE_TRACKING') {
+          toast({
+            variant: 'error',
+            title: 'เลขพัสดุซ้ำ',
+            description: data.message || `เลขพัสดุ ${formData.trackingNo} มี Ticket อยู่แล้ว`,
+          });
+          
+          // Scroll to top to show error
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          
+          // Stay on form - user can fix the tracking number
+          setErrors([data.message || 'เลขพัสดุนี้มี Ticket อยู่แล้ว กรุณาตรวจสอบเลขพัสดุอีกครั้ง']);
+        } else {
+          setErrors([data.error || 'เกิดข้อผิดพลาดในการสร้าง Ticket']);
+        }
       }
     } catch (error) {
       console.error('Error creating ticket:', error);

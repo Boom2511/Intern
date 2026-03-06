@@ -20,6 +20,7 @@ export async function GET() {
         username: true,
         name: true,
         role: true,
+        department: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -49,12 +50,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { username, password, name, role } = await request.json();
+    const { username, password, name, role, department } = await request.json();
 
     // Validation
     if (!username || !password || !name || !role) {
       return NextResponse.json(
         { error: 'All fields are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate department for USER role
+    if (role === 'USER' && !department) {
+      return NextResponse.json(
+        { error: 'Department is required for USER role' },
         { status: 400 }
       );
     }
@@ -81,12 +90,14 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name,
         role,
+        department: role === 'USER' ? department : null,
       },
       select: {
         id: true,
         username: true,
         name: true,
         role: true,
+        department: true,
         isActive: true,
         createdAt: true,
       }

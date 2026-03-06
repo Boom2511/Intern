@@ -11,6 +11,9 @@ export const ROLE_NAMES = {
   // End user roles
   END_USER: 'พนักงาน',       // End user/Customer
   CUSTOMER: 'พนักงาน',       // Customer (alternative)
+  
+  // Department user role
+  USER: 'User',          // Department user
 } as const;
 
 export const ROLE_LABELS = {

@@ -18,7 +18,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const { username, password, name, role, isActive } = await request.json();
+    const { username, password, name, role, department, isActive } = await request.json();
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -63,6 +63,25 @@ export async function PATCH(
     }
 
     if (role !== undefined) updateData.role = role;
+    
+    // Handle department field
+    if (role === 'USER') {
+      // If changing to USER role, department is required
+      if (department === undefined && existingUser.role !== 'USER') {
+        return NextResponse.json(
+          { error: 'Department is required for USER role' },
+          { status: 400 }
+        );
+      }
+      updateData.department = department;
+    } else if (role !== undefined && role !== 'USER') {
+      // If changing from USER to another role, clear department
+      updateData.department = null;
+    } else if (department !== undefined) {
+      // Updating department while already USER role
+      updateData.department = department;
+    }
+    
     if (isActive !== undefined) updateData.isActive = isActive;
 
     // Update user
@@ -74,6 +93,7 @@ export async function PATCH(
         username: true,
         name: true,
         role: true,
+        department: true,
         isActive: true,
         updatedAt: true,
       }

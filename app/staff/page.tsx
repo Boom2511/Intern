@@ -12,12 +12,14 @@ import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useUser } from '@/providers/UserProvider';
+import { getDepartmentOptions } from '@/config/departments';
 
 interface User {
   id: string;
   username: string;
   name: string;
-  role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR';
+  role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR' | 'USER';
+  department: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -37,7 +39,8 @@ export default function StaffPage() {
     username: '',
     password: '',
     name: '',
-    role: 'OPERATOR' as 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR',
+    role: 'OPERATOR' as 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR' | 'USER',
+    department: null as string | null,
   });
   const [passwordError, setPasswordError] = useState('');
 
@@ -71,9 +74,9 @@ export default function StaffPage() {
       if (response.ok) {
         const data = await response.json();
         // Sort users by role: ADMINISTRATOR first, then ADMIN, then OPERATOR
-        const roleOrder = { ADMINISTRATOR: 1, ADMIN: 2, OPERATOR: 3 };
+        const roleOrder = { ADMINISTRATOR: 1, ADMIN: 2, OPERATOR: 3, USER: 4 };
         const sortedUsers = data.users.sort((a: User, b: User) => {
-          return roleOrder[a.role] - roleOrder[b.role];
+          return roleOrder[a.role as keyof typeof roleOrder] - roleOrder[b.role as keyof typeof roleOrder];
         });
         setUsers(sortedUsers);
       }
@@ -122,6 +125,16 @@ export default function StaffPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Department validation for USER role
+    if (formData.role === 'USER' && !formData.department) {
+      toast({
+        title: 'ข้อมูลไม่ครบถ้วน',
+        description: 'กรุณาเลือกแผนกสำหรับ User',
+        variant: 'error',
+      });
+      return;
+    }
 
     // Validate password if creating new user or changing password
     if (!editingUser && !validatePassword(formData.password)) {
@@ -225,6 +238,7 @@ export default function StaffPage() {
       password: '',
       name: user.name,
       role: user.role,
+      department: user.department,
     });
     setIsDialogOpen(true);
   };
@@ -236,6 +250,7 @@ export default function StaffPage() {
       password: '',
       name: '',
       role: 'OPERATOR',
+      department: null,
     });
     setPasswordError('');
   };
@@ -255,6 +270,7 @@ export default function StaffPage() {
       case 'ADMINISTRATOR': return 'bg-purple-100 text-purple-800';
       case 'ADMIN': return 'bg-blue-100 text-blue-800';
       case 'OPERATOR': return 'bg-green-100 text-green-800';
+      case 'USER': return 'bg-yellow-100 text-yellow-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -264,8 +280,15 @@ export default function StaffPage() {
       case 'ADMINISTRATOR': return 'Administrator';
       case 'ADMIN': return 'Admin';
       case 'OPERATOR': return 'Operator';
+      case 'USER': return 'User';
       default: return role;
     }
+  };
+
+  const getDepartmentLabel = (department: string | null) => {
+    if (!department) return null;
+    const dept = getDepartmentOptions().find(d => d.value === department);
+    return dept?.label || department;
   };
 
   if (loading) {
@@ -369,10 +392,34 @@ export default function StaffPage() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                     disabled={editingUser?.role === 'ADMINISTRATOR'}
                   >
-                    <option value="OPERATOR">Operator </option>
+                    <option value="USER">User</option>
+                    <option value="OPERATOR">Operator</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
+
+                {/* Department selector - only show for USER role */}
+                {formData.role === 'USER' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="department">แผนก</Label>
+                    <select
+                      aria-label="แผนก"
+                      id="department"
+                      name="department"
+                      className="w-full border rounded-md p-2"
+                      value={formData.department || ''}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value || null })}
+                      required
+                    >
+                      <option value="">เลือกแผนก</option>
+                      {getDepartmentOptions().map((dept) => (
+                        <option key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -428,9 +475,16 @@ export default function StaffPage() {
                     </td>
                     <td className="p-3">{user.username}</td>
                     <td className="p-3">
-                      <Badge className={getRoleBadgeColor(user.role)}>
-                        {getRoleLabel(user.role)}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getRoleBadgeColor(user.role)}>
+                          {getRoleLabel(user.role)}
+                        </Badge>
+                        {user.role === 'USER' && user.department && (
+                          <span className="text-xs text-gray-600">
+                            ({getDepartmentLabel(user.department)})
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
@@ -483,8 +537,9 @@ export default function StaffPage() {
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <h3 className="font-semibold mb-2">สิทธิ์การใช้งาน</h3>
         <ul className="space-y-1 text-sm text-gray-700">
-          <li><strong>Admin:</strong> สามารถจัดการผู้ใช้งาน และการตั้งค่าระบบทั้งหมดรวมถึงดูภาพรวมงาน, SLA และใช้งานระบบได้ครบทุกฟังก์ชัน </li>
-          <li><strong>Operator:</strong> ใช้งานระบบ CEC เพื่อสร้างและจัดการ Ticket เห็นเฉพาะงานที่ได้รับมอบหมายหรือเกี่ยวข้อง ไม่สามารถจัดการผู้ใช้งานหรือระบบได้ </li>
+          <li><strong>User:</strong> ดูและตอบผลการดำเนินการ Ticket เฉพาะแผนกที่ได้รับมอบหมาย ไม่สามารถแก้ไข Ticket, เปลี่ยนสถานะ หรือเปลี่ยนแผนกได้</li>
+          <li><strong>Operator:</strong> ใช้งานระบบ CEC เพื่อสร้างและจัดการ Ticket เห็นเฉพาะงานที่ได้รับมอบหมายหรือเกี่ยวข้อง ไม่สามารถจัดการผู้ใช้งานหรือระบบได้</li>
+          <li><strong>Admin:</strong> สามารถจัดการผู้ใช้งาน และการตั้งค่าระบบทั้งหมดรวมถึงดูภาพรวมงาน, SLA และใช้งานระบบได้ครบทุกฟังก์ชัน</li>
         </ul>
       </div>
       <Toaster />

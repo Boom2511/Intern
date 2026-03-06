@@ -14,6 +14,7 @@ export interface SessionUser {
   id: string;
   name: string;
   role: UserRole;
+  department?: string | null;
 }
 
 /**
@@ -103,6 +104,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
         id: true,
         name: true,
         role: true,
+        department: true,
         isActive: true,
       }
     });
@@ -115,6 +117,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       id: user.id,
       name: user.name,
       role: user.role,
+      department: user.department,
     };
   } catch (error) {
     console.error('Error getting current user:', error);
@@ -122,63 +125,8 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   }
 }
 
-/**
- * Check if user has required permission
- */
-export function hasPermission(userRole: UserRole, requiredPermission: Permission): boolean {
-  const permissions = rolePermissions[userRole];
-  return permissions.includes(requiredPermission);
-}
-
-/**
- * Permission types
- */
-export enum Permission {
-  VIEW_TICKETS = 'VIEW_TICKETS',
-  CREATE_TICKETS = 'CREATE_TICKETS',
-  EDIT_TICKETS = 'EDIT_TICKETS',
-  DELETE_TICKETS = 'DELETE_TICKETS',
-  VIEW_USERS = 'VIEW_USERS',
-  MANAGE_USERS = 'MANAGE_USERS',
-  VIEW_TEST_PAGES = 'VIEW_TEST_PAGES',
-  VIEW_DASHBOARD = 'VIEW_DASHBOARD',
-  VIEW_STAFF = 'VIEW_STAFF',
-}
-
-/**
- * Role-based permissions mapping
- */
-export const rolePermissions: Record<UserRole, Permission[]> = {
-  ADMINISTRATOR: [
-    Permission.VIEW_TICKETS,
-    Permission.CREATE_TICKETS,
-    Permission.EDIT_TICKETS,
-    Permission.DELETE_TICKETS,
-    Permission.VIEW_USERS,
-    Permission.MANAGE_USERS,
-    Permission.VIEW_TEST_PAGES,
-    Permission.VIEW_DASHBOARD,
-    Permission.VIEW_STAFF,
-  ],
-  ADMIN: [
-    Permission.VIEW_TICKETS,
-    Permission.CREATE_TICKETS,
-    Permission.EDIT_TICKETS,
-    Permission.DELETE_TICKETS,
-    Permission.VIEW_USERS,
-    Permission.MANAGE_USERS,
-    Permission.VIEW_DASHBOARD,
-    Permission.VIEW_STAFF,
-    // Note: NO VIEW_TEST_PAGES permission
-  ],
-  OPERATOR: [
-    Permission.VIEW_TICKETS,
-    Permission.CREATE_TICKETS,
-    Permission.EDIT_TICKETS,
-    Permission.VIEW_DASHBOARD,
-    // Note: NO user management, NO test pages, NO staff page
-  ],
-};
+// Re-export permission utilities from separate file (client-safe)
+export { Permission, rolePermissions, hasPermission } from './permissions';
 
 /**
  * Check if route requires authentication

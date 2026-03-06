@@ -17,7 +17,11 @@ import { TICKET_STATUSES } from '@/lib/constants';
 import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeOptions } from '@/config/issue-types';
 
-export default function TicketFilters() {
+interface TicketFiltersProps {
+  hideDepartmentFilter?: boolean;
+}
+
+export default function TicketFilters({ hideDepartmentFilter = false }: TicketFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -72,7 +76,10 @@ export default function TicketFilters() {
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
 
-      router.push(`/tickets?${params.toString()}`);
+      // Detect if we're on user page
+      const isUserPage = window.location.pathname.startsWith('/user');
+      const basePath = isUserPage ? '/user/tickets' : '/tickets';
+      router.push(`${basePath}?${params.toString()}`);
     }, 500);
 
     return () => {
@@ -89,7 +96,9 @@ export default function TicketFilters() {
     setIssueType('');
     setStartDate('');
     setEndDate('');
-    router.push('/tickets');
+    const isUserPage = window.location.pathname.startsWith('/user');
+    const basePath = isUserPage ? '/user/tickets' : '/tickets';
+    router.push(basePath);
   };
 
   const handleClearDateRange = () => {
@@ -167,24 +176,26 @@ export default function TicketFilters() {
               </div>
 
               {/* Department */}
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  แผนก
-                </label>
-                <Select value={department} onValueChange={setDepartment}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ทั้งหมด" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">ทั้งหมด</SelectItem>
-                    {departmentOptions.map((dept) => (
-                      <SelectItem key={dept.value} value={dept.value}>
-                        {dept.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!hideDepartmentFilter && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    แผนก
+                  </label>
+                  <Select value={department} onValueChange={setDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="ทั้งหมด" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">ทั้งหมด</SelectItem>
+                      {departmentOptions.map((dept) => (
+                        <SelectItem key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Issue Type */}
               <div>

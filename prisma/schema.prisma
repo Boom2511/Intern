@@ -216,17 +216,19 @@ enum SLAStatus {
 
 // User model - for authentication and authorization
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique  // For login/authentication
-  password  String   // Hashed password
-  name      String   // Display name
-  role      UserRole @default(OPERATOR)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String      @id @default(cuid())
+  username   String      @unique  // For login/authentication
+  password   String      // Hashed password
+  name       String      // Display name
+  role       UserRole    @default(OPERATOR)
+  department Department? // Department for USER role - required for USER, optional for others
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@index([role])
   @@index([username])
+  @@index([department])
 }
 
 // User Role enum
@@ -234,6 +236,7 @@ enum UserRole {
   ADMINISTRATOR  // Full access to everything
   ADMIN          // User management + CEC, no test pages
   OPERATOR       // CEC only, no user management or test pages
+  USER           // Department user - can only view tickets from their assigned department
 }
 
 // Ticket View History - Track who viewed the ticket and when

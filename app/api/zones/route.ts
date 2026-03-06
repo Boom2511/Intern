@@ -65,7 +65,15 @@ export async function GET(request: NextRequest) {
           include: {
             employee: {
               include: {
-                manager: true, // Include manager for hierarchy lookup
+                manager: {
+                  include: {
+                    zones: {
+                      include: {
+                        zone: true,
+                      },
+                    },
+                  },
+                }, // Include manager with their zones for hierarchy lookup
               },
             },
             chiefOfficer: {
@@ -121,7 +129,15 @@ export async function GET(request: NextRequest) {
             include: {
               employee: {
                 include: {
-                  manager: true,
+                  manager: {
+                    include: {
+                      zones: {
+                        include: {
+                          zone: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
               chiefOfficer: {
@@ -250,14 +266,14 @@ export async function GET(request: NextRequest) {
           source: zone.source,
           createdAt: zone.createdAt,
           updatedAt: zone.updatedAt,
-          employees: zone.employees.map((ze) => ({
-            id: ze.employee.id,
-            employeeId: ze.employee.employeeId,
-            name: ze.employee.name,
-            department: ze.employee.department,
-            role: ze.employee.role,
-            chiefOfficer: ze.chiefOfficer
-              ? {
+          employees: zone.employees.map((ze) => {
+            // For STAFF, show their manager (CHIEF) in hierarchy
+            let employeeChief = null;
+            
+            if (ze.employee.role === "STAFF") {
+              // Priority 1: Use chiefOfficer from ZoneEmployee if available
+              if (ze.chiefOfficer) {
+                employeeChief = {
                   id: ze.chiefOfficer.id,
                   employeeId: ze.chiefOfficer.employeeId,
                   name: ze.chiefOfficer.name,
@@ -265,9 +281,32 @@ export async function GET(request: NextRequest) {
                     zoneId: z.zone.zoneId,
                     zoneName: z.zone.zoneName,
                   })),
-                }
-              : null,
-          })),
+                };
+              } 
+              // Priority 2: Use employee.manager if it's a CHIEF
+              else if (ze.employee.manager && ze.employee.manager.role === "CHIEF") {
+                // Fetch manager's zones for display
+                employeeChief = {
+                  id: ze.employee.manager.id,
+                  employeeId: ze.employee.manager.employeeId,
+                  name: ze.employee.manager.name,
+                  zones: ze.employee.manager.zones?.map((z: any) => ({
+                    zoneId: z.zone.zoneId,
+                    zoneName: z.zone.zoneName,
+                  })) || [],
+                };
+              }
+            }
+            
+            return {
+              id: ze.employee.id,
+              employeeId: ze.employee.employeeId,
+              name: ze.employee.name,
+              department: ze.employee.department,
+              role: ze.employee.role,
+              chiefOfficer: employeeChief,
+            };
+          }),
           employeeCount: zone.employees.length,
           // Zone department from first employee, CHIEF, or DB_HEAD
           department:

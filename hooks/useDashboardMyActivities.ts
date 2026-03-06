@@ -25,12 +25,13 @@ interface MyActivitiesResponse {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function useDashboardMyActivities(enabled: boolean) {
-  const { data, error, isLoading, isValidating } = useSWR<MyActivitiesResponse>(
+  const { data, error, isLoading, isValidating, mutate } = useSWR<MyActivitiesResponse>(
     enabled ? '/api/dashboard/my-activities' : null,
     fetcher,
     {
-      refreshInterval: 30000, // Auto-refresh every 30s
+      refreshInterval: 0, // Disabled - use manual mutate instead
       revalidateOnFocus: true,
+      revalidateOnReconnect: true,
       dedupingInterval: 10000, // 10 seconds
     }
   );
@@ -40,5 +41,6 @@ export function useDashboardMyActivities(enabled: boolean) {
     isLoading,
     isError: error,
     isValidating,
+    mutate, // For manual refresh
   };
 }

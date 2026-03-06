@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/dashboard';
   const reason = searchParams.get('reason');
 
   const [username, setUsername] = useState('');
@@ -67,6 +66,15 @@ function LoginForm() {
 
       // Wait a bit to ensure cookie is set before redirecting
       await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Determine redirect based on user role
+      const userRole = data.user?.role;
+      let redirectTo = searchParams.get('redirect');
+      
+      // If no explicit redirect, use role-based default
+      if (!redirectTo) {
+        redirectTo = userRole === 'USER' ? '/user/dashboard' : '/dashboard';
+      }
 
       // Use window.location for full page reload to ensure fresh session
       // This prevents race conditions with router.push + router.refresh

@@ -192,6 +192,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for duplicate tracking number (race condition protection)
+    if (trackingNo && trackingNo.trim()) {
+      const existingTicket = await prisma.ticket.findFirst({
+        where: {
+          trackingNo: trackingNo.trim(),
+        },
+        select: {
+          id: true,
+          ticketNo: true,
+          trackingNo: true,
+        },
+      });
+
+      if (existingTicket) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'DUP
+...
+Message truncated in message history.
+...
+LICATE_TRACKING',
+            message: `เลขพัสดุ ${trackingNo} มี Ticket อยู่แล้ว (${existingTicket.ticketNo})`,
+            existingTicket: {
+              id: existingTicket.id,
+              ticketNo: existingTicket.ticketNo,
+            },
+          },
+          { status: 409 } // 409 Conflict
+        );
+      }
+    }
+
     // Normalize customer phone to E.164 (TH)
     const cleanPhone = normalizePhoneToE164(customerPhone, 'TH');
     if (!cleanPhone) {
