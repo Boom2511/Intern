@@ -28,14 +28,14 @@ async function generate7DayTrendsForDepartment(department: string) {
     const [solved, unresolved] = await Promise.all([
       prisma.ticket.count({
         where: {
-          department,
+          department: department as any, // Type assertion to fix enum type
           createdAt: { gte: date, lt: nextDate },
           status: { in: ['RESOLVED', 'CLOSED'] },
         },
       }),
       prisma.ticket.count({
         where: {
-          department,
+          department: department as any, // Type assertion to fix enum type
           createdAt: { gte: date, lt: nextDate },
           status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
         },
@@ -67,14 +67,14 @@ async function generate30DayTrendsForDepartment(department: string) {
     const [solved, unresolved] = await Promise.all([
       prisma.ticket.count({
         where: {
-          department,
+          department: department as any, // Type assertion to fix enum type
           createdAt: { gte: startDate, lt: endDate },
           status: { in: ['RESOLVED', 'CLOSED'] },
         },
       }),
       prisma.ticket.count({
         where: {
-          department,
+          department: department as any, // Type assertion to fix enum type
           createdAt: { gte: startDate, lt: endDate },
           status: { in: ['NEW', 'IN_PROGRESS', 'PENDING'] },
         },
@@ -126,7 +126,7 @@ export async function GET() {
       by: ['status'],
       _count: true,
       where: {
-        department,
+        department: department as any, // Type assertion to fix enum type
       },
     });
 
@@ -134,8 +134,9 @@ export async function GET() {
     const statusMap: Record<string, number> = {};
     let totalTickets = 0;
     statusCounts.forEach((item) => {
-      statusMap[item.status] = item._count;
-      totalTickets += item._count;
+      const count = typeof item._count === 'number' ? item._count : ((item._count as any)?._all || 0);
+      statusMap[item.status] = count;
+      totalTickets += count;
     });
 
     const newTickets = statusMap['NEW'] || 0;
@@ -152,7 +153,7 @@ export async function GET() {
 
     const totalTicketsLast30Days = await prisma.ticket.count({
       where: { 
-        department,
+        department: department as any, // Type assertion to fix enum type
         createdAt: { gte: last30Days } 
       }
     });
@@ -166,7 +167,7 @@ export async function GET() {
     const recentTickets = await prisma.ticket.findMany({
       orderBy: { createdAt: 'desc' },
       where: {
-        department,
+        department: department as any, // Type assertion to fix enum type
         status: {
           not: 'CLOSED',
         },
@@ -245,7 +246,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       where: {
         ticket: {
-          department,
+          department: department as any, // Type assertion to fix enum type
         },
       },
       select: {
@@ -270,7 +271,7 @@ export async function GET() {
       by: ['issueType', 'status'],
       _count: true,
       where: {
-        department,
+        department: department as any, // Type assertion to fix enum type
       },
     });
 
@@ -290,12 +291,13 @@ export async function GET() {
       }
 
       // Categorize statuses
+      const count = typeof item._count === 'number' ? item._count : ((item._count as any)?._all || 0);
       if (item.status === 'NEW' || item.status === 'PENDING') {
-        issueTypeStatusMap[item.issueType].open += item._count;
+        issueTypeStatusMap[item.issueType].open += count;
       } else if (item.status === 'IN_PROGRESS') {
-        issueTypeStatusMap[item.issueType].inProgress += item._count;
+        issueTypeStatusMap[item.issueType].inProgress += count;
       } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
-        issueTypeStatusMap[item.issueType].resolved += item._count;
+        issueTypeStatusMap[item.issueType].resolved += count;
       }
     });
 

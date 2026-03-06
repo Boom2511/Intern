@@ -125,8 +125,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   }
 }
 
-// Re-export permission utilities from separate file (client-safe)
-export { Permission, rolePermissions, hasPermission } from './permissions';
+// Import permission utilities from separate file (client-safe)
+import { Permission, rolePermissions, hasPermission } from './permissions';
+
+// Re-export for use in other modules
+export { Permission, rolePermissions, hasPermission };
 
 /**
  * Check if route requires authentication
