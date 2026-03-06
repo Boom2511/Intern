@@ -786,6 +786,7 @@ export default function ZoneTreePage() {
             />
             {searchTerm && (
               <button
+                aria-label='Clear search term'
                 onClick={() => setSearchTerm('')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
               >
