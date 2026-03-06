@@ -192,38 +192,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicate tracking number (race condition protection)
-    if (trackingNo && trackingNo.trim()) {
-      const existingTicket = await prisma.ticket.findFirst({
-        where: {
-          trackingNo: trackingNo.trim(),
-        },
-        select: {
-          id: true,
-          ticketNo: true,
-          trackingNo: true,
-        },
-      });
-
-      if (existingTicket) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'DUP
-...
-Message truncated in message history.
-...
-LICATE_TRACKING',
-            message: `เลขพัสดุ ${trackingNo} มี Ticket อยู่แล้ว (${existingTicket.ticketNo})`,
-            existingTicket: {
-              id: existingTicket.id,
-              ticketNo: existingTicket.ticketNo,
-            },
-          },
-          { status: 409 } // 409 Conflict
-        );
-      }
-    }
+    // NOTE: Tracking number duplicate check moved inside transaction below
+    // to prevent race conditions when multiple tickets are created simultaneously
 
     // Normalize customer phone to E.164 (TH)
     const cleanPhone = normalizePhoneToE164(customerPhone, 'TH');
@@ -336,6 +306,24 @@ LICATE_TRACKING',
           // Acquire advisory lock - other transactions will WAIT here
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
+          // Check for duplicate tracking number INSIDE the lock
+          if (trackingNo && trackingNo.trim()) {
+            const existingTicket = await tx.ticket.findFirst({
+              where: {
+                trackingNo: trackingNo.trim(),
+              },
+              select: {
+                id: true,
+                ticketNo: true,
+                trackingNo: true,
+              },
+            });
+
+            if (existingTicket) {
+              throw new Error(`เลขพัสดุ ${trackingNo} มี Ticket อยู่แล้ว (${existingTicket.ticketNo})`);
+            }
+          }
+
           // Now we have exclusive access - find latest ticket created today (Thailand time)
           const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
             SELECT "ticketNo"
@@ -409,6 +397,25 @@ LICATE_TRACKING',
         // Success - break out of retry loop
         break;
       } catch (error: any) {
+        // Check if it's tracking number duplicate error from transaction
+        if (error.message?.includes('เลขพัสดุ') && error.message?.includes('มี Ticket อยู่แล้ว')) {
+          // Extract existing ticket info from error message
+          const match = error.message.match(/\(([^)]+)\)/);
+          const existingTicketNo = match ? match[1] : 'Unknown';
+          
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'DUPLICATE_TRACKING',
+              message: error.message,
+              existingTicket: {
+                ticketNo: existingTicketNo,
+              },
+            },
+            { status: 409 } // 409 Conflict
+          );
+        }
+        
         // Check if it's a unique constraint error on ticketNo
         if (error.code === 'P2002' && error.meta?.target?.includes('ticketNo')) {
           retryCount++;
