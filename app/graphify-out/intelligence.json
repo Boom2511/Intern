@@ -1,0 +1,36 @@
+{
+  "hotspots": [
+    {
+      "label": "GET()",
+      "risk": 0.673,
+      "type": "FUNCTION"
+    },
+    {
+      "label": "HomeContent()",
+      "risk": 0.483,
+      "type": "FUNCTION"
+    },
+    {
+      "label": "PATCH()",
+      "risk": 0.421,
+      "type": "FUNCTION"
+    },
+    {
+      "label": "ReportsPage()",
+      "risk": 0.282,
+      "type": "FUNCTION"
+    },
+    {
+      "label": "handleDragEnd()",
+      "risk": 0.244,
+      "type": "FUNCTION"
+    }
+  ],
+  "blast_radius": {
+    "GET()": 58,
+    "POST()": 29,
+    "dynamic": 26,
+    "error": 21,
+    "PATCH()": 10
+  }
+}

@@ -1,0 +1,502 @@
+// Prisma Schema for Thailand Post Help Desk System
+// This schema defines the database structure for managing customer tickets
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Customer model - stores customer information
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique // Unique phone number for searching existing customers
+  address   String?  @db.Text // Customer address - nullable for backward compatibility
+  tickets   Ticket[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+}
+
+// Ticket model - main help desk ticket entity
+model Ticket {
+  id                         String    @id @default(cuid())
+  ticketNo                   String    @unique // Auto-generated format: TH-YYYYMMDD-XXXX
+  branchId                   Int?
+  branch                     Branch?   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  clientAccessTokenHash      String?   @unique
+  clientAccessTokenExpiresAt DateTime?
+
+  // Channel & Classification
+  channel        Channel     @default(CEC)
+  issueType      IssueType   @default(OTHER)
+  issueTypeOther String? // For OTHER issue type
+  department     Department? // Optional - if not specified, needs assignment
+
+  // Tracking Information
+  trackingNo String?
+  zoneId     String?
+
+  // Customer & Recipient
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id])
+  // Legacy recipient fields - kept for backward compatibility
+  // New tickets should use customer.name, customer.phone, customer.address
+  recipientName    String   @default("")
+  recipientPhone   String   @default("")
+  recipientAddress String   @default("") @db.Text
+  description      String   @db.Text
+
+  // Salesforce Integration
+  salesforceId String?
+
+  // Status & Priority
+  status   TicketStatus @default(NEW)
+  priority Priority     @default(MEDIUM)
+
+  // SLA Tracking
+  slaHours    Int       @default(24) // Stored SLA hours from config
+  slaDeadline DateTime  @default(now()) // Calculated SLA deadline
+  slaStatus   SLAStatus @default(ON_TRACK)
+
+  // Assignment & Resolution
+  createdBy        String? // Staff member who created this ticket
+  assignedTo       String? // Staff member assigned to this ticket
+  resolvedBy       String? // Staff member who resolved this ticket
+  resolvedAt       DateTime? // Timestamp when ticket was resolved
+  resolutionDetail String?   @db.Text // Resolution details from end user (via LIFF)
+  closedBy         String? // CEC staff who closed the ticket
+  closedAt         DateTime? // Timestamp when ticket was closed
+
+  notes         Note[]
+  statusHistory StatusHistory[]
+  fieldEdits    FieldEdit[]
+  views         TicketView[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketNo])
+  @@index([branchId, createdAt])
+  @@index([status])
+  @@index([channel])
+  @@index([issueType])
+  @@index([department])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([slaDeadline])
+  @@index([slaStatus])
+  @@index([trackingNo])
+}
+
+// Note model - for adding comments/updates to tickets
+model Note {
+  id            String   @id @default(cuid())
+  ticketId      String
+  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content       String   @db.Text
+  createdBy     String // Name or ID of person who created the note
+  isFromEndUser Boolean  @default(false) // True if reported by end user
+  images        String[] // Array of image URLs (stored in Supabase storage)
+
+  // LINE user information (for notes from LIFF)
+  createdByLineUserId String? // LINE User ID
+  createdByLineName   String? // Display name from LINE
+  createdByLineAvatar String? // Profile picture URL from LINE
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([isFromEndUser])
+  @@index([createdByLineUserId])
+}
+
+// StatusHistory model - tracks all status changes for audit trail
+model StatusHistory {
+  id         String       @id @default(cuid())
+  ticketId   String
+  ticket     Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromStatus TicketStatus
+  toStatus   TicketStatus
+
+  // Changed by information
+  changedBy String // User who made the change (for CEC staff)
+
+  // LINE user information (for updates via LIFF)
+  changedByLineUserId String? // LINE User ID
+  changedByLineName   String? // Display name from LINE
+  changedByLineAvatar String? // Profile picture URL from LINE
+
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@index([changedByLineUserId])
+}
+
+// FieldEdit model - tracks field-level changes for audit trail
+model FieldEdit {
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  fieldName String // Field that was changed (e.g., 'trackingNo', 'recipientName')
+  oldValue  String? @db.Text // Previous value (null if field was empty)
+  newValue  String? @db.Text // New value (null if field was cleared)
+
+  // Changed by information
+  editedBy String // User who made the change (for CEC staff)
+
+  // LINE user information (for edits via LIFF)
+  editedByLineUserId String? // LINE User ID
+  editedByLineName   String? // Display name from LINE
+  editedByLineAvatar String? // Profile picture URL from LINE
+
+  editedAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([editedAt])
+  @@index([editedByLineUserId])
+}
+
+// Channel enum - where the ticket came from
+enum Channel {
+  CEC // CEC Call Center
+  SALESFORCE // Salesforce system
+}
+
+// Issue Type enum - type of problem
+enum IssueType {
+  NEW_DELIVERY // นำจ่ายใหม่
+  CHECK_DELIVERY // ตรวจสอบการนำจ่าย
+  SERVICE_COMPLAINT // ร้องเรียนบริการ
+  RETURN_REQUEST // ขอถอนคืน
+  ADDRESS_CORRECTION // ขอแก้ไขจ่าหน้า
+  RECEIPT_TRACKING // ติดตามใบตอบรับ/ขอใบแทนใบตอบรับ
+  OTHER // อื่นๆ
+}
+
+// Department enum - which department handles the ticket
+enum Department {
+  DB1 // D1
+  DB2 // D2
+  DB3 // D3
+  DB4 // D4
+  DB5 // นำจ่ายรถยนต์
+  DB6 // บป (บริการประชาชน)
+  TEST // ทดสอบ
+}
+
+// Ticket status enum
+enum TicketStatus {
+  NEW // Newly created by CEC
+  IN_PROGRESS // Assigned to department, being worked on
+  PENDING // Waiting for customer response or external action
+  RESOLVED // Issue resolved by end user
+  CLOSED // Confirmed closed by CEC
+}
+
+// Priority levels enum
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// SLA Status enum
+enum SLAStatus {
+  ON_TRACK // Within SLA time
+  AT_RISK // 80%+ of SLA time used
+  BREACHED // SLA deadline passed
+}
+
+// User model - for authentication and authorization
+model User {
+  id           String      @id @default(cuid())
+  username     String      @unique // For login/authentication
+  password     String // Hashed password
+  name         String // Display name
+  role         UserRole    @default(OPERATOR)
+  department   Department? // Department for USER role - required for USER, optional for others
+  branchId     Int?
+  branch       Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  isSuperAdmin Boolean     @default(false)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([role])
+  @@index([username])
+  @@index([department])
+  @@index([branchId])
+}
+
+// User Role enum
+enum UserRole {
+  ADMINISTRATOR // Full access to everything
+  ADMIN // User management + CEC, no test pages
+  OPERATOR // CEC only, no user management or test pages
+  USER // Department user - can only view tickets from their assigned department
+}
+
+// Ticket View History - Track who viewed the ticket and when
+model TicketView {
+  id           String   @id @default(cuid())
+  ticketId     String
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  viewerName   String // Name of the person who viewed (from LINE profile or User)
+  viewerLineId String? // LINE user ID if viewed from LIFF
+  viewerAvatar String? // LINE profile picture URL
+  viewedAt     DateTime @default(now())
+
+  @@unique([ticketId, viewerLineId]) // One view per person per ticket
+  @@index([ticketId])
+  @@index([viewedAt])
+}
+
+// LINE Group - Store LINE group information for each department
+model LineGroup {
+  id         String      @id @default(cuid())
+  groupId    String      @unique // LINE group ID from webhook
+  groupName  String // Group name from LINE API
+  department Department? // Associated department
+  zoneId     String? // Optional zone identifier
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([groupId])
+  @@index([department])
+  @@index([isActive])
+}
+
+// Persistent cache for LINE quota to survive cold starts
+model LineQuotaCache {
+  key        String   @id // use a fixed key e.g., "default"
+  quota      Int
+  used       Int
+  remaining  Int
+  percentage Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Optional: Persist LINE API call metrics
+model LineApiLog {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now())
+  endpoint  String
+  status    Int
+  duration  Int
+  attempt   Int      @default(1)
+  isRetry   Boolean  @default(false)
+  errorType String?
+
+  @@index([timestamp])
+  @@index([endpoint])
+  @@index([status])
+}
+
+// Employee Role enum - Hierarchy: DB_HEAD > CHIEF > STAFF
+enum Role {
+  STAFF // พนักงานทั่วไป (EMS)
+  CHIEF // หัวหน้าโซน (ZNE)
+  DB_HEAD // หัวหน้าแผนก (REG)
+}
+
+// Zone Source enum - Where the zone data came from
+enum ZoneSource {
+  TICKET // From ticket creation
+  XLSX // From Excel import
+  MANUAL // Manually added
+}
+
+enum ZoneType {
+  REGION
+  ZONE
+  DELIVERY
+  OTHER
+}
+
+enum ZoneNodeKind {
+  DELIVERY_HEAD
+  DELIVERY_ZONE
+  DELIVERY_SIDE
+  CAR
+}
+
+model Employee {
+  id         Int     @id @default(autoincrement())
+  employeeId String  @unique
+  name       String
+  department String?
+  role       Role    @default(STAFF)
+  branchId   Int?
+  branch     Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  managerId     Int?
+  manager       Employee?  @relation("EmployeeHierarchy", fields: [managerId], references: [id])
+  subordinates  Employee[] @relation("EmployeeHierarchy")
+  managerZoneId String?
+  managerZone   Zone?      @relation("EmployeeManagerZone", fields: [managerZoneId], references: [zoneId], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  zones        ZoneEmployee[]
+  chiefOfZones ZoneEmployee[]          @relation("EmployeeChief")
+  history      EmployeeChangeHistory[]
+
+  @@index([employeeId])
+  @@index([role])
+  @@index([department])
+  @@index([managerId])
+  @@index([branchId])
+  @@index([managerZoneId])
+}
+
+model Branch {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                   User[]
+  tickets                 Ticket[]
+  employees               Employee[]
+  zones                   Zone[]
+  zoneDepartmentRoots     ZoneDepartmentRoot[]
+  organizationDepartments OrganizationDepartment[]
+}
+
+model EmployeeChangeHistory {
+  id              Int      @id @default(autoincrement())
+  employeeId      Int
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  actorId         String?
+  actorName       String
+  source          String   @default("MANUAL")
+  operation       String
+  oldValues       Json
+  newValues       Json
+  effectiveAt     DateTime @default(now())
+  relatedImportId Int?
+  createdAt       DateTime @default(now())
+
+  @@index([employeeId, effectiveAt])
+  @@index([relatedImportId])
+}
+
+// Zone - Store zone/area information
+model Zone {
+  id              Int           @id @default(autoincrement())
+  zoneId          String        @unique // Zone ID (e.g., "REG10260EVD0001", "ZNE10260EVD1001")
+  zoneName        String? // Zone Thai name
+  zoneType        ZoneType      @default(OTHER)
+  nodeKind        ZoneNodeKind?
+  parentZoneId    String?
+  parentZone      Zone?         @relation("ZoneHierarchy", fields: [parentZoneId], references: [zoneId], onDelete: SetNull)
+  childZones      Zone[]        @relation("ZoneHierarchy")
+  department      String?
+  branchId        Int?
+  branch          Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  isMapped        Boolean       @default(false) // Whether zone has been mapped to employees
+  source          ZoneSource    @default(TICKET) // Where this zone came from
+  hierarchyManual Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  employees        ZoneEmployee[]
+  departmentRoots  ZoneDepartmentRoot[]
+  managedEmployees Employee[]           @relation("EmployeeManagerZone")
+
+  @@index([zoneId])
+  @@index([parentZoneId])
+  @@index([zoneType])
+  @@index([isMapped])
+  @@index([branchId])
+}
+
+model ZoneDepartmentRoot {
+  id         Int      @id @default(autoincrement())
+  branchId   Int
+  department String
+  rootZoneId String   @unique
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  rootZone   Zone     @relation(fields: [rootZoneId], references: [zoneId], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([branchId, department])
+  @@index([branchId])
+}
+
+model OrganizationDepartment {
+  id        Int      @id @default(autoincrement())
+  branchId  Int
+  name      String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, name])
+  @@index([branchId])
+}
+
+model OrganizationChangeHistory {
+  id            Int       @id @default(autoincrement())
+  actorId       String?
+  actorName     String
+  branchId      Int?
+  entityType    String
+  operation     String
+  description   String
+  beforeValues  Json
+  afterValues   Json
+  effectiveAt   DateTime  @default(now())
+  rolledBackAt  DateTime?
+
+  @@index([entityType, effectiveAt])
+  @@index([branchId, effectiveAt])
+  @@index([rolledBackAt])
+}
+
+// ZoneEmployee - Junction table for many-to-many relationship between Zone and Employee
+model ZoneEmployee {
+  id             Int  @id @default(autoincrement())
+  zoneId         Int
+  employeeId     Int
+  chiefOfficerId Int? // Optional: CHIEF OFFICER who manages this employee in this zone
+
+  zone         Zone      @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  chiefOfficer Employee? @relation("EmployeeChief", fields: [chiefOfficerId], references: [id], onDelete: SetNull)
+
+  @@unique([zoneId, employeeId])
+  @@index([zoneId])
+  @@index([employeeId])
+  @@index([chiefOfficerId])
+}
+
+// ZoneImportLog - Track Excel import history for zone-employee assignments
+model ZoneImportLog {
+  id         Int      @id @default(autoincrement())
+  filename   String
+  importedBy String // User who imported the file
+  importedAt DateTime @default(now())
+  rowCount   Int // Number of rows imported
+  status     String   @default("SUCCESS") // SUCCESS | FAILED
+  report     Json?
+
+  @@index([importedAt])
+}

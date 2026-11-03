@@ -1,0 +1,154 @@
+/**
+ * SLA Check Cron Job
+ * ตรวจสอบ Tickets ที่ใกล้หมดเวลา SLA และส่ง warning notification
+ *
+ * วิธีใช้: ตั้ง cron job ให้เรียก API นี้ทุก 30 นาที หรือใช้ Vercel Cron
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { Priority } from '@prisma/client';
+
+// Force this route to be dynamic (required for cron jobs)
+export const dynamic = 'force-dynamic';
+
+// SLA thresholds (in hours)
+const SLA_THRESHOLDS = {
+  URGENT: 4,   // 4 hours
+  HIGH: 24,    // 1 day
+  MEDIUM: 72,  // 3 days
+  LOW: 168,    // 7 days
+};
+
+// Warning threshold (send warning when 80% of SLA time has passed)
+const WARNING_THRESHOLD = 0.8;
+
+function calculateRemainingTime(createdAt: Date, priority: Priority): { hours: number; isNearSLA: boolean; displayTime: string } {
+  const now = new Date();
+  const elapsedHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+  const slaHours = SLA_THRESHOLDS[priority];
+  const remainingHours = slaHours - elapsedHours;
+  const warningThresholdHours = slaHours * WARNING_THRESHOLD;
+
+  const isNearSLA = elapsedHours >= warningThresholdHours;
+
+  // Format display time
+  let displayTime: string;
+  if (remainingHours <= 0) {
+    displayTime = '⚠️ เกินเวลา';
+  } else if (remainingHours < 1) {
+    displayTime = `${Math.round(remainingHours * 60)} นาที`;
+  } else if (remainingHours < 24) {
+    displayTime = `${Math.round(remainingHours)} ชั่วโมง`;
+  } else {
+    const days = Math.floor(remainingHours / 24);
+    const hours = Math.round(remainingHours % 24);
+    displayTime = `${days} วัน ${hours} ชั่วโมง`;
+  }
+
+  return {
+    hours: remainingHours,
+    isNearSLA,
+    displayTime,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // Verify authorization (optional - add your auth token check here)
+    const authHeader = request.headers.get('authorization');
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get all active tickets (not RESOLVED or CLOSED)
+    const activeTickets = await prisma.ticket.findMany({
+      where: {
+        status: {
+          notIn: ['RESOLVED', 'CLOSED'],
+        },
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    const warnings: any[] = [];
+
+    // Check each ticket for SLA violation
+    for (const ticket of activeTickets) {
+      const slaInfo = calculateRemainingTime(ticket.createdAt, ticket.priority);
+
+      // If SLA is breached and ticket is not already PENDING, update status
+      if (slaInfo.hours <= 0 && ticket.status !== 'PENDING') {
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            status: 'PENDING',
+            slaStatus: 'BREACHED',
+          },
+        });
+
+        // Create status history record
+        await prisma.statusHistory.create({
+          data: {
+            ticketId: ticket.id,
+            fromStatus: ticket.status,
+            toStatus: 'PENDING',
+            changedBy: 'System',
+            note: 'สถานะเปลี่ยนเป็น PENDING เนื่องจากเกินเวลา SLA',
+          },
+        });
+      }
+
+      if (slaInfo.isNearSLA) {
+        warnings.push({
+          ticket,
+          remainingTime: slaInfo.displayTime,
+          remainingHours: slaInfo.hours,
+        });
+
+        // NOTE: Removed LINE notification for SLA warnings to reduce quota usage
+        // SLA warnings are still tracked via notes only
+        console.log(`⚠️ SLA warning for ticket ${ticket.ticketNo} (${slaInfo.displayTime} remaining)`);
+
+        // Add a note to the ticket (notification via system note only)
+        await prisma.note.create({
+          data: {
+            ticketId: ticket.id,
+            content: `⚠️ เตือน: ${slaInfo.hours <= 0 ? 'เกินเวลา SLA' : `ใกล้เกินเวลา SLA (เหลือเวลา: ${slaInfo.displayTime})`}`,
+            createdBy: 'System',
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `SLA check completed`,
+      stats: {
+        totalActiveTickets: activeTickets.length,
+        warningsSent: warnings.length,
+      },
+      warnings: warnings.map(w => ({
+        ticketNo: w.ticket.ticketNo,
+        priority: w.ticket.priority,
+        remainingTime: w.remainingTime,
+      })),
+    });
+  } catch (error) {
+    console.error('Error checking SLA:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการตรวจสอบ SLA' },
+      { status: 500 }
+    );
+  }
+}

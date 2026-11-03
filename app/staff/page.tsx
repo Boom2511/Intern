@@ -1,0 +1,612 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Toaster } from '@/components/ui/toaster';
+import { useUser } from '@/providers/UserProvider';
+import { getDepartmentOptions } from '@/config/departments';
+
+interface Branch {
+  id: number;
+  name: string;
+  code: string | null;
+}
+
+interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR' | 'USER';
+  department: string | null;
+  branchId: number | null;
+  branch: Branch | null;
+  isSuperAdmin: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export default function StaffPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const { user: currentUser } = useUser(); // Use context instead of fetching
+  const [users, setUsers] = useState<User[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [lastOnlineRefresh, setLastOnlineRefresh] = useState<Date | null>(null);
+
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+    name: '',
+    role: 'OPERATOR' as 'ADMINISTRATOR' | 'ADMIN' | 'OPERATOR' | 'USER',
+    department: null as string | null,
+    branchId: currentUser?.branchId ?? null,
+  });
+  const [passwordError, setPasswordError] = useState('');
+
+  // Check permission on mount
+  useEffect(() => {
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+
+    if (currentUser.role === 'OPERATOR') {
+      router.push('/dashboard');
+      return;
+    }
+
+    // Load initial data
+    loadUsers();
+    loadOnlineStatus();
+
+    // Poll online status every 30 seconds
+    const onlineInterval = setInterval(loadOnlineStatus, 30000);
+
+    return () => {
+      clearInterval(onlineInterval);
+    };
+  }, [currentUser, router]); // loadUsers and loadOnlineStatus are stable
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch('/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        setBranches(data.branches || []);
+        // Sort users by role: ADMINISTRATOR first, then ADMIN, then OPERATOR
+        const roleOrder = { ADMINISTRATOR: 1, ADMIN: 2, OPERATOR: 3, USER: 4 };
+        const sortedUsers = data.users.sort((a: User, b: User) => {
+          return roleOrder[a.role as keyof typeof roleOrder] - roleOrder[b.role as keyof typeof roleOrder];
+        });
+        setUsers(sortedUsers);
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOnlineStatus = async () => {
+    try {
+      const response = await fetch('/api/users/online-status', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        setOnlineUserIds(data.onlineUserIds || []);
+        setLastOnlineRefresh(new Date());
+      }
+    } catch (error) {
+      console.error('Failed to load online status:', error);
+    }
+  };
+
+ 
+
+  const validatePassword = (password: string): boolean => {
+    if (password.length < 8) {
+      setPasswordError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+      return false;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setPasswordError('รหัสผ่านต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว');
+      return false;
+    }
+    if (!/[a-z]/.test(password)) {
+      setPasswordError('รหัสผ่านต้องมีตัวพิมพ์เล็กอย่างน้อย 1 ตัว');
+      return false;
+    }
+    if (!/[0-9]/.test(password)) {
+      setPasswordError('รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Department validation for USER role
+    if (formData.role === 'USER' && !formData.department) {
+      toast({
+        title: 'ข้อมูลไม่ครบถ้วน',
+        description: 'กรุณาเลือกแผนกสำหรับ User',
+        variant: 'error',
+      });
+      return;
+    }
+    if (!editingUser?.isSuperAdmin && formData.branchId === null) {
+      toast({
+        title: 'ข้อมูลไม่ครบถ้วน',
+        description: 'กรุณาเลือกสาขาที่ผู้ใช้นี้สังกัด',
+        variant: 'error',
+      });
+      return;
+    }
+
+    // Validate password if creating new user or changing password
+    if (!editingUser && !validatePassword(formData.password)) {
+      return;
+    }
+    if (editingUser && formData.password && !validatePassword(formData.password)) {
+      return;
+    }
+
+    try {
+      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
+      const method = editingUser ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingUser ? {
+          ...formData,
+          username: formData.username, // Use username directly
+          password: formData.password || undefined, // Only send password if changed
+          ...(editingUser.isSuperAdmin ? { branchId: undefined } : {}),
+        } : {
+          ...formData,
+          username: formData.username, // Use username directly
+        }),
+      });
+
+      if (response.ok) {
+        setIsDialogOpen(false);
+        resetForm();
+        loadUsers();
+        toast({
+          title: editingUser ? 'อัปเดตผู้ใช้สำเร็จ' : 'เพิ่มผู้ใช้สำเร็จ',
+          description: editingUser ? `อัปเดตข้อมูล ${formData.name} เรียบร้อยแล้ว` : `เพิ่ม ${formData.name} เป็นผู้ใช้ใหม่แล้ว`,
+        });
+      } else {
+        const data = await response.json();
+        toast({
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถบันทึกข้อมูลได้',
+          variant: 'error',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to save user:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถบันทึกข้อมูลได้',
+        variant: 'error',
+      });
+    }
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (!confirm('ต้องการลบผู้ใช้นี้หรือไม่?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        loadUsers();
+        toast({
+          title: 'ลบผู้ใช้สำเร็จ',
+          description: 'ลบผู้ใช้ออกจากระบบเรียบร้อยแล้ว',
+        });
+      } else {
+        const data = await response.json();
+        toast({
+          title: 'เกิดข้อผิดพลาด',
+          description: data.error || 'ไม่สามารถลบผู้ใช้ได้',
+          variant: 'error',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: 'ไม่สามารถลบผู้ใช้ได้',
+        variant: 'error',
+      });
+    }
+  };
+
+  const handleEdit = (user: User) => {
+    // Admin cannot edit Administrator users
+    if (currentUser?.role === 'ADMIN' && user.role === 'ADMINISTRATOR') {
+      toast({
+        title: 'ไม่มีสิทธิ์',
+        description: 'Admin ไม่สามารถแก้ไข Administrator ได้',
+        variant: 'error',
+      });
+      return;
+    }
+
+    setEditingUser(user);
+    setFormData({
+      username: user.username, // Use full username directly
+      password: '',
+      name: user.name,
+      role: user.role,
+      department: user.department,
+      branchId: user.branchId,
+    });
+    setIsDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setEditingUser(null);
+    setFormData({
+      username: '',
+      password: '',
+      name: '',
+      role: 'OPERATOR',
+      department: null,
+      branchId: currentUser?.branchId ?? null,
+    });
+    setPasswordError('');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'ADMINISTRATOR': return 'bg-purple-100 text-purple-800';
+      case 'ADMIN': return 'bg-blue-100 text-blue-800';
+      case 'OPERATOR': return 'bg-green-100 text-green-800';
+      case 'USER': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'ADMINISTRATOR': return 'Administrator';
+      case 'ADMIN': return 'Admin';
+      case 'OPERATOR': return 'Operator';
+      case 'USER': return 'User';
+      default: return role;
+    }
+  };
+
+  const getDepartmentLabel = (department: string | null) => {
+    if (!department) return null;
+    const dept = getDepartmentOptions().find(d => d.value === department);
+    return dept?.label || department;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6 max-w-6xl">
+      
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/settings')}>
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            กลับ
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">User Management</h1>
+            <p className="text-gray-500 mt-1">จัดการผู้ใช้งานระบบ</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                เพิ่มผู้ใช้ใหม่
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้ใหม่'}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">ชื่อผู้ใช้</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="username"
+                    value={formData.username}
+                    onChange={(e) => {
+                      setFormData({ ...formData, username: e.target.value });
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">
+                    รหัสผ่าน {editingUser && '(เว้นว่างหากไม่ต้องการเปลี่ยน)'}
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => {
+                      setFormData({ ...formData, password: e.target.value });
+                      setPasswordError('');
+                    }}
+                    required={!editingUser}
+                    placeholder="ขั้นต่ำ 8 ตัว (A-Z, a-z, 0-9)"
+                  />
+                  {passwordError && (
+                    <p className="text-red-500 text-sm">{passwordError}</p>
+                  )}
+                  {!editingUser && (
+                    <p className="text-gray-500 text-xs">
+                      ต้องมี: ตัวพิมพ์ใหญ่, ตัวพิมพ์เล็ก, ตัวเลข, อย่างน้อย 8 ตัวอักษร
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">ชื่อ</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label id="role-label" htmlFor="role">สิทธิ์การใช้งาน</Label>
+
+                  <select
+                    id="role"
+                    name="role"
+                    className="w-full border rounded-md p-2"
+                    aria-label="สิทธิ์การใช้งาน"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                    disabled={editingUser?.role === 'ADMINISTRATOR'}
+                  >
+                    <option value="USER">User</option>
+                    <option value="OPERATOR">Operator</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+
+                {/* Department selector - only show for USER role */}
+                {formData.role === 'USER' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="department">แผนก</Label>
+                    <select
+                      aria-label="แผนก"
+                      id="department"
+                      name="department"
+                      className="w-full border rounded-md p-2"
+                      value={formData.department || ''}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value || null })}
+                      required
+                    >
+                      <option value="">เลือกแผนก</option>
+                      {getDepartmentOptions().map((dept) => (
+                        <option key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="branchId">สาขาที่สังกัด</Label>
+                  {editingUser?.isSuperAdmin ? (
+                    <p className="rounded-md border bg-gray-50 p-2 text-sm text-gray-700">
+                      Super Admin — เข้าถึงได้ทุกสาขา
+                    </p>
+                  ) : currentUser?.isSuperAdmin ? (
+                    <select
+                      id="branchId"
+                      name="branchId"
+                      className="w-full border rounded-md p-2"
+                      value={formData.branchId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value ? Number(e.target.value) : null })}
+                      required
+                    >
+                      <option value="">เลือกสาขา</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name}{branch.code ? ` (${branch.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="rounded-md border bg-gray-50 p-2 text-sm text-gray-700">
+                      {currentUser?.branch?.name || 'ยังไม่ได้กำหนดสาขา'}
+                      {currentUser?.branch?.code ? ` (${currentUser.branch.code})` : ''}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    ยกเลิก
+                  </Button>
+                  <Button type="submit">
+                    {editingUser ? 'บันทึก' : 'เพิ่มผู้ใช้'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>รายชื่อผู้ใช้ทั้งหมด</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between mb-3 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <div>
+              ออนไลน์ {onlineUserIds.length} / {users.length} คน
+              {lastOnlineRefresh && (
+                <span className="ml-2 text-xs text-gray-400">อัปเดตล่าสุด {lastOnlineRefresh.toLocaleTimeString()}</span>
+              )}
+            </div>
+          </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left p-3 font-medium">ชื่อ</th>
+                  <th className="text-left p-3 font-medium">Username</th>
+                  <th className="text-left p-3 font-medium">สิทธิ์</th>
+                  <th className="text-left p-3 font-medium">สาขา</th>
+                  <th className="text-left p-3 font-medium">สถานะ</th>
+                  <th className="text-right p-3 font-medium">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        {user.name}
+                        {user.id === currentUser?.id && (
+                          <Badge className="text-xs" variant="outline">You</Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3">{user.username}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <Badge className={getRoleBadgeColor(user.role)}>
+                          {getRoleLabel(user.role)}
+                        </Badge>
+                        {user.isSuperAdmin && (
+                          <Badge className="bg-purple-100 text-purple-800">Super Admin</Badge>
+                        )}
+                        {user.role === 'USER' && user.department && (
+                          <span className="text-xs text-gray-600">
+                            ({getDepartmentLabel(user.department)})
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      {user.isSuperAdmin
+                        ? 'ทุกสาขา'
+                        : user.branch
+                          ? `${user.branch.name}${user.branch.code ? ` (${user.branch.code})` : ''}`
+                          : 'ยังไม่กำหนด'}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        {onlineUserIds.includes(user.id) ? (
+                          <Badge className="text-xs bg-green-100 text-green-800 border-0">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                            Online
+                          </Badge>
+                        ) : (
+                          <Badge className="text-xs bg-gray-100 text-gray-600 border-0">
+                            Offline
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        {!(currentUser?.role === 'ADMIN' && user.role === 'ADMINISTRATOR') && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(user)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(user.id)}
+                              disabled={user.id === currentUser?.id}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {currentUser?.role === 'ADMIN' && user.role === 'ADMINISTRATOR' && (
+                          <span className="text-gray-400 text-xs">ไม่สามารถแก้ไขได้</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="font-semibold mb-2">สิทธิ์การใช้งาน</h3>
+        <ul className="space-y-1 text-sm text-gray-700">
+          <li><strong>User:</strong> ดูและตอบผลการดำเนินการ Ticket เฉพาะแผนกที่ได้รับมอบหมาย ไม่สามารถแก้ไข Ticket, เปลี่ยนสถานะ หรือเปลี่ยนแผนกได้</li>
+          <li><strong>Operator:</strong> ใช้งานระบบ CEC เพื่อสร้างและจัดการ Ticket เห็นเฉพาะงานที่ได้รับมอบหมายหรือเกี่ยวข้อง ไม่สามารถจัดการผู้ใช้งานหรือระบบได้</li>
+          <li><strong>Admin:</strong> สามารถจัดการผู้ใช้งาน และการตั้งค่าระบบทั้งหมดรวมถึงดูภาพรวมงาน, SLA และใช้งานระบบได้ครบทุกฟังก์ชัน</li>
+        </ul>
+      </div>
+      <Toaster />
+    </div>
+  );
+}

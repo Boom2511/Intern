@@ -1,0 +1,5 @@
+{
+    "CodeGPT.apiKey": "Ollama",
+    "atlascode.rovodev.debugPanelEnabled": false,
+    "python-envs.defaultEnvManager": "ms-python.python:system"
+}

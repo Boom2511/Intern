@@ -1,0 +1,640 @@
+/**
+ * Tickets API Route
+ * GET /api/tickets - List all tickets with optional filters
+ * POST /api/tickets - Create a new ticket
+ */
+
+export const dynamic = 'force-dynamic'
+
+import { NextRequest, NextResponse } from 'next/server';
+import { Department } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { normalizePhoneToE164 } from '@/lib/validations';
+import { generateTicketNumber } from '@/lib/utils';
+import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
+import { getSLAHours, getSLAPriority } from '@/config/issue-types';
+import { lineService } from '@/lib/line';
+import { createDepartmentWorkSnapshotMessage, getLiffUrl } from '@/lib/line-templates';
+import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
+import { getCurrentUser } from '@/lib/auth';
+import { getOrCreateLineGroup } from '@/lib/line-groups';
+import { getTicketBranchScope } from '@/lib/branch-access';
+import { getBranchDepartmentCodes } from '@/lib/branch-organization';
+import { synchronizeZoneHierarchy } from '@/lib/zone-hierarchy';
+
+/**
+ * GET /api/tickets
+ * Query params:
+ * - status: Filter by ticket status
+ * - priority: Filter by priority
+ * - search: Search in ticket number, customer name, or phone
+ * - customerId: Filter by customer ID
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 20)
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const branchScope = getTicketBranchScope(currentUser);
+    if (!branchScope) {
+      return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const status = searchParams.get('status');
+    const priority = searchParams.get('priority');
+    const search = searchParams.get('search');
+    const customerId = searchParams.get('customerId');
+    const department = searchParams.get('department');
+    const issueType = searchParams.get('issueType');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // Pagination params
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = { ...branchScope };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (priority) {
+      where.priority = priority;
+    }
+
+    if (customerId) {
+      where.customerId = customerId;
+    }
+
+    if (department) {
+      where.department = department;
+    }
+
+    if (issueType) {
+      where.issueType = issueType;
+    }
+
+    if (search) {
+      const phoneE164 = normalizePhoneToE164(search, 'TH');
+      where.OR = [
+        { ticketNo: { contains: search, mode: 'insensitive' } },
+        { trackingNo: { contains: search, mode: 'insensitive' } },
+        { salesforceId: { contains: search, mode: 'insensitive' } },
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { customer: { phone: { contains: search } } },
+        ...(phoneE164 ? [{ customer: { phone: { equals: phoneE164 } } }] : []),
+      ];
+    }
+
+    // Date range filtering (Thailand timezone GMT+7)
+    if (startDate || endDate) {
+      where.createdAt = {};
+
+      if (startDate) {
+        // Start of the day in Thailand timezone
+        where.createdAt.gte = new Date(startDate + 'T00:00:00+07:00');
+      }
+
+      if (endDate) {
+        // End of the day in Thailand timezone
+        where.createdAt.lte = new Date(endDate + 'T23:59:59.999+07:00');
+      }
+    }
+
+    // Count and fetch the page concurrently; neither query depends on the other.
+    const [totalCount, tickets] = await Promise.all([
+      prisma.ticket.count({ where }),
+      prisma.ticket.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              // Exclude address to reduce payload size in list view
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: tickets,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNextPage: skip + tickets.length < totalCount,
+        hasPreviousPage: page > 1,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูล Tickets' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/tickets
+ * Create a new ticket
+ * Body: CreateTicketFormData
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Get current user for createdBy field
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const {
+      customerName,
+      customerPhone,
+      channel = 'CEC',
+      issueType,
+      issueTypeOther,
+      department,
+      trackingNo,
+      zoneId,
+      recipientName,
+      recipientPhone,
+      recipientAddress,
+      description,
+      salesforceId,
+      customerId,
+      branchId: requestedBranchId,
+    } = body;
+
+    let branchId = currentUser.branchId;
+    if (currentUser.isSuperAdmin) {
+      if (requestedBranchId !== undefined) {
+        if (!Number.isInteger(requestedBranchId)) {
+          return NextResponse.json({ success: false, error: 'A valid branch is required' }, { status: 400 });
+        }
+        branchId = requestedBranchId;
+      } else {
+        const availableBranches = await prisma.branch.findMany({
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: 2,
+        });
+        if (availableBranches.length !== 1) {
+          return NextResponse.json({ success: false, error: 'Select the branch for this ticket' }, { status: 400 });
+        }
+        branchId = availableBranches[0].id;
+      }
+    } else if (requestedBranchId !== undefined && requestedBranchId !== currentUser.branchId) {
+      return NextResponse.json({ success: false, error: 'You may only create tickets in your own branch' }, { status: 403 });
+    }
+    if (branchId === null) {
+      return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
+    }
+    const ticketBranch = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { id: true },
+    });
+    if (!ticketBranch) {
+      return NextResponse.json({ success: false, error: 'Branch not found' }, { status: 404 });
+    }
+
+    if (zoneId !== undefined && zoneId !== null && typeof zoneId !== 'string') {
+      return NextResponse.json({ success: false, error: 'Choose a valid zone' }, { status: 400 });
+    }
+    const normalizedZoneId = typeof zoneId === 'string' ? zoneId.trim() : '';
+    const selectedZone = normalizedZoneId
+      ? await prisma.zone.findUnique({ where: { zoneId: normalizedZoneId } })
+      : null;
+    if (selectedZone && selectedZone.branchId !== branchId) {
+      return NextResponse.json({ success: false, error: 'Zone does not belong to the selected branch' }, { status: 400 });
+    }
+
+    if (department !== undefined && department !== null && department !== '') {
+      if (typeof department !== 'string' || !(await getBranchDepartmentCodes(branchId)).includes(department)) {
+        return NextResponse.json(
+          { success: false, error: 'Choose a department registered in the selected branch' },
+          { status: 400 }
+        );
+      }
+      if (department === 'TEST' && currentUser.role !== 'ADMINISTRATOR') {
+        return NextResponse.json({ success: false, error: 'You may not assign tickets to the TEST department' }, { status: 403 });
+      }
+    }
+    if (selectedZone?.department && department) {
+      const selectedZoneDepartment = selectedZone.department;
+      const departmentLabel = Object.values(Department).includes(department as Department)
+        ? getDepartmentLabel(department as Department)
+        : department;
+      if (selectedZoneDepartment !== department && selectedZoneDepartment !== departmentLabel) {
+        return NextResponse.json({ success: false, error: 'The selected Zone ID does not belong to the selected department' }, { status: 400 });
+      }
+    }
+
+    // Basic validation
+    if (!customerName || !customerPhone || !description) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณากรอกข้อมูลให้ครบถ้วน' },
+        { status: 400 }
+      );
+    }
+
+    if (!issueType) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณาเลือกประเภทปัญหา' },
+        { status: 400 }
+      );
+    }
+
+    if (!recipientName || !recipientPhone || !recipientAddress) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณากรอกข้อมูลผู้รับให้ครบถ้วน' },
+        { status: 400 }
+      );
+    }
+
+    // NOTE: Tracking number duplicate check moved inside transaction below
+    // to prevent race conditions when multiple tickets are created simultaneously
+
+    // Normalize customer phone to E.164 (TH)
+    const cleanPhone = normalizePhoneToE164(customerPhone, 'TH');
+    if (!cleanPhone) {
+      return NextResponse.json(
+        { success: false, error: 'หมายเลขโทรศัพท์ลูกค้าไม่ถูกต้อง' },
+        { status: 400 }
+      );
+    }
+
+    let customer;
+
+    // Check if customer exists or create new one
+    if (customerId) {
+      customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer) {
+        return NextResponse.json(
+          { success: false, error: 'ไม่พบข้อมูลลูกค้า' },
+          { status: 404 }
+        );
+      }
+      // Update customer address if provided (always keep customer data up-to-date)
+      if (recipientAddress && recipientAddress.trim()) {
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: { 
+            name: customerName, // Also update name in case it changed
+            address: recipientAddress 
+          },
+        });
+      }
+    } else {
+      // Try to find existing customer by phone
+      customer = await prisma.customer.findUnique({ where: { phone: cleanPhone } });
+
+      if (!customer) {
+        // Create new customer with address
+        customer = await prisma.customer.create({
+          data: {
+            name: customerName,
+            phone: cleanPhone,
+            address: recipientAddress || null,
+          },
+        });
+      } else {
+        // Update existing customer's name and address
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            name: customerName,
+            address: recipientAddress || customer.address, // Keep existing if not provided
+          },
+        });
+      }
+    }
+
+    // Handle zone_id if provided
+    let zoneStatus: 'NEW_ZONE' | 'UNMAPPED' | 'MAPPED' | null = null;
+    if (normalizedZoneId) {
+      if (!selectedZone) {
+        // Create new zone entry (unmapped, from ticket)
+        await prisma.zone.create({
+          data: {
+            zoneId: normalizedZoneId,
+            isMapped: false,
+            source: 'TICKET',
+            branchId,
+          },
+        });
+        await synchronizeZoneHierarchy(prisma, { branchId });
+        zoneStatus = 'NEW_ZONE';
+      } else if (!selectedZone.isMapped) {
+        zoneStatus = 'UNMAPPED';
+      } else {
+        zoneStatus = 'MAPPED';
+      }
+    }
+
+    // Generate ticket number with transaction + retry to handle race conditions
+    // Strategy: Use PostgreSQL Advisory Lock + findFirst to prevent duplicates
+    // Advisory lock ensures sequential access, retries only for network errors
+    let ticket;
+    let retryCount = 0;
+    const maxRetries = 2; // Reduced from 5 - advisory lock prevents race conditions
+
+    while (retryCount < maxRetries) {
+      try {
+        // Use PostgreSQL Advisory Lock to prevent race conditions
+        // Advisory locks work even when no rows exist (first ticket of the day)
+        ticket = await prisma.$transaction(async (tx) => {
+          // CRITICAL: Use Thailand timezone (UTC+7) for date calculations
+          // Server might be in different timezone, so we calculate Thailand's "today"
+          const now = new Date();
+          const thailandOffset = 7 * 60; // Thailand is UTC+7 (in minutes)
+          const thailandTime = new Date(now.getTime() + thailandOffset * 60 * 1000);
+
+          // Get Thailand's date string (YYYY-MM-DD)
+          const thailandDateStr = thailandTime.toISOString().split('T')[0];
+
+          // Create "today" datetime for Thailand (start of day in Thailand time)
+          const today = new Date(thailandDateStr + 'T00:00:00+07:00');
+
+          // CRITICAL FIX: Use PostgreSQL Advisory Lock with date-based key
+          // This ensures only ONE transaction can generate ticket numbers at a time
+          // Lock key: Hash of today's date (YYYYMMDD) to ensure daily uniqueness
+          const lockKey = parseInt(thailandDateStr.replace(/-/g, '')); // YYYYMMDD
+
+          // Acquire advisory lock - other transactions will WAIT here
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
+          // Check for duplicate tracking number INSIDE the lock
+          if (trackingNo && trackingNo.trim()) {
+            const existingTicket = await tx.ticket.findFirst({
+              where: {
+                trackingNo: trackingNo.trim(),
+                branchId,
+              },
+              select: {
+                id: true,
+                ticketNo: true,
+                trackingNo: true,
+              },
+            });
+
+            if (existingTicket) {
+              throw new Error(`เลขพัสดุ ${trackingNo} มี Ticket อยู่แล้ว (${existingTicket.ticketNo})`);
+            }
+          }
+
+          // Now we have exclusive access - find latest ticket created today (Thailand time)
+          const latestTickets = await tx.$queryRaw<Array<{ ticketNo: string }>>`
+            SELECT "ticketNo"
+            FROM "Ticket"
+            WHERE "createdAt" >= ${today}
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+          `;
+
+          // Extract sequence from latest ticketNo or start from 1
+          let nextSequence = 1;
+          if (latestTickets.length > 0 && latestTickets[0].ticketNo) {
+            // ticketNo format: TH-YYYYMMDD-XXXX
+            const parts = latestTickets[0].ticketNo.split('-');
+            if (parts.length === 3) {
+              const lastSeq = parseInt(parts[2], 10);
+              if (!isNaN(lastSeq)) {
+                nextSequence = lastSeq + 1;
+              }
+            }
+          }
+
+          const ticketNo = generateTicketNumber(nextSequence, thailandDateStr);
+
+          // Get SLA hours and priority from config based on issue type
+          const slaHours = getSLAHours(issueType);
+          const priority = getSLAPriority(issueType);
+
+          // Calculate SLA deadline
+          const createdAt = new Date();
+          const slaDeadline = calculateSLADeadline(createdAt, issueType);
+          const slaStatus = calculateSLAStatus(createdAt, slaDeadline, false);
+
+          // Create ticket within same transaction
+          // All tickets start with NEW status, only change to IN_PROGRESS when opened via LIFF
+          const initialStatus = 'NEW';
+
+          return await tx.ticket.create({
+            data: {
+              ticketNo,
+              branchId,
+              customerId: customer.id,
+              // Auto-set channel based on salesforceId
+              channel: salesforceId ? 'SALESFORCE' : channel,
+              issueType,
+              issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
+              department: department || null,
+              trackingNo: trackingNo || null,
+              zoneId: normalizedZoneId || null,
+              // Store recipient info as snapshot at ticket creation time
+              // This preserves historical data even if customer info changes later
+              // Use customer data as source (which was just updated above)
+              recipientName: customer.name,
+              recipientPhone: customer.phone,
+              recipientAddress: customer.address || recipientAddress,
+              description,
+              salesforceId: salesforceId || null,
+              priority,
+              status: initialStatus,
+              slaHours,
+              slaDeadline,
+              slaStatus,
+              createdBy: currentUser?.name || 'CEC Staff', // Save who created the ticket
+            },
+            include: {
+              customer: true,
+              notes: true,
+            },
+          });
+        });
+
+        // Success - break out of retry loop
+        break;
+      } catch (error: any) {
+        // Check if it's tracking number duplicate error from transaction
+        if (error.message?.includes('เลขพัสดุ') && error.message?.includes('มี Ticket อยู่แล้ว')) {
+          // Extract existing ticket info from error message
+          const match = error.message.match(/\(([^)]+)\)/);
+          const existingTicketNo = match ? match[1] : 'Unknown';
+          
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'DUPLICATE_TRACKING',
+              message: error.message,
+              existingTicket: {
+                ticketNo: existingTicketNo,
+              },
+            },
+            { status: 409 } // 409 Conflict
+          );
+        }
+        
+        // Check if it's a unique constraint error on ticketNo
+        if (error.code === 'P2002' && error.meta?.target?.includes('ticketNo')) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error('Failed to create ticket after max retries:', error);
+            throw error;
+          }
+          // Wait with exponential backoff (50-200ms) - only for network errors
+          const delay = 50 + Math.random() * 50 * Math.pow(2, retryCount);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // Different error - throw immediately
+          throw error;
+        }
+      }
+    }
+
+    if (!ticket) {
+      throw new Error('Failed to create ticket after retries');
+    }
+
+    // Track notification status
+    let notificationSent = false;
+    let notificationError: string | null = null;
+
+    // If no department specified, add a note
+    if (!department) {
+      await prisma.note.create({
+        data: {
+          ticketId: ticket.id,
+          content: '⚠️ โปรดเลือกแผนกรับผิดชอบ',
+          createdBy: 'System',
+        },
+      });
+    } else {
+      // Send LINE notification when ticket is created with department
+      console.log('=== NEW TICKET WITH DEPARTMENT - Debug ===');
+      console.log('Department:', department);
+      console.log('LINE configured:', lineService.isConfigured());
+
+      if (lineService.isConfigured()) {
+        const groupId = getDepartmentLineGroup(department);
+        console.log('Group ID:', groupId);
+
+        if (groupId) {
+          // Get department label
+          const deptLabel = getDepartmentLabel(department);
+          console.log('Department label:', deptLabel);
+
+          // Fetch all pending tickets for this department to create work snapshot
+          const pendingTickets = await prisma.ticket.findMany({
+            where: {
+              department,
+              status: {
+                notIn: ['RESOLVED', 'CLOSED'],
+              },
+            },
+            include: {
+              customer: true,
+            },
+            orderBy: [
+              { priority: 'desc' },
+              { slaDeadline: 'asc' },
+              { createdAt: 'asc' },
+            ],
+            take: 10, // Limit to 10 tickets for the snapshot
+          });
+
+          // Build LIFF queue URL
+          const queueUrl = getLiffUrl(`/liff/queue?department=${department}`);
+
+          // Get or create LINE group to fetch group name
+          let groupName: string | undefined;
+          try {
+            const lineGroupData = await getOrCreateLineGroup(groupId, department);
+            groupName = lineGroupData?.groupName;
+          } catch (err) {
+            console.error('⚠️ Failed to get LINE group name, continuing without it:', err);
+            groupName = undefined;
+          }
+
+          // Create and send Department Work Snapshot
+          const flexMessage = await createDepartmentWorkSnapshotMessage({
+            tickets: pendingTickets,
+            department,
+            departmentLabel: deptLabel,
+            queueUrl,
+            groupName,
+          });
+          console.log('✅ Sending Department Work Snapshot...');
+          console.log('📋 Flex Message Preview:', JSON.stringify(flexMessage, null, 2).substring(0, 500));
+
+          try {
+            console.log(`🚀 Attempting to send to: ${groupId}`);
+            console.log(`   Message text: 📋 มีงานใหม่ ${deptLabel}${groupName ? ` (${groupName})` : ''}`);
+
+            const success = await lineService.sendFlexMessage(
+              groupId,
+              `📋 มีงานใหม่ ${deptLabel}${groupName ? ` (${groupName})` : ''}`,
+              flexMessage
+            );
+
+            if (success) {
+              console.log(`✅ Department Work Snapshot sent to ${deptLabel}: ${pendingTickets.length} pending tickets`);
+              notificationSent = true;
+            } else {
+              console.error('❌ Department Work Snapshot failed for:', deptLabel);
+              notificationError = 'Failed to send notification (quota exceeded or rate limited)';
+            }
+          } catch (error: any) {
+            console.error('❌ Failed to send Department Work Snapshot:', error);
+            notificationError = error.message || 'Unknown error';
+          }
+        } else {
+          console.log('❌ No group ID found for department:', department);
+          notificationError = 'No LINE group configured for this department';
+        }
+      } else {
+        console.log('❌ LINE service not configured');
+        notificationError = 'LINE service is disabled or not configured';
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: ticket,
+        message: 'สร้าง Ticket สำเร็จ',
+        zoneStatus,
+        notification: {
+          sent: notificationSent,
+          error: notificationError,
+        }
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error('Error creating ticket:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการสร้าง Ticket' },
+      { status: 500 }
+    );
+  }
+}

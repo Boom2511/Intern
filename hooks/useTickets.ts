@@ -1,0 +1,68 @@
+/**
+ * SWR Hook for fetching tickets list
+ * Includes automatic polling and caching
+ */
+
+import useSWR from 'swr';
+
+export interface UseTicketsOptions {
+  status?: string;
+  priority?: string;
+  department?: string;
+  issueType?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+  refreshInterval?: number;
+}
+
+export function useTickets(options: UseTicketsOptions = {}) {
+  const {
+    status,
+    department,
+    issueType,
+    search,
+    startDate,
+    endDate,
+    page = 1,
+    limit = 20,
+    refreshInterval = 0 // Disabled by default - use event-based mutate instead
+  } = options;
+
+  // Build URL with query params
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.append('status', status);
+  if (department && department !== 'all') params.append('department', department);
+  if (issueType && issueType !== 'all') params.append('issueType', issueType);
+  if (search) params.append('search', search);
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  params.append('page', page.toString());
+  params.append('limit', limit.toString());
+
+  const url = `/api/tickets?${params.toString()}`;
+
+  const { data, error, mutate, isLoading, isValidating } = useSWR(
+    url,
+    {
+      refreshInterval: refreshInterval || undefined, // Only poll if explicitly set
+      revalidateOnFocus: false, // Disabled - use manual refresh button instead
+      revalidateOnReconnect: true, // Refresh when network reconnects
+      dedupingInterval: 2000, // Reduced to 2s for faster updates
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      keepPreviousData: true, // Keep previous data while revalidating (smoother UX)
+    }
+  );
+
+  return {
+    tickets: data?.data || [],
+    pagination: data?.pagination,
+    isLoading,
+    isError: error,
+    isValidating,
+    mutate, // For manual refresh or optimistic updates
+  };
+}
