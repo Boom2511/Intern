@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { getReportZoneInfo } from '@/lib/report-zone-employees';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,64 +62,8 @@ export async function POST(request: NextRequest) {
         take: sampleLimit,
       });
 
-      const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
-      const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
-        where: {
-          zoneId: { in: zoneIds },
-          ...(user.isSuperAdmin ? {} : { branchId: user.branchId ?? -1 }),
-        },
-        include: {
-          employees: {
-            include: {
-              employee: { include: { manager: true } },
-              chiefOfficer: { include: { manager: { include: { manager: true } } } },
-            },
-          },
-        },
-      }) : [];
-      const zoneMap = new Map<string, { staffName?: string; chief?: string; dbHead?: string }>();
-      const findDbHeadViaManagers = (start: any): any | null => {
-        let current = start?.manager || null;
-        const visited = new Set<number>();
-        while (current && !visited.has(current.id)) {
-          visited.add(current.id);
-          if (current.role === 'DB_HEAD') return current;
-          current = current.manager || null;
-        }
-        return null;
-      };
-      for (const z of zones) {
-        const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
-        const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
-        const dbHeadEmp = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee || null;
-        
-        let dbHead = dbHeadEmp?.name || null;
-        if (!dbHead && chiefEmp) {
-          const resolved = findDbHeadViaManagers(chiefEmp as any);
-          if (resolved) dbHead = resolved.name;
-        }
-        
-        // Find STAFF employee in zone
-        const staffEmp = z.employees.find(e => e.employee.role === 'STAFF')?.employee || null;
-        
-        // Logic: same as generate route
-        let staffName: string | undefined;
-        let chief: string | undefined;
-        
-        if (dbHeadEmp) {
-          staffName = dbHeadEmp.name;
-          chief = dbHeadEmp.name;
-          dbHead = dbHeadEmp.name;
-        } else if (chiefEmp && !staffEmp) {
-          staffName = chiefEmp.name;
-          chief = dbHead || undefined;
-        } else if (staffEmp) {
-          staffName = staffEmp.name;
-          chief = chiefEmp?.name || undefined;
-        }
-        
-        zoneMap.set(z.zoneId, { staffName, chief, dbHead: dbHead || undefined });
-      }
+      const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
+      const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
 
       samples = tickets.map((ticket) => {
         const latestClosed = (ticket as any).statusHistory?.[0];

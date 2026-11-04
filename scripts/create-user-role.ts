@@ -3,29 +3,20 @@
  * Usage: npx ts-node --project tsconfig.scripts.json scripts/create-user-role.ts
  */
 
-import { PrismaClient, Department } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Define users to create
-const usersToCreate = [
-  { username: 'user_db1', name: 'User D1', department: 'DB1' as Department },
-  { username: 'user_db2', name: 'User D2', department: 'DB2' as Department },
-  { username: 'user_db3', name: 'User D3', department: 'DB3' as Department },
-  { username: 'user_db4', name: 'User D4', department: 'DB4' as Department },
-  { username: 'user_db5', name: 'User นำจ่ายรถยนต์', department: 'DB5' as Department },
-  { username: 'user_db6', name: 'User บป', department: 'DB6' as Department },
-];
+interface DepartmentUser {
+  username: string;
+  name: string;
+  department: string;
+}
 
 const password = 'password123'; // Change this in production
 
-async function createOrUpdateUser(username: string, name: string, department: Department) {
-  const branch = await prisma.branch.findUnique({ where: { code: '10260' } });
-  if (!branch) {
-    throw new Error('Branch 10260 (บางนา) must exist before creating department users');
-  }
-
+async function createOrUpdateUser(username: string, name: string, department: string, branchId: number) {
   // Check if user already exists
   const existingUser = await prisma.user.findUnique({
     where: { username },
@@ -44,7 +35,7 @@ async function createOrUpdateUser(username: string, name: string, department: De
         department,
         isActive: true,
         name,
-        branchId: branch.id,
+        branchId,
         isSuperAdmin: false,
       },
     });
@@ -61,7 +52,7 @@ async function createOrUpdateUser(username: string, name: string, department: De
         role: 'USER',
         department,
         isActive: true,
-        branchId: branch.id,
+        branchId,
         isSuperAdmin: false,
       },
     });
@@ -71,28 +62,35 @@ async function createOrUpdateUser(username: string, name: string, department: De
 }
 
 async function main() {
-  console.log('Creating USER role accounts for all departments...\n');
+  const branch = await prisma.branch.findUnique({ where: { code: '10260' } });
+  if (!branch) {
+    throw new Error('Branch 10260 (บางนา) must exist before creating department users');
+  }
 
+  const departments = await prisma.organizationDepartment.findMany({
+    where: { branchId: branch.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  if (departments.length === 0) {
+    throw new Error('Branch 10260 has no departments registered in Organization');
+  }
+
+  const usersToCreate: DepartmentUser[] = departments.map(({ id, name }) => ({
+    username: `user_${branch.code}_dept${id}`,
+    name: `User ${name}`,
+    department: name,
+  }));
+  console.log(`Creating USER role accounts for ${departments.length} Organization departments...\n`);
   for (const user of usersToCreate) {
-    await createOrUpdateUser(user.username, user.name, user.department);
+    await createOrUpdateUser(user.username, user.name, user.department, branch.id);
   }
 
   console.log('\n=== Login Credentials ===');
   console.log('Password for all users: password123\n');
   console.log('Usernames:');
-  usersToCreate.forEach(user => {
-    const deptLabels: Record<string, string> = {
-      DB1: 'D1',
-      DB2: 'D2',
-      DB3: 'D3',
-      DB4: 'D4',
-      DB5: 'นำจ่ายรถยนต์',
-      DB6: 'บป (บริการประชาชน)',
-      TEST: 'ทดสอบ',
-    };
-    const deptLabel = deptLabels[user.department] || user.department;
-    
-    console.log(`  - ${user.username} (${deptLabel})`);
+  usersToCreate.forEach((user) => {
+    console.log(`  - ${user.username} (${user.department})`);
   });
 }
 

@@ -6,9 +6,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma, Department, Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { departmentsMatch, getBranchDepartments } from '@/lib/branch-organization';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -21,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (!branchScope) return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
 
     const searchParams = request.nextUrl.searchParams;
-    const department = searchParams.get('department');
+    let department = searchParams.get('department');
     const zone = searchParams.get('zone');
     const groupBy = searchParams.get('groupBy'); // 'zone' or null
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
@@ -33,11 +35,30 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+    const availableDepartments = user.branchId !== null
+      ? await getBranchDepartments(user.branchId)
+      : user.isSuperAdmin
+        ? (await prisma.organizationDepartment.findMany({
+          select: { name: true },
+          distinct: ['name'],
+          orderBy: { name: 'asc' },
+        })).map(({ name }) => name)
+        : [];
+    const canonicalDepartment = availableDepartments.find(
+      (name) => name.trim().toLocaleLowerCase() === department?.trim().toLocaleLowerCase()
+    ) ?? availableDepartments.find((name) => departmentsMatch(name, department));
+    if (!canonicalDepartment) {
+      return NextResponse.json(
+        { success: false, error: 'Department is not registered in the selected branch' },
+        { status: 400 }
+      );
+    }
+    department = canonicalDepartment;
 
     // Build where clause for pending tickets
     const whereClause: Prisma.TicketWhereInput = {
       ...branchScope,
-      department: department as Department,
+      department,
       status: {
         notIn: ['RESOLVED', 'CLOSED'],
       },
@@ -85,39 +106,12 @@ export async function GET(request: NextRequest) {
       // Enrich with zone hierarchy and employee names
       const zoneIds = Object.keys(ticketsByZone).filter((z) => z && z !== 'ไม่ระบุ Zone');
 
-      let zonesMeta: Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] } > = {};
-      if (zoneIds.length > 0) {
-        const zones = await prisma.zone.findMany({
-          where: {
-            zoneId: { in: zoneIds },
-            ...(user.isSuperAdmin ? {} : { branchId: user.branchId ?? -1 }),
-          },
-          include: {
-            employees: {
-              include: {
-                employee: true,
-              },
-            },
-          },
-        });
-
-        zonesMeta = zones.reduce((acc, z) => {
-          const chief = z.employees.find((ze) => ze.employee.role === Role.CHIEF)?.employee;
-          const employeeNames = z.employees
-            .filter((ze) => ze.employee.role === Role.STAFF)
-            .map((ze) => ze.employee.name);
-          acc[z.zoneId] = {
-            zoneName: z.zoneName,
-            chiefName: chief?.name ?? null,
-            employeeNames,
-          };
-          return acc;
-        }, {} as Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] }>);
-      }
+      const zonesMeta = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
 
       // Calculate stats for each zone, attaching meta
       const zoneStats = Object.entries(ticketsByZone).map(([zone, zoneTickets]) => {
-        const meta = zonesMeta[zone] || { zoneName: null, chiefName: null, employeeNames: [] };
+        const zoneInfo = zonesMeta.get(zone);
+        const meta = zoneInfo || { zoneName: null, chiefName: undefined, employeeNames: [] };
         return {
           zone,
           zoneName: meta.zoneName,

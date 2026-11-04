@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { getResolutionCounts } from '@/lib/dashboard-trends';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { isTestDepartment } from '@/config/departments';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -138,11 +139,15 @@ async function getDepartmentStatsByRange(
   excludedDepartments: string[],
   branchScope: Prisma.TicketWhereInput
 ) {
+  const excludesTestDepartments = excludedDepartments.some(isTestDepartment);
+  const shouldExclude = (department: string | null) => Boolean(department && (
+    excludedDepartments.some((excluded) => excluded.toLocaleLowerCase() === department.toLocaleLowerCase()) ||
+    (excludesTestDepartments && isTestDepartment(department))
+  ));
   const whereClause: any = {
     ...branchScope,
     department: {
       not: null,
-      notIn: excludedDepartments,
     },
   };
 
@@ -160,7 +165,7 @@ async function getDepartmentStatsByRange(
   });
 
   return departmentCounts
-    .filter((dept) => dept.department && !excludedDepartments.includes(dept.department))
+    .filter((dept) => dept.department && !shouldExclude(dept.department))
     .map((dept) => ({
       department: dept.department || 'ไม่ระบุ',
       count: dept._count,
@@ -183,6 +188,11 @@ export async function GET() {
     const excludedDepartments = (process.env.EXCLUDED_DEPARTMENTS || 'TEST')
       .split(',')
       .map(d => d.trim());
+    const excludesTestDepartments = excludedDepartments.some(isTestDepartment);
+    const shouldExcludeDepartment = (department: string | null) => Boolean(department && (
+      excludedDepartments.some((excluded) => excluded.toLocaleLowerCase() === department.toLocaleLowerCase()) ||
+      (excludesTestDepartments && isTestDepartment(department))
+    ));
 
     // Get current date ranges
     const now = new Date();
@@ -271,7 +281,7 @@ export async function GET() {
 
     // Filter out excluded departments and format department data for chart
     const departmentStats = departmentCounts
-      .filter((dept) => dept.department && !excludedDepartments.includes(dept.department))
+      .filter((dept) => dept.department && !shouldExcludeDepartment(dept.department))
       .map((dept) => ({
         department: dept.department || 'ไม่ระบุ',
         count: dept._count,
@@ -289,9 +299,15 @@ export async function GET() {
       },
     });
 
-    // Get all departments from enum (excluding test departments)
-    const allDepartments = ['DB1', 'DB2', 'DB3', 'DB4', 'DB5', 'DB6']
-      .filter(dept => !excludedDepartments.includes(dept));
+    const departmentNames = await prisma.organizationDepartment.findMany({
+      where: currentUser.isSuperAdmin ? {} : { branchId: currentUser.branchId ?? -1 },
+      select: { name: true },
+      distinct: ['name'],
+      orderBy: { name: 'asc' },
+    });
+    const allDepartments = departmentNames
+      .map(({ name }) => name)
+      .filter((department) => !shouldExcludeDepartment(department));
 
     // Initialize all departments with zero counts
     const departmentStatusMap: Record<string, { department: string; open: number; inProgress: number; resolved: number }> = {};
@@ -307,20 +323,24 @@ export async function GET() {
 
     // Fill in actual data
     departmentStatusData.forEach((item) => {
-      if (!item.department || excludedDepartments.includes(item.department)) {
+      if (!item.department || shouldExcludeDepartment(item.department)) {
         return; // Skip null departments and excluded departments
       }
 
-      // Only process if department is in our list
-      if (departmentStatusMap[item.department]) {
-        // Categorize statuses
-        if (item.status === 'NEW' || item.status === 'PENDING') {
-          departmentStatusMap[item.department].open += item._count;
-        } else if (item.status === 'IN_PROGRESS') {
-          departmentStatusMap[item.department].inProgress += item._count;
-        } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
-          departmentStatusMap[item.department].resolved += item._count;
-        }
+      if (!departmentStatusMap[item.department]) {
+        departmentStatusMap[item.department] = {
+          department: item.department,
+          open: 0,
+          inProgress: 0,
+          resolved: 0,
+        };
+      }
+      if (item.status === 'NEW' || item.status === 'PENDING') {
+        departmentStatusMap[item.department].open += item._count;
+      } else if (item.status === 'IN_PROGRESS') {
+        departmentStatusMap[item.department].inProgress += item._count;
+      } else if (item.status === 'RESOLVED' || item.status === 'CLOSED') {
+        departmentStatusMap[item.department].resolved += item._count;
       }
     });
 

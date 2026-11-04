@@ -12,6 +12,7 @@ import { th } from 'date-fns/locale';
 import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { getReportZoneInfo } from '@/lib/report-zone-employees';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,67 +70,8 @@ export async function POST(request: NextRequest) {
     const salesforceTickets = tickets.filter(t => t.channel === 'SALESFORCE');
 
     // Build a zone map to fill ชื่อเจ้าหน้าที่/ผู้ควบคุม/หัวหน้า DB from zoneId
-    const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
-    const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
-      where: {
-        zoneId: { in: zoneIds },
-        ...(user.isSuperAdmin ? {} : { branchId: user.branchId ?? -1 }),
-      },
-      include: {
-        employees: {
-          include: {
-            employee: { include: { manager: true } },
-            chiefOfficer: { include: { manager: { include: { manager: true } } } },
-          },
-        },
-      },
-    }) : [];
-    const zoneMap = new Map<string, { staffName?: string; chief?: string; dbHead?: string }>();
-    for (const z of zones) {
-      const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
-      const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
-      const dbHeadEmp = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee || null;
-      
-      // Find DB_HEAD via manager chain if not directly in zone
-      let dbHead = dbHeadEmp?.name || null;
-      if (!dbHead && chiefEmp) {
-        let current: any = (chiefEmp as any).manager || null;
-        const visited = new Set<number>();
-        while (current && !visited.has(current.id)) {
-          visited.add(current.id);
-          if (current.role === 'DB_HEAD') { dbHead = current.name; break; }
-          current = current.manager || null;
-        }
-      }
-      
-      // Find STAFF employee in zone
-      const staffEmp = z.employees.find(e => e.employee.role === 'STAFF')?.employee || null;
-      
-      // Logic: 
-      // If zone has DB_HEAD → all 3 columns = DB_HEAD name
-      // If zone has CHIEF → staffName = CHIEF, chief = DB_HEAD, dbHead = DB_HEAD
-      // If zone has STAFF → staffName = STAFF, chief = CHIEF, dbHead = DB_HEAD
-      let staffName: string | undefined;
-      let chief: string | undefined;
-      
-      if (dbHeadEmp) {
-        // Zone has DB_HEAD → all 3 are same
-        staffName = dbHeadEmp.name;
-        chief = dbHeadEmp.name;
-        dbHead = dbHeadEmp.name;
-      } else if (chiefEmp && !staffEmp) {
-        // Zone has CHIEF (no STAFF) → staffName = CHIEF, others = DB_HEAD
-        staffName = chiefEmp.name;
-        chief = dbHead || undefined;
-      } else if (staffEmp) {
-        // Zone has STAFF → staffName = STAFF, chief = CHIEF, dbHead = DB_HEAD
-        staffName = staffEmp.name;
-        chief = chiefEmp?.name || undefined;
-        // dbHead already set from above
-      }
-      
-      zoneMap.set(z.zoneId, { staffName, chief, dbHead: dbHead || undefined });
-    }
+    const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
+    const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
 
     // Helper function to create a worksheet with data
     const createWorksheet = (workbook: ExcelJS.Workbook, sheetName: string, ticketsData: any[], includeSalesforceId: boolean = true) => {

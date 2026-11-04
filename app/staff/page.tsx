@@ -12,7 +12,7 @@ import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useUser } from '@/providers/UserProvider';
-import { getDepartmentOptions } from '@/config/departments';
+import { useOrganizationDepartments } from '@/hooks/useOrganizationDepartments';
 
 interface Branch {
   id: number;
@@ -54,6 +54,9 @@ export default function StaffPage() {
     branchId: currentUser?.branchId ?? null,
   });
   const [passwordError, setPasswordError] = useState('');
+  const { departments: departmentOptions, error: departmentOptionsError } = useOrganizationDepartments(
+    currentUser?.isSuperAdmin ? (formData.branchId ?? undefined) : currentUser?.branchId ?? undefined
+  );
 
   // Check permission on mount
   useEffect(() => {
@@ -78,6 +81,12 @@ export default function StaffPage() {
       clearInterval(onlineInterval);
     };
   }, [currentUser, router]); // loadUsers and loadOnlineStatus are stable
+
+  useEffect(() => {
+    if (currentUser && !currentUser.isSuperAdmin) {
+      setFormData((previous) => ({ ...previous, branchId: currentUser.branchId }));
+    }
+  }, [currentUser]);
 
   const loadUsers = async () => {
     try {
@@ -310,8 +319,7 @@ export default function StaffPage() {
 
   const getDepartmentLabel = (department: string | null) => {
     if (!department) return null;
-    const dept = getDepartmentOptions().find(d => d.value === department);
-    return dept?.label || department;
+    return department;
   };
 
   if (loading) {
@@ -435,12 +443,15 @@ export default function StaffPage() {
                       required
                     >
                       <option value="">เลือกแผนก</option>
-                      {getDepartmentOptions().map((dept) => (
+                      {departmentOptions.map((dept) => (
                         <option key={dept.value} value={dept.value}>
                           {dept.label}
                         </option>
                       ))}
                     </select>
+                    {departmentOptionsError && (
+                      <p className="text-sm text-red-600">โหลดรายชื่อแผนกไม่สำเร็จ: {departmentOptionsError}</p>
+                    )}
                   </div>
                 )}
 

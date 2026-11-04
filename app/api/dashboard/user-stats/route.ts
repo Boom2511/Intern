@@ -7,9 +7,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
-import { Department, Role } from '@prisma/client';
 import { getResolutionCounts } from '@/lib/dashboard-trends';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { getReportZoneInfo } from '@/lib/report-zone-employees';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,7 +29,7 @@ async function generate7DayTrendsForDepartment(department: string, branchId: num
 
     const { solved, unresolved } = await getResolutionCounts({
       branchId,
-      department: department as Department,
+      department,
       createdAt: { gte: date, lt: nextDate },
     });
 
@@ -57,7 +57,7 @@ async function generate30DayTrendsForDepartment(department: string, branchId: nu
 
     const { solved, unresolved } = await getResolutionCounts({
       branchId,
-      department: department as Department,
+      department,
       createdAt: { gte: startDate, lt: endDate },
     });
 
@@ -111,7 +111,7 @@ export async function GET() {
       _count: true,
       where: {
         ...branchScope,
-        department: department as any, // Type assertion to fix enum type
+        department,
       },
     });
 
@@ -139,7 +139,7 @@ export async function GET() {
     const totalTicketsLast30Days = await prisma.ticket.count({
       where: {
         ...branchScope,
-        department: department as any, // Type assertion to fix enum type
+        department,
         createdAt: { gte: last30Days } 
       }
     });
@@ -154,7 +154,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       where: {
         ...branchScope,
-        department: department as any, // Type assertion to fix enum type
+        department,
         status: {
           not: 'CLOSED',
         },
@@ -186,36 +186,11 @@ export async function GET() {
     // Enrich with zone hierarchy and employee names
     const zoneIds = Object.keys(ticketsByZone).filter((z) => z && z !== 'ไม่ระบุ Zone');
 
-    let zonesMeta: Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] }> = {};
-    if (zoneIds.length > 0) {
-      const zones = await prisma.zone.findMany({
-        where: { zoneId: { in: zoneIds }, branchId: currentUser.branchId },
-        include: {
-          employees: {
-            include: {
-              employee: true,
-            },
-          },
-        },
-      });
-
-      zonesMeta = zones.reduce((acc, z) => {
-        const chief = z.employees.find((ze) => ze.employee.role === Role.CHIEF)?.employee;
-        const employeeNames = z.employees
-          .filter((ze) => ze.employee.role === Role.STAFF)
-          .map((ze) => ze.employee.name);
-        acc[z.zoneId] = {
-          zoneName: z.zoneName,
-          chiefName: chief?.name ?? null,
-          employeeNames,
-        };
-        return acc;
-      }, {} as Record<string, { zoneName?: string | null; chiefName?: string | null; employeeNames: string[] }>);
-    }
+    const zonesMeta = await getReportZoneInfo(zoneIds, currentUser.branchId);
 
     // Calculate stats for each zone
     const recentTicketsByZone = Object.entries(ticketsByZone).map(([zone, zoneTickets]) => {
-      const meta = zonesMeta[zone] || { zoneName: null, chiefName: null, employeeNames: [] };
+      const meta = zonesMeta.get(zone) || { zoneName: null, chiefName: undefined, employeeNames: [] };
       return {
         zone,
         zoneName: meta.zoneName,
@@ -234,7 +209,7 @@ export async function GET() {
       where: {
         ticket: {
           ...branchScope,
-          department: department as any, // Type assertion to fix enum type
+          department,
         },
       },
       select: {
@@ -260,7 +235,7 @@ export async function GET() {
       _count: true,
       where: {
         ...branchScope,
-        department: department as any, // Type assertion to fix enum type
+        department,
       },
     });
 

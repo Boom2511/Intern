@@ -5,7 +5,31 @@
 
 import { prisma } from './prisma';
 import { lineService } from './line';
-import type { Department } from '@prisma/client';
+import { getDepartmentLineGroup as getLegacyDepartmentLineGroup } from '@/config/departments';
+
+export async function getLineGroupForDepartment(department: string, branchId?: number): Promise<string> {
+  const departmentZones = branchId === undefined
+    ? []
+    : await prisma.zone.findMany({
+      where: {
+        branchId,
+        department: { equals: department, mode: 'insensitive' },
+      },
+      select: { zoneId: true },
+    });
+  const associatedGroup = await prisma.lineGroup.findFirst({
+    where: {
+      isActive: true,
+      OR: [
+        { department: { equals: department, mode: 'insensitive' } },
+        ...(departmentZones.length > 0 ? [{ zoneId: { in: departmentZones.map(({ zoneId }) => zoneId) } }] : []),
+      ],
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: { groupId: true },
+  });
+  return associatedGroup?.groupId || getLegacyDepartmentLineGroup(department);
+}
 
 /**
  * Get or create LINE group record in database
@@ -13,7 +37,7 @@ import type { Department } from '@prisma/client';
  */
 export async function getOrCreateLineGroup(
   groupId: string,
-  department?: Department,
+  department?: string,
   zoneId?: string
 ): Promise<{ groupName: string } | null> {
   try {
@@ -101,7 +125,7 @@ export async function getCachedGroupName(groupId: string): Promise<string | null
  */
 export async function associateGroupWithDepartment(
   groupId: string,
-  department: Department,
+  department: string,
   zoneId?: string
 ): Promise<boolean> {
   try {

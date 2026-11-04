@@ -22,7 +22,6 @@ import { Badge } from '@/components/ui/badge';
 import StatusBadge from './StatusBadge';
 import { TicketWithRelations, TicketStatus } from '@/types';
 import { formatThaiDate, formatRelativeTime, getStatusLabel, cn } from '@/lib/utils';
-import { getDepartmentOptions } from '@/config/departments';
 import { User, MessageSquare, Edit, CheckCircle, TrendingUp, History, Save, X, ChevronDown, ChevronUp, Pencil, Copy, Zap, Loader2, Trash2 } from 'lucide-react';
 import { invalidateTicketsList, invalidateDashboardStats, invalidateReports } from '@/lib/swr-utils';
 import { validatePhone, normalizePhoneToE164 } from '@/lib/validations';
@@ -34,6 +33,7 @@ import type { QuickAnswerTemplate } from '@/config/quick-answers';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { hasPermission, Permission } from '@/lib/permissions';
+import { useOrganizationDepartments } from '@/hooks/useOrganizationDepartments';
 
 interface TicketDetailProps {
   ticket: TicketWithRelations;
@@ -109,7 +109,9 @@ export default function TicketDetail({ ticket, mutate, viewMode = 'staff', clien
     zoneId: ticket.zoneId || '',
   });
 
-  const departmentOptions = getDepartmentOptions();
+  const { departments: departmentOptions, error: departmentOptionsError } = useOrganizationDepartments(
+    ticket.branchId ?? (user ? (user.isSuperAdmin ? null : user.branchId) : undefined)
+  );
 
   // Update local state when ticket prop changes (real-time updates)
   useEffect(() => {
@@ -842,6 +844,9 @@ export default function TicketDetail({ ticket, mutate, viewMode = 'staff', clien
                         ))}
                       </SelectContent>
                     </Select>
+                    {departmentOptionsError && (
+                      <p className="mt-1 text-sm text-red-600">โหลดรายชื่อแผนกไม่สำเร็จ: {departmentOptionsError}</p>
+                    )}
                   </div>
 
                   {/* Close Ticket Button */}

@@ -1119,7 +1119,7 @@ export default function ZoneHierarchy() {
             </div>}
             {newDepartmentNames.map((name, index) => <div key={index} className="flex items-end gap-2">
               <label className="block flex-1 text-sm font-medium">ชื่อแผนก {index + 1}
-                <Input value={name} onChange={(event) => setNewDepartmentNames((names) => names.map((item, rowIndex) => rowIndex === index ? event.target.value : item))} maxLength={120} placeholder="เช่น DB1" />
+                <Input value={name} onChange={(event) => setNewDepartmentNames((names) => names.map((item, rowIndex) => rowIndex === index ? event.target.value : item))} maxLength={120} placeholder="ชื่อแผนก" />
               </label>
               <Button type="button" variant="outline" className="h-10" disabled={newDepartmentNames.length === 1} aria-label={`ลบแผนกแถว ${index + 1}`} onClick={() => setNewDepartmentNames((names) => names.filter((_, rowIndex) => rowIndex !== index))}>
                 <Trash2 className="h-4 w-4" />

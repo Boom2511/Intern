@@ -169,16 +169,7 @@ function UserDashboardContent() {
   }
 
   const getDepartmentLabel = (dept: string) => {
-    const labels: Record<string, string> = {
-      DB1: 'D1',
-      DB2: 'D2',
-      DB3: 'D3',
-      DB4: 'D4',
-      DB5: 'นำจ่ายรถยนต์',
-      DB6: 'บป ',
-      TEST: 'ทดสอบ',
-    };
-    return labels[dept] || dept;
+    return dept;
   };
 
   const handleRefresh = () => {

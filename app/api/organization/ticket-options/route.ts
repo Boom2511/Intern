@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Department } from '@prisma/client';
-import { getDepartmentLabel } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getBranchDepartmentCodes } from '@/lib/branch-organization';
+import { departmentsMatch, getBranchDepartments, resolveBranchDepartment } from '@/lib/branch-organization';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,62 +12,74 @@ export async function GET(request: NextRequest) {
 
     const requestedBranchId = request.nextUrl.searchParams.get('branchId');
     let branchId: number | null = user.branchId;
+    let branchIds: number[] = branchId === null ? [] : [branchId];
+    let branch: { id: number; name: string; code: string | null } | null = null;
     if (user.isSuperAdmin) {
       if (requestedBranchId) {
         branchId = Number(requestedBranchId);
         if (!Number.isInteger(branchId) || branchId <= 0) {
           return NextResponse.json({ error: 'Choose a valid branch' }, { status: 400 });
         }
+        branchIds = [branchId];
       } else {
         const branches = await prisma.branch.findMany({
-          select: { id: true },
+          select: { id: true, name: true, code: true },
           orderBy: { id: 'asc' },
-          take: 2,
         });
-        if (branches.length !== 1) {
-          return NextResponse.json({ error: 'Select a branch before loading organization options' }, { status: 400 });
-        }
-        branchId = branches[0].id;
+        branchIds = branches.map(({ id }) => id);
+        branch = branches.length === 1 ? branches[0] : null;
+        branchId = branch?.id ?? null;
       }
     } else if (requestedBranchId && Number(requestedBranchId) !== user.branchId) {
       return NextResponse.json({ error: 'You may only load organization options for your own branch' }, { status: 403 });
     }
 
-    if (branchId === null) {
+    if (!user.isSuperAdmin && branchId === null) {
       return NextResponse.json({ error: 'Your account is not assigned to a branch' }, { status: 403 });
     }
 
-    const branch = await prisma.branch.findUnique({
-      where: { id: branchId },
-      select: { id: true, name: true, code: true },
-    });
-    if (!branch) return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
+    if (branchId !== null) {
+      branch = await prisma.branch.findUnique({
+        where: { id: branchId },
+        select: { id: true, name: true, code: true },
+      });
+      if (!branch) return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
+    }
 
     const search = request.nextUrl.searchParams.get('zoneSearch')?.trim();
     const includeEmployees = request.nextUrl.searchParams.get('includeEmployees') === 'true';
     const requestedDepartment = request.nextUrl.searchParams.get('department')?.trim();
-    const departmentLabel = requestedDepartment && Object.values(Department).includes(requestedDepartment as Department)
-      ? getDepartmentLabel(requestedDepartment as Department)
-      : requestedDepartment;
-    const departments = await getBranchDepartmentCodes(branchId);
-    if (requestedDepartment && !departments.includes(requestedDepartment)) {
+    const departments = branchId !== null
+      ? await getBranchDepartments(branchId)
+      : (await prisma.organizationDepartment.findMany({
+        where: { branchId: { in: branchIds } },
+        select: { name: true },
+        distinct: ['name'],
+        orderBy: { name: 'asc' },
+      })).map(({ name }) => name);
+    const selectedDepartment = requestedDepartment
+      ? branchId !== null
+        ? await resolveBranchDepartment(branchId, requestedDepartment)
+        : departments.find((department) => departmentsMatch(department, requestedDepartment)) ?? null
+      : null;
+    if (requestedDepartment && !selectedDepartment) {
       return NextResponse.json({ error: 'Choose a department registered in this branch' }, { status: 400 });
     }
     const zoneFilters = [
-      { branchId },
+      { branchId: { in: branchIds } },
       {
         OR: [
           { isMapped: true },
-          { employees: { some: { employee: { branchId } } } },
-          { managedEmployees: { some: { branchId } } },
+          { employees: { some: { employee: { branchId: { in: branchIds } } } } },
+          { managedEmployees: { some: { branchId: { in: branchIds } } } },
         ],
       },
-      ...(requestedDepartment && departmentLabel
+      ...(selectedDepartment
         ? [{
             OR: [
-              { department: { in: [requestedDepartment, departmentLabel] } },
-              { employees: { some: { employee: { branchId, department: { in: [requestedDepartment, departmentLabel] } } } } },
-              { managedEmployees: { some: { branchId, department: { in: [requestedDepartment, departmentLabel] } } } },
+              { department: { equals: selectedDepartment, mode: 'insensitive' as const } },
+              { employees: { some: { employee: { branchId: { in: branchIds }, department: { equals: selectedDepartment, mode: 'insensitive' as const } } } } },
+              { managedEmployees: { some: { branchId: { in: branchIds }, department: { equals: selectedDepartment, mode: 'insensitive' as const } } } },
             ],
           }]
         : []),
@@ -86,14 +96,14 @@ export async function GET(request: NextRequest) {
             zoneName: true,
             department: true,
             employees: {
-              where: { employee: { branchId } },
+              where: { employee: { branchId: { in: branchIds } } },
               select: { employee: { select: { department: true } } },
               take: 1,
             },
             ...(includeEmployees
               ? {
                   managedEmployees: {
-                    where: { branchId },
+                    where: { branchId: { in: branchIds } },
                     select: {
                       id: true,
                       employeeId: true,
@@ -119,7 +129,7 @@ export async function GET(request: NextRequest) {
       branch,
       departments: departments.map((value) => ({
         value,
-        label: getDepartmentLabel(value as Department),
+        label: value,
       })),
       zones: zones.map((zone) => ({
         id: zone.id,

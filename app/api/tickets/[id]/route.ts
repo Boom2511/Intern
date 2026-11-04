@@ -9,12 +9,12 @@ import { prisma } from '@/lib/prisma';
 import { calculateSLAStatus } from '@/lib/sla';
 import { lineService } from '@/lib/line';
 import { createDepartmentWorkSnapshotMessage } from '@/lib/line-templates';
-import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
+import { getDepartmentLabel, isTestDepartment } from '@/config/departments';
 import { getStatusLabel } from '@/lib/utils';
 import { getCurrentUser, hasPermission, Permission } from '@/lib/auth';
-import { getOrCreateLineGroup } from '@/lib/line-groups';
+import { getLineGroupForDepartment, getOrCreateLineGroup } from '@/lib/line-groups';
 import { getTicketBranchScope } from '@/lib/branch-access';
-import { getBranchDepartmentCodes } from '@/lib/branch-organization';
+import { resolveBranchDepartment } from '@/lib/branch-organization';
 import { hashClientTicketToken } from '@/lib/client-ticket-access';
 
 export const dynamic = 'force-dynamic';
@@ -193,18 +193,22 @@ export async function PATCH(
         { status: 404 }
       );
     }
-    if (department !== undefined && department !== null && department !== '') {
-      if (
-        typeof department !== 'string' ||
-        ticket.branchId === null ||
-        !(await getBranchDepartmentCodes(ticket.branchId)).includes(department)
-      ) {
+    let resolvedDepartment: string | null | undefined;
+    if (department !== undefined && department !== null && department !== '' && department !== 'none') {
+      if (typeof department !== 'string' || ticket.branchId === null) {
         return NextResponse.json(
           { success: false, error: 'Choose a department registered in this ticket’s branch' },
           { status: 400 }
         );
       }
-      if (department === 'TEST' && currentUser.role !== 'ADMINISTRATOR') {
+      resolvedDepartment = await resolveBranchDepartment(ticket.branchId, department);
+      if (!resolvedDepartment) {
+        return NextResponse.json(
+          { success: false, error: 'Choose a department registered in this ticket’s branch' },
+          { status: 400 }
+        );
+      }
+      if (isTestDepartment(resolvedDepartment) && currentUser.role !== 'ADMINISTRATOR') {
         return NextResponse.json({ success: false, error: 'You may not assign tickets to the TEST department' }, { status: 403 });
       }
     }
@@ -286,14 +290,16 @@ export async function PATCH(
 
     // Handle department update
     if (department !== undefined) {
-      const newDepartment = department === 'none' ? null : department;
+      const newDepartment = department === 'none' || department === '' || department === null
+        ? null
+        : resolvedDepartment ?? department;
       updateData.department = newDepartment;
 
       // Send Department Work Snapshot when department is assigned for the FIRST time only
       // Only send if ticket had no department before (ticket.department is null)
       // This prevents notifications on department reassignments to reduce quota usage
       if (newDepartment && !ticket.department && lineService.isConfigured()) {
-        const groupId = getDepartmentLineGroup(newDepartment);
+        const groupId = await getLineGroupForDepartment(newDepartment, ticket.branchId ?? undefined);
         if (groupId) {
           const deptLabel = getDepartmentLabel(newDepartment);
 
@@ -319,7 +325,7 @@ export async function PATCH(
 
           // Build LIFF queue URL
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intern-tawny.vercel.app';
-          const queueUrl = `${baseUrl}/liff/queue?department=${newDepartment}`;
+          const queueUrl = `${baseUrl}/liff/queue?department=${encodeURIComponent(newDepartment)}`;
 
           // Get or create LINE group to fetch group name
           const lineGroupData = await getOrCreateLineGroup(groupId, newDepartment);

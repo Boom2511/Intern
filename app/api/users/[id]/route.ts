@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, hashPassword, Permission, hasPermission } from '@/lib/auth';
+import { resolveBranchDepartment } from '@/lib/branch-organization';
+import { isTestDepartment } from '@/config/departments';
 
 // PATCH - Update user
 export async function PATCH(
@@ -91,21 +93,31 @@ export async function PATCH(
       updateData.branchId = branchId;
     }
     
-    // Handle department field
-    if (role === 'USER') {
-      // If changing to USER role, department is required
-      if (department === undefined && existingUser.role !== 'USER') {
+    // Keep USER department assignments aligned with the selected branch's Organization.
+    const targetRole = role ?? existingUser.role;
+    if (targetRole === 'USER') {
+      const targetDepartment = department === undefined ? existingUser.department : department;
+      const targetBranchId = branchId === undefined ? existingUser.branchId : branchId;
+      if (typeof targetDepartment !== 'string' || targetBranchId === null) {
         return NextResponse.json(
-          { error: 'Department is required for USER role' },
+          { error: 'Choose a department registered in the selected branch' },
           { status: 400 }
         );
       }
-      updateData.department = department;
-    } else if (role !== undefined && role !== 'USER') {
-      // If changing from USER to another role, clear department
+      const resolvedDepartment = await resolveBranchDepartment(targetBranchId, targetDepartment);
+      if (!resolvedDepartment) {
+        return NextResponse.json(
+          { error: 'Choose a department registered in the selected branch' },
+          { status: 400 }
+        );
+      }
+      if (isTestDepartment(resolvedDepartment) && currentUser.role !== 'ADMINISTRATOR') {
+        return NextResponse.json({ error: 'You may not assign users to the TEST department' }, { status: 403 });
+      }
+      updateData.department = resolvedDepartment;
+    } else if (role !== undefined) {
       updateData.department = null;
     } else if (department !== undefined) {
-      // Updating department while already USER role
       updateData.department = department;
     }
     

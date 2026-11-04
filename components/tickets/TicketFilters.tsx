@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DateRangePicker } from '@/components/ui/date-picker';
 import { Search, X, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { TICKET_STATUSES } from '@/lib/constants';
-import { getDepartmentOptions } from '@/config/departments';
 import { getIssueTypeOptions } from '@/config/issue-types';
+import { useUser } from '@/providers/UserProvider';
+import { useOrganizationDepartments } from '@/hooks/useOrganizationDepartments';
 
 interface TicketFiltersProps {
   hideDepartmentFilter?: boolean;
@@ -24,6 +25,7 @@ interface TicketFiltersProps {
 export default function TicketFilters({ hideDepartmentFilter = false }: TicketFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useUser();
   const [isExpanded, setIsExpanded] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -43,7 +45,9 @@ export default function TicketFilters({ hideDepartmentFilter = false }: TicketFi
   const [startDate, setStartDate] = useState(currentStartDate);
   const [endDate, setEndDate] = useState(currentEndDate);
 
-  const departmentOptions = getDepartmentOptions();
+  const { departments: departmentOptions, error: departmentOptionsError } = useOrganizationDepartments(
+    user ? (user.isSuperAdmin ? null : user.branchId) : undefined
+  );
   const issueTypeOptions = getIssueTypeOptions();
 
   const handleApplyFilters = () => {
@@ -194,6 +198,9 @@ export default function TicketFilters({ hideDepartmentFilter = false }: TicketFi
                       ))}
                     </SelectContent>
                   </Select>
+                  {departmentOptionsError && (
+                    <p className="mt-1 text-sm text-red-600">โหลดรายชื่อแผนกไม่สำเร็จ: {departmentOptionsError}</p>
+                  )}
                 </div>
               )}
 

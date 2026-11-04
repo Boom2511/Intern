@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, hashPassword, Permission, hasPermission } from '@/lib/auth';
+import { resolveBranchDepartment } from '@/lib/branch-organization';
+import { isTestDepartment } from '@/config/departments';
 
 // GET - List all users
 export async function GET() {
@@ -97,6 +99,19 @@ export async function POST(request: NextRequest) {
     if (!branch) {
       return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
     }
+    let userDepartment: string | null = null;
+    if (role === 'USER') {
+      if (typeof department !== 'string') {
+        return NextResponse.json({ error: 'Choose a department registered in the selected branch' }, { status: 400 });
+      }
+      userDepartment = await resolveBranchDepartment(targetBranchId, department);
+      if (!userDepartment) {
+        return NextResponse.json({ error: 'Choose a department registered in the selected branch' }, { status: 400 });
+      }
+      if (isTestDepartment(userDepartment) && currentUser.role !== 'ADMINISTRATOR') {
+        return NextResponse.json({ error: 'You may not assign users to the TEST department' }, { status: 403 });
+      }
+    }
 
     // Check if username already exists
     const existingUser = await prisma.user.findUnique({
@@ -120,7 +135,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name,
         role,
-        department: role === 'USER' ? department : null,
+        department: userDepartment,
         branchId: targetBranchId,
         isSuperAdmin: false,
       },

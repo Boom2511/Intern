@@ -1,31 +1,42 @@
-import { Department } from '@prisma/client';
-import { DEPARTMENTS } from '@/config/departments';
 import { prisma } from '@/lib/prisma';
 
-export async function getBranchDepartmentCodes(branchId: number): Promise<string[]> {
-  const [employeeDepartments, zoneDepartments] = await Promise.all([
-    prisma.employee.findMany({
-      where: { branchId, department: { not: null } },
-      select: { department: true },
-      distinct: ['department'],
-    }),
-    prisma.zone.findMany({
-      where: { branchId, department: { not: null } },
-      select: { department: true },
-      distinct: ['department'],
-    }),
-  ]);
+const legacyDepartmentKeys: Record<string, string> = {
+  DB1: 'DB1',
+  DB2: 'DB2',
+  DB3: 'DB3',
+  DB4: 'DB4',
+  DB5: 'DB5',
+  'นำจ่ายรถยนต์': 'DB5',
+  DB6: 'DB6',
+  'บป': 'DB6',
+  TEST: 'TEST',
+  'ทดสอบ': 'TEST',
+};
 
-  const validDepartments = new Set<string>(Object.values(Department));
-  const departmentCodeByLabel = new Map(
-    Object.entries(DEPARTMENTS).map(([code, config]) => [config.label, code]),
-  );
-  const codes = new Set<string>();
-  for (const record of [...employeeDepartments, ...zoneDepartments]) {
-    if (record.department) {
-      const code = departmentCodeByLabel.get(record.department) || record.department;
-      if (validDepartments.has(code)) codes.add(code);
-    }
-  }
-  return Array.from(codes).sort();
+function departmentKey(department: string): string {
+  const normalized = department.trim().toLocaleUpperCase();
+  return legacyDepartmentKeys[normalized] || legacyDepartmentKeys[department.trim()] || normalized;
+}
+
+export function departmentsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  return Boolean(left && right && departmentKey(left) === departmentKey(right));
+}
+
+export async function getBranchDepartments(branchId: number): Promise<string[]> {
+  const departments = await prisma.organizationDepartment.findMany({
+    where: { branchId },
+    select: { name: true },
+    orderBy: { name: 'asc' },
+  });
+  return departments.map(({ name }) => name);
+}
+
+export async function resolveBranchDepartment(
+  branchId: number,
+  department: string,
+): Promise<string | null> {
+  const departments = await getBranchDepartments(branchId);
+  return departments.find((name) => name.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase()) ||
+    departments.find((name) => departmentKey(name) === departmentKey(department)) ||
+    null;
 }

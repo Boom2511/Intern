@@ -54,7 +54,7 @@ function formatShortDate(date: Date): string {
 
 /**
  * Generate LIFF URL for any path
- * @param path - The target path (e.g., "/liff/queue?department=DB1")
+ * @param path - The target path (e.g., "/liff/queue?department=Organization%20name")
  */
 export function getLiffUrl(path: string): string {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;

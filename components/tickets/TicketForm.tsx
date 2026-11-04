@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getIssueTypeOptions } from '@/config/issue-types';
-import { DEPARTMENTS, getDepartmentLabel } from '@/config/departments';
+import { isTestDepartment } from '@/config/departments';
 import { CircleAlert, AlertTriangle, Tag } from 'lucide-react';
 import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
@@ -87,24 +87,22 @@ interface OrganizationZoneOption {
   employees?: ZoneEmployeeInfo['employees'];
 }
 
-const getDepartmentCode = (deptLabel: string | null | undefined): string | null => {
-  if (!deptLabel) return null;
-  for (const [code, config] of Object.entries(DEPARTMENTS)) {
-    if (config.label === deptLabel) return code;
-  }
-  return deptLabel;
-};
-
 /** Resolve the department shown for a Zone, preferring the Zone's own department. */
 const resolveZoneDepartment = (
-  zone: { department?: string | null; employees?: Array<{ department: string | null }> },
+  zone: { department?: string | null },
 ): string | null => {
   if (zone.department) return zone.department;
-  if (zone.employees && zone.employees.length > 0) {
-    return zone.employees[0].department ?? null;
-  }
   return null;
 };
+
+function findDepartmentOption(
+  department: string | null | undefined,
+  options: Array<{ value: string; label: string }>,
+) {
+  return department
+    ? options.find((option) => option.value.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase())?.value
+    : undefined;
+}
 
 /** Convert a Zone returned by `/api/organization/ticket-options` into a select option. */
 const toZoneOption = (zone: {
@@ -209,7 +207,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         setOrganizationDepartments(
           currentUser.role === 'ADMINISTRATOR'
             ? departments
-            : departments.filter((option) => option.value !== 'TEST'),
+            : departments.filter((option) => !isTestDepartment(option.value)),
         );
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -290,7 +288,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       setLoadingZoneSearch(true);
       try {
         const params = new URLSearchParams({ branchId: String(branchId), zoneSearch: search });
-        params.set('includeEmployees', 'true');
         if (formData.department) params.set('department', formData.department);
         const response = await fetch(`/api/organization/ticket-options?${params}`, { signal: controller.signal });
         const data = await response.json();
@@ -304,7 +301,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       } finally {
         if (!controller.signal.aborted) setLoadingZoneSearch(false);
       }
-    }, 300);
+    }, 200);
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -315,7 +312,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   useEffect(() => {
     const zoneIdInput = formData.zoneId?.trim();
     const branchId = currentUser?.isSuperAdmin ? formData.branchId : currentUser?.branchId;
-    if (!zoneIdInput || zoneIdInput.length < 3 || !branchId) {
+    if (!zoneIdInput || zoneIdInput.length < 3 || !branchId || selectedZoneId !== zoneIdInput) {
       setZoneEmployees(null);
       setLoadingZone(false);
       setZoneDetailsError('');
@@ -345,9 +342,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
           };
           setZoneEmployees(zoneData);
           if (zoneData.department) {
-            const deptCode = getDepartmentCode(zoneData.department);
-            if (organizationDepartments.some((option) => option.value === deptCode)) {
-              setFormData((previous) => ({ ...previous, department: deptCode || undefined }));
+            const department = findDepartmentOption(zoneData.department, organizationDepartments);
+            if (department) {
+              setFormData((previous) => ({ ...previous, department }));
             }
           }
         } else {
@@ -363,13 +360,12 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       }
     };
 
-    // Debounce the API call
-    const timer = setTimeout(loadZoneEmployees, 500);
+    const timer = setTimeout(loadZoneEmployees, 150);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [currentUser, formData.branchId, formData.zoneId, organizationDepartments]);
+  }, [currentUser, formData.branchId, formData.zoneId, organizationDepartments, selectedZoneId]);
 
   const departmentOptions = organizationDepartments;
 
@@ -889,11 +885,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       onClick={() => {
                         const chosenZoneId = zone.zoneId;
                         const chosenDept = resolveZoneDepartment(zone);
-                        const deptCode = chosenDept ? getDepartmentCode(chosenDept) : null;
-                        const dept =
-                          deptCode && organizationDepartments.some((o) => o.value === deptCode)
-                            ? deptCode
-                            : chosenDept;
+                        const department = findDepartmentOption(chosenDept, organizationDepartments);
 
                         setSelectedZoneId(chosenZoneId);
                         setZoneSuggestions([]);
@@ -902,7 +894,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                         setFormData((current) => ({
                           ...current,
                           zoneId: chosenZoneId,
-                          department: dept !== null ? dept : undefined,
+                          department: department ?? current.department,
                         }));
                       }}
                     >
@@ -1096,14 +1088,8 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       const selectedZoneOption = departmentZoneOptions.find((z) => z.zoneId === zoneId);
                       if (selectedZoneOption) {
                         const chosenDept = resolveZoneDepartment(selectedZoneOption);
-                        const deptCode = chosenDept ? getDepartmentCode(chosenDept) : null;
-                        if (deptCode && organizationDepartments.some((o) => o.value === deptCode)) {
-                          setFormData((current) => ({ ...current, department: deptCode, zoneId }));
-                        } else if (chosenDept) {
-                          setFormData((current) => ({ ...current, department: chosenDept, zoneId }));
-                        } else {
-                          setFormData((current) => ({ ...current, zoneId }));
-                        }
+                        const department = findDepartmentOption(chosenDept, organizationDepartments);
+                        setFormData((current) => ({ ...current, department: department ?? current.department, zoneId }));
                       } else {
                         setFormData((current) => ({ ...current, zoneId }));
                       }

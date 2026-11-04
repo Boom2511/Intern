@@ -51,7 +51,7 @@ export default function LiffTicketDetailPage() {
       // No history - opened directly from Carousel
       // Try to get department from ticket data to navigate to correct queue
       if (ticket?.department) {
-        router.push(`/liff/queue?department=${ticket.department}`);
+        router.push(`/liff/queue?department=${encodeURIComponent(ticket.department)}`);
       } else {
         // Fallback to generic queue page
         router.push('/liff/queue');

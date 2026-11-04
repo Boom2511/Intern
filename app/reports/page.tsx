@@ -16,11 +16,9 @@ import { displayThaiPhone } from '@/lib/utils';
 
 // --- Types & Constants ---
 type ReportType = 'daily' | 'monthly';
-type Department = 'ALL' | 'DB1' | 'DB2' | 'DB3' | 'DB4' | 'DB5' | 'DB6';
-
-const DEPT_LABELS: Record<Department, string> = {
-  ALL: 'ทั้งหมด', DB1: 'DB1', DB2: 'DB2', DB3: 'DB3', DB4: 'DB4', DB5: 'นำจ่ายรถยนต์', DB6: 'บริการประชาชน',
-};
+interface OrganizationOptionsResponse {
+  departments: Array<{ value: string; label: string }>;
+}
 
 // --- Sub-Component: Report Table ---
 const ReportTable = ({ data, showSalesforceId = true }: { data: any[], showSalesforceId?: boolean }) => {
@@ -77,11 +75,27 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [monthYear, setMonthYear] = useState(format(new Date(), 'yyyy-MM'));
-  const [lineGroupDepartment, setLineGroupDepartment] = useState<Department>('DB1');
+  const [lineGroupDepartment, setLineGroupDepartment] = useState('');
   
   const [status, setStatus] = useState({ generating: false, sending: false });
   const [dialogs, setDialogs] = useState({ send: false, preview: false });
   const [activeTab, setActiveTab] = useState<'CEC' | 'SALESFORCE'>('CEC');
+  const { data: organizationOptions, error: organizationOptionsError } = useSWR<OrganizationOptionsResponse>(
+    '/api/organization/ticket-options',
+    async (url: string) => {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'ไม่สามารถโหลดข้อมูลแผนกได้');
+      return data;
+    }
+  );
+  const departments = useMemo(() => organizationOptions?.departments ?? [], [organizationOptions?.departments]);
+
+  useEffect(() => {
+    if (departments.length > 0 && !departments.some(({ value }) => value === lineGroupDepartment)) {
+      setLineGroupDepartment(departments[0].value);
+    }
+  }, [departments, lineGroupDepartment]);
 
   // Auto-calculate dates for monthly report
   useEffect(() => {
@@ -269,18 +283,24 @@ export default function ReportsPage() {
                 <div className="py-4 space-y-4">
                   <div className="space-y-2">
                     <Label>กลุ่ม LINE แผนก</Label>
-                    <Select value={lineGroupDepartment} onValueChange={(v: Department) => setLineGroupDepartment(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select value={lineGroupDepartment} onValueChange={setLineGroupDepartment}>
+                      <SelectTrigger><SelectValue placeholder="เลือกแผนก" /></SelectTrigger>
                       <SelectContent>
-                        {Object.entries(DEPT_LABELS).filter(([k]) => k !== 'ALL').map(([val, label]) => (
-                          <SelectItem key={val} value={val}>{label}</SelectItem>
+                        {departments.map(({ value, label }) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {organizationOptionsError && (
+                      <p className="text-sm text-red-600">โหลดรายชื่อแผนกไม่สำเร็จ: {organizationOptionsError.message}</p>
+                    )}
+                    {!organizationOptionsError && departments.length === 0 && (
+                      <p className="text-sm text-gray-500">ไม่พบแผนกใน Organization</p>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={() => handleAction('send')} disabled={status.sending} className="w-full">
+                  <Button onClick={() => handleAction('send')} disabled={status.sending || !lineGroupDepartment} className="w-full">
                     ยืนยันส่งข้อมูล ({preview.count} รายการ)
                   </Button>
                 </DialogFooter>

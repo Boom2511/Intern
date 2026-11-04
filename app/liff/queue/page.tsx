@@ -358,7 +358,7 @@ function WorkQueueContent() {
   const [isRefetching, setIsRefetching] = useState(false);
 
   const apiUrl = department
-    ? `/api/tickets/queue?department=${department}&groupBy=zone`
+    ? `/api/tickets/queue?department=${encodeURIComponent(department)}&groupBy=zone`
     : null;
 
   const { data, error, isLoading, mutate } = useSWR<QueueResponse>(

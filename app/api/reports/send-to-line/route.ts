@@ -10,10 +10,11 @@ import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { lineService } from '@/lib/line';
-import { getDepartmentLineGroup } from '@/config/departments';
 import { displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
+import { getLineGroupForDepartment } from '@/lib/line-groups';
+import { getReportZoneInfo } from '@/lib/report-zone-employees';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Vercel function timeout
@@ -122,43 +123,8 @@ export async function POST(request: NextRequest) {
     ];
 
     // Build zone map similar to generate endpoint
-    const zoneIds = Array.from(new Set(tickets.map(t => t.zoneId).filter(Boolean))) as string[];
-    const zones = zoneIds.length > 0 ? await prisma.zone.findMany({
-      where: {
-        zoneId: { in: zoneIds },
-        ...(user.isSuperAdmin ? {} : { branchId: user.branchId ?? -1 }),
-      },
-      include: {
-        employees: {
-          include: {
-            employee: { include: { manager: true } },
-            chiefOfficer: { include: { manager: { include: { manager: true } } } },
-          },
-        },
-      },
-    }) : [];
-    const zoneMap = new Map<string, { chief?: string; dbHead?: string }>();
-    const findDbHeadViaManagers = (start: any): any | null => {
-      let current = start?.manager || null;
-      const visited = new Set<number>();
-      while (current && !visited.has(current.id)) {
-        visited.add(current.id);
-        if (current.role === 'DB_HEAD') return current;
-        current = current.manager || null;
-      }
-      return null;
-    };
-    for (const z of zones) {
-      const chiefFromMapping = z.employees.find((ze: any) => ze.chiefOfficer)?.chiefOfficer || null;
-      const chiefEmp = chiefFromMapping || z.employees.find(e => e.employee.role === 'CHIEF')?.employee || null;
-      const chief = chiefEmp?.name;
-      let dbHead = z.employees.find(e => e.employee.role === 'DB_HEAD')?.employee?.name || null;
-      if (!dbHead && chiefEmp) {
-        const resolved = findDbHeadViaManagers(chiefEmp as any);
-        if (resolved) dbHead = resolved.name;
-      }
-      zoneMap.set(z.zoneId, { chief: chief || undefined, dbHead: dbHead || undefined });
-    }
+    const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
+    const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
 
     tickets.forEach((ticket, index) => {
       const zoneInfo = ticket.zoneId ? zoneMap.get(ticket.zoneId) : undefined;
@@ -233,7 +199,10 @@ export async function POST(request: NextRequest) {
     // Determine LINE group - prioritize lineGroupId, then explicit lineGroupDepartment
     let targetGroupId = lineGroupId;
     if (!targetGroupId && lineGroupDepartment) {
-      targetGroupId = getDepartmentLineGroup(lineGroupDepartment as any);
+      targetGroupId = await getLineGroupForDepartment(
+        lineGroupDepartment,
+        user.isSuperAdmin ? undefined : user.branchId ?? undefined
+      );
     }
 
     if (!targetGroupId) {

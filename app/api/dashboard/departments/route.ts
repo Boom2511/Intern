@@ -10,8 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Department } from '@prisma/client';
-import { getDepartmentLabel } from '@/config/departments';
+import { getDepartmentLabel, isTestDepartment } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
 
@@ -30,7 +29,11 @@ export async function GET(request: Request) {
 
     const excludedDepartments = (process.env.EXCLUDED_DEPARTMENTS || 'TEST')
       .split(',')
-      .map(d => d.trim()) as Department[];
+      .map((department) => department.trim());
+    const shouldExclude = (department: string | null) => Boolean(department && (
+      excludedDepartments.some((excluded) => excluded.toLocaleLowerCase() === department.toLocaleLowerCase()) ||
+      (excludedDepartments.some(isTestDepartment) && isTestDepartment(department))
+    ));
 
     // Calculate date cutoff based on range
     const now = Date.now();
@@ -56,7 +59,6 @@ export async function GET(request: Request) {
       ...branchScope,
       department: {
         not: null,
-        notIn: excludedDepartments,
       },
     };
 
@@ -83,16 +85,16 @@ export async function GET(request: Request) {
     // Format department counts for pie chart
     const departments = departmentCounts.map((dept) => ({
       department: dept.department || 'Unknown',
-      label: getDepartmentLabel(dept.department as any),
+      label: getDepartmentLabel(dept.department),
       count: dept._count,
-    }));
+    })).filter((department) => !shouldExclude(department.department));
 
     // Format status breakdown
     const statusBreakdown = departmentStatusData.map((stat) => ({
       department: stat.department || 'Unknown',
       status: stat.status,
       count: stat._count,
-    }));
+    })).filter((stat) => !shouldExclude(stat.department));
 
     // Format stacked bar chart data (status by department)
     interface DeptStatusCount {
@@ -109,10 +111,11 @@ export async function GET(request: Request) {
 
     departmentStatusData.forEach((stat) => {
       const dept = stat.department || 'Unknown';
+      if (shouldExclude(dept)) return;
       if (!departmentStatusMap[dept]) {
         departmentStatusMap[dept] = {
           department: dept,
-          label: getDepartmentLabel(dept as any),
+          label: getDepartmentLabel(dept),
           NEW: 0,
           PENDING: 0,
           IN_PROGRESS: 0,

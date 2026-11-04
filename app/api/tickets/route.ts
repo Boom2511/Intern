@@ -7,7 +7,6 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Department } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { normalizePhoneToE164 } from '@/lib/validations';
 import { generateTicketNumber } from '@/lib/utils';
@@ -15,11 +14,11 @@ import { calculateSLADeadline, calculateSLAStatus } from '@/lib/sla';
 import { getSLAHours, getSLAPriority } from '@/config/issue-types';
 import { lineService } from '@/lib/line';
 import { createDepartmentWorkSnapshotMessage, getLiffUrl } from '@/lib/line-templates';
-import { getDepartmentLineGroup, getDepartmentLabel } from '@/config/departments';
+import { getDepartmentLabel, isTestDepartment } from '@/config/departments';
 import { getCurrentUser } from '@/lib/auth';
-import { getOrCreateLineGroup } from '@/lib/line-groups';
+import { getLineGroupForDepartment, getOrCreateLineGroup } from '@/lib/line-groups';
 import { getTicketBranchScope } from '@/lib/branch-access';
-import { getBranchDepartmentCodes } from '@/lib/branch-organization';
+import { departmentsMatch, resolveBranchDepartment } from '@/lib/branch-organization';
 import { synchronizeZoneHierarchy } from '@/lib/zone-hierarchy';
 
 /**
@@ -227,23 +226,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Zone does not belong to the selected branch' }, { status: 400 });
     }
 
+    let ticketDepartment: string | null = null;
     if (department !== undefined && department !== null && department !== '') {
-      if (typeof department !== 'string' || !(await getBranchDepartmentCodes(branchId)).includes(department)) {
+      if (typeof department !== 'string') {
         return NextResponse.json(
           { success: false, error: 'Choose a department registered in the selected branch' },
           { status: 400 }
         );
       }
-      if (department === 'TEST' && currentUser.role !== 'ADMINISTRATOR') {
+      ticketDepartment = await resolveBranchDepartment(branchId, department);
+      if (!ticketDepartment) {
+        return NextResponse.json(
+          { success: false, error: 'Choose a department registered in the selected branch' },
+          { status: 400 }
+        );
+      }
+      if (isTestDepartment(ticketDepartment) && currentUser.role !== 'ADMINISTRATOR') {
         return NextResponse.json({ success: false, error: 'You may not assign tickets to the TEST department' }, { status: 403 });
       }
     }
-    if (selectedZone?.department && department) {
-      const selectedZoneDepartment = selectedZone.department;
-      const departmentLabel = Object.values(Department).includes(department as Department)
-        ? getDepartmentLabel(department as Department)
-        : department;
-      if (selectedZoneDepartment !== department && selectedZoneDepartment !== departmentLabel) {
+    if (selectedZone?.department && ticketDepartment) {
+      if (!departmentsMatch(selectedZone.department, ticketDepartment)) {
         return NextResponse.json({ success: false, error: 'The selected Zone ID does not belong to the selected department' }, { status: 400 });
       }
     }
@@ -447,7 +450,7 @@ export async function POST(request: NextRequest) {
               channel: salesforceId ? 'SALESFORCE' : channel,
               issueType,
               issueTypeOther: issueType === 'OTHER' ? issueTypeOther : null,
-              department: department || null,
+              department: ticketDepartment,
               trackingNo: trackingNo || null,
               zoneId: normalizedZoneId || null,
               // Store recipient info as snapshot at ticket creation time
@@ -520,7 +523,7 @@ export async function POST(request: NextRequest) {
     let notificationError: string | null = null;
 
     // If no department specified, add a note
-    if (!department) {
+    if (!ticketDepartment) {
       await prisma.note.create({
         data: {
           ticketId: ticket.id,
@@ -531,22 +534,22 @@ export async function POST(request: NextRequest) {
     } else {
       // Send LINE notification when ticket is created with department
       console.log('=== NEW TICKET WITH DEPARTMENT - Debug ===');
-      console.log('Department:', department);
+      console.log('Department:', ticketDepartment);
       console.log('LINE configured:', lineService.isConfigured());
 
       if (lineService.isConfigured()) {
-        const groupId = getDepartmentLineGroup(department);
+        const groupId = await getLineGroupForDepartment(ticketDepartment, branchId);
         console.log('Group ID:', groupId);
 
         if (groupId) {
           // Get department label
-          const deptLabel = getDepartmentLabel(department);
+          const deptLabel = getDepartmentLabel(ticketDepartment);
           console.log('Department label:', deptLabel);
 
           // Fetch all pending tickets for this department to create work snapshot
           const pendingTickets = await prisma.ticket.findMany({
             where: {
-              department,
+              department: ticketDepartment,
               status: {
                 notIn: ['RESOLVED', 'CLOSED'],
               },
@@ -563,12 +566,12 @@ export async function POST(request: NextRequest) {
           });
 
           // Build LIFF queue URL
-          const queueUrl = getLiffUrl(`/liff/queue?department=${department}`);
+          const queueUrl = getLiffUrl(`/liff/queue?department=${encodeURIComponent(ticketDepartment)}`);
 
           // Get or create LINE group to fetch group name
           let groupName: string | undefined;
           try {
-            const lineGroupData = await getOrCreateLineGroup(groupId, department);
+            const lineGroupData = await getOrCreateLineGroup(groupId, ticketDepartment);
             groupName = lineGroupData?.groupName;
           } catch (err) {
             console.error('⚠️ Failed to get LINE group name, continuing without it:', err);
@@ -578,7 +581,7 @@ export async function POST(request: NextRequest) {
           // Create and send Department Work Snapshot
           const flexMessage = await createDepartmentWorkSnapshotMessage({
             tickets: pendingTickets,
-            department,
+            department: ticketDepartment,
             departmentLabel: deptLabel,
             queueUrl,
             groupName,
