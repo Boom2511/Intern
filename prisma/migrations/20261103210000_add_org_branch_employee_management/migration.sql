@@ -1,4 +1,4 @@
-﻿-- Idempotent migration: old_schema.prisma -> prisma/schema.prisma
+-- Idempotent migration: old_schema.prisma -> prisma/schema.prisma
 -- Adds employee/org/branch management structures without dropping existing data.
 BEGIN;
 

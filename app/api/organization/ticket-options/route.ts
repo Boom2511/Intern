@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     if (!branch) return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
 
     const search = request.nextUrl.searchParams.get('zoneSearch')?.trim();
+    const includeEmployees = request.nextUrl.searchParams.get('includeEmployees') === 'true';
     const requestedDepartment = request.nextUrl.searchParams.get('department')?.trim();
     const departmentLabel = requestedDepartment && Object.values(Department).includes(requestedDepartment as Department)
       ? getDepartmentLabel(requestedDepartment as Department)
@@ -60,13 +61,20 @@ export async function GET(request: NextRequest) {
         OR: [
           { isMapped: true },
           { employees: { some: { employee: { branchId } } } },
+          { managedEmployees: { some: { branchId } } },
         ],
       },
       ...(requestedDepartment && departmentLabel
-        ? [{ department: { in: [requestedDepartment, departmentLabel] } }]
+        ? [{
+            OR: [
+              { department: { in: [requestedDepartment, departmentLabel] } },
+              { employees: { some: { employee: { branchId, department: { in: [requestedDepartment, departmentLabel] } } } } },
+              { managedEmployees: { some: { branchId, department: { in: [requestedDepartment, departmentLabel] } } } },
+            ],
+          }]
         : []),
       ...(search && search.length >= 2
-        ? [{ zoneId: { contains: search, mode: 'insensitive' as const } }]
+        ? [{ OR: [{ zoneId: { contains: search, mode: 'insensitive' as const } }, { zoneName: { contains: search, mode: 'insensitive' as const } }] }]
         : []),
     ];
     const zones = (requestedDepartment || (search && search.length >= 2))
@@ -82,6 +90,25 @@ export async function GET(request: NextRequest) {
               select: { employee: { select: { department: true } } },
               take: 1,
             },
+            ...(includeEmployees
+              ? {
+                  managedEmployees: {
+                    where: { branchId },
+                    select: {
+                      id: true,
+                      employeeId: true,
+                      name: true,
+                      role: true,
+                      department: true,
+                      manager: {
+                        select: { employeeId: true, name: true, role: true },
+                      },
+                    },
+                    orderBy: [{ role: 'asc' as const }, { name: 'asc' as const }],
+                    take: 50,
+                  },
+                }
+              : {}),
           },
           orderBy: { zoneId: 'asc' },
           take: requestedDepartment ? 200 : 15,
@@ -98,7 +125,8 @@ export async function GET(request: NextRequest) {
         id: zone.id,
         zoneId: zone.zoneId,
         zoneName: zone.zoneName,
-        department: zone.department ?? zone.employees[0]?.employee.department ?? null,
+        department: zone.department ?? zone.managedEmployees?.[0]?.department ?? zone.employees[0]?.employee.department ?? null,
+        ...(includeEmployees ? { employees: zone.managedEmployees } : {}),
       })),
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
