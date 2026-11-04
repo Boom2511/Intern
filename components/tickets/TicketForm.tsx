@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getIssueTypeOptions } from '@/config/issue-types';
 import { isTestDepartment } from '@/config/departments';
-import { CircleAlert, AlertTriangle, Tag } from 'lucide-react';
+import { AlertTriangle, Tag } from 'lucide-react';
 import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 import { normalizePhoneToE164 } from '@/lib/validations';
@@ -62,21 +62,29 @@ interface ExistingTicket {
   createdAt: string;
 }
 
+interface ZoneEmployeeRecord {
+  id: number;
+  name: string;
+  employeeId: string;
+  role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
+  department: string | null;
+  manager: {
+    name: string;
+    employeeId: string;
+    role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
+  } | null;
+}
+
 interface ZoneEmployeeInfo {
   zoneName: string | null;
   department: string | null;
-  employees: Array<{
-    id: number;
-    name: string;
-    employeeId: string;
-    role: "STAFF" | "CHIEF" | "DB_HEAD";
+  parentZones: Array<{
+    zoneId: string;
+    zoneName: string | null;
     department: string | null;
-    manager: {
-      name: string;
-      employeeId: string;
-      role: "STAFF" | "CHIEF" | "DB_HEAD";
-    } | null;
+    employees: ZoneEmployeeRecord[];
   }>;
+  employees: ZoneEmployeeRecord[];
 }
 
 interface OrganizationZoneOption {
@@ -85,23 +93,6 @@ interface OrganizationZoneOption {
   zoneName: string | null;
   department: string | null;
   employees?: ZoneEmployeeInfo['employees'];
-}
-
-/** Resolve the department shown for a Zone, preferring the Zone's own department. */
-const resolveZoneDepartment = (
-  zone: { department?: string | null },
-): string | null => {
-  if (zone.department) return zone.department;
-  return null;
-};
-
-function findDepartmentOption(
-  department: string | null | undefined,
-  options: Array<{ value: string; label: string }>,
-) {
-  return department
-    ? options.find((option) => option.value.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase())?.value
-    : undefined;
 }
 
 /** Convert a Zone returned by `/api/organization/ticket-options` into a select option. */
@@ -119,6 +110,15 @@ const toZoneOption = (zone: {
   employees: zone.employees,
 });
 
+function getEmployeesForDepartment(zone: ZoneEmployeeInfo, department: string | undefined) {
+  if (!department) return [];
+  const departmentKey = department.trim().toLocaleLowerCase();
+  return [
+    ...zone.employees,
+    ...zone.parentZones.flatMap((parent) => parent.employees),
+  ].filter((employee) => employee.department?.trim().toLocaleLowerCase() === departmentKey);
+}
+
 export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -132,8 +132,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   const [currentUser, setCurrentUser] = useState<{ role: string; branchId: number | null; isSuperAdmin: boolean } | null>(null);
   const [branches, setBranches] = useState<Array<{ id: number; name: string; code: string | null }>>([]);
   const [organizationDepartments, setOrganizationDepartments] = useState<Array<{ value: string; label: string }>>([]);
-  const [departmentZoneOptions, setDepartmentZoneOptions] = useState<OrganizationZoneOption[]>([]);
-  const [departmentZoneError, setDepartmentZoneError] = useState('');
   const [zoneSuggestions, setZoneSuggestions] = useState<OrganizationZoneOption[]>([]);
   const [organizationOptionsError, setOrganizationOptionsError] = useState('');
   const [zoneSearchError, setZoneSearchError] = useState('');
@@ -220,59 +218,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
   }, [currentUser, formData.branchId]);
 
   useEffect(() => {
-    const branchId = currentUser?.isSuperAdmin ? formData.branchId : currentUser?.branchId;
-    // When branch or department changes, reset the zone flow because department
-    // should be derived from the selected zone.
-    const resetZoneFlow = () => {
-      setSelectedZoneId(null);
-      setZoneEmployees(null);
-      setZoneSuggestions([]);
-      setZoneSearchError('');
-      setDepartmentZoneOptions([]);
-      setDepartmentZoneError('');
-      setFormData((current) => ({ ...current, department: undefined, zoneId: undefined }));
-    };
-
-    if (!branchId) {
-      resetZoneFlow();
-      return;
-    }
-
-    if (!formData.department) {
-      resetZoneFlow();
-      return;
-    }
-
-    const controller = new AbortController();
-    const loadDepartmentZones = async () => {
-      setDepartmentZoneError('');
-      try {
-        const params = new URLSearchParams({
-          branchId: String(branchId),
-          department: formData.department!,
-        });
-        const response = await fetch(`/api/organization/ticket-options?${params}`, {
-          signal: controller.signal,
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Unable to load department Zones');
-        if (Array.isArray(data.zones)) {
-          setDepartmentZoneOptions(data.zones.map(toZoneOption));
-        } else {
-          setDepartmentZoneOptions([]);
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        console.error('Failed to load Zones for department:', error);
-        setDepartmentZoneOptions([]);
-        setDepartmentZoneError('ไม่สามารถโหลด Zone ของแผนกนี้ได้');
-      }
-    };
-    void loadDepartmentZones();
-    return () => controller.abort();
-  }, [currentUser, formData.branchId, formData.department]);
-
-  useEffect(() => {
     const search = formData.zoneId?.trim();
     const branchId = currentUser?.isSuperAdmin ? formData.branchId : currentUser?.branchId;
     if (!search || search.length < 2 || !branchId || selectedZoneId === search) {
@@ -287,8 +232,11 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       setZoneSearchError('');
       setLoadingZoneSearch(true);
       try {
-        const params = new URLSearchParams({ branchId: String(branchId), zoneSearch: search });
-        if (formData.department) params.set('department', formData.department);
+        const params = new URLSearchParams({
+          branchId: String(branchId),
+          zoneSearch: search,
+          includeEmployees: 'true',
+        });
         const response = await fetch(`/api/organization/ticket-options?${params}`, { signal: controller.signal });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to search organization zones');
@@ -306,7 +254,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [currentUser, formData.branchId, formData.department, formData.zoneId, selectedZoneId]);
+  }, [currentUser, formData.branchId, formData.zoneId, selectedZoneId]);
 
   // Load employees when Zone ID is entered
   useEffect(() => {
@@ -339,12 +287,31 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
             zoneName: zone.zoneName ?? null,
             department: zone.department ?? null,
             employees: zone.employees ?? [],
+            parentZones: zone.parentZones ?? [],
           };
           setZoneEmployees(zoneData);
-          if (zoneData.department) {
-            const department = findDepartmentOption(zoneData.department, organizationDepartments);
-            if (department) {
-              setFormData((previous) => ({ ...previous, department }));
+
+          if (zoneData.employees.length > 0 || zoneData.parentZones.some((parent) => parent.employees.length > 0)) {
+            const rolePriority: Record<ZoneEmployeeRecord['role'], number> = {
+              DB_HEAD: 0,
+              CHIEF: 1,
+              STAFF: 2,
+            };
+            const assignedDepartment = [
+              ...zoneData.employees,
+              ...zoneData.parentZones.flatMap((parent) => parent.employees),
+            ]
+              .filter((employee) => employee.department)
+              .sort((left, right) => rolePriority[left.role] - rolePriority[right.role])
+              .map((employee) => employee.department!)
+              .find((department) => organizationDepartments.some(
+                (option) => option.value.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase(),
+              )) ?? zoneData.department;
+            const departmentOption = organizationDepartments.find(
+              (option) => option.value.trim().toLocaleLowerCase() === assignedDepartment?.trim().toLocaleLowerCase(),
+            );
+            if (departmentOption) {
+              setFormData((current) => ({ ...current, department: departmentOption.value }));
             }
           }
         } else {
@@ -884,9 +851,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
                         const chosenZoneId = zone.zoneId;
-                        const chosenDept = resolveZoneDepartment(zone);
-                        const department = findDepartmentOption(chosenDept, organizationDepartments);
-
                         setSelectedZoneId(chosenZoneId);
                         setZoneSuggestions([]);
                         setZoneEmployees(null);
@@ -894,7 +858,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                         setFormData((current) => ({
                           ...current,
                           zoneId: chosenZoneId,
-                          department: department ?? current.department,
                         }));
                       }}
                     >
@@ -940,11 +903,19 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               {!loadingZone && zoneEmployees && (
                 <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
                   <div className="flex items-center justify-between px-1">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">ข้อมูลพนักงานประจำ Zone</p>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">ผู้รับผิดชอบตาม Zone ID</p>
                     <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
                       {zoneEmployees.employees.length} คน
                     </span>
                   </div>
+                  {formData.department && getEmployeesForDepartment(zoneEmployees, formData.department).length > 0 && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                      แผนกที่รับผิดชอบ: <strong>{formData.department}</strong>
+                      <span className="ml-1">
+                        · {getEmployeesForDepartment(zoneEmployees, formData.department).map((employee) => employee.name).join(', ')}
+                      </span>
+                    </div>
+                  )}
                   {zoneEmployees.employees.length ? (
                     <div className="divide-y rounded-xl border bg-white">
                       {zoneEmployees.employees.map((employee) => (
@@ -972,6 +943,30 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                     <p className="rounded-xl border bg-white px-4 py-3 text-sm text-gray-500">
                       ยังไม่มีพนักงานกำหนด Zone นี้ในข้อมูลพนักงานปัจจุบัน
                     </p>
+                  )}
+                  {zoneEmployees.parentZones.length > 0 && (
+                    <div className="rounded-xl border bg-white p-3">
+                      <p className="mb-2 text-xs font-semibold text-gray-600">Parent Zone และผู้รับผิดชอบ</p>
+                      <ol className="space-y-2">
+                        {zoneEmployees.parentZones.map((parent) => (
+                          <li key={parent.zoneId} className="border-l-2 border-blue-200 pl-3">
+                            <p className="text-sm font-medium text-gray-800">
+                              {parent.zoneId}{parent.zoneName ? ` · ${parent.zoneName}` : ''}
+                              {parent.department ? ` · ${parent.department}` : ''}
+                            </p>
+                            {parent.employees.length > 0 ? (
+                              <p className="text-xs text-gray-600">
+                                {parent.employees.map((employee) =>
+                                  `${employee.name} (${employee.role === 'DB_HEAD' ? 'หัวหน้าแผนก' : employee.role === 'CHIEF' ? 'หัวหน้าโซน' : 'พนักงาน'})`
+                                ).join(', ')}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-400">ไม่พบพนักงานสังกัด Parent Zone นี้</p>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                   )}
                 </div>
               )}
@@ -1048,14 +1043,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 value={formData.department || 'none'}
                 onValueChange={(value) => {
                   const department = value === 'none' ? undefined : value;
-                  setSelectedZoneId(null);
-                  setZoneSuggestions([]);
-                  setZoneEmployees(null);
-                  setFormData((current) => ({
-                    ...current,
-                    department,
-                    zoneId: undefined,
-                  }));
+                  setFormData((current) => ({ ...current, department }));
                 }}
               >
                 <SelectTrigger>
@@ -1074,49 +1062,9 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 <p className="mt-1 text-xs text-gray-500">ไม่พบแผนกที่ลงทะเบียนในโครงสร้างองค์กรของสาขานี้</p>
               )}
               {organizationOptionsError && <p className="mt-1 text-xs text-red-600" role="alert">{organizationOptionsError}</p>}
-              {formData.department && (
-                <div className="mt-3">
-                  <label htmlFor="department-zone-id" className="block text-sm font-medium text-gray-700 mb-1">
-                    Zone ID ในแผนกนี้
-                  </label>
-                  <Select
-                    value={formData.zoneId || 'none'}
-                    onValueChange={(value) => {
-                      const zoneId = value === 'none' ? undefined : value;
-                      setSelectedZoneId(zoneId ?? null);
-                      setZoneSuggestions([]);
-                      const selectedZoneOption = departmentZoneOptions.find((z) => z.zoneId === zoneId);
-                      if (selectedZoneOption) {
-                        const chosenDept = resolveZoneDepartment(selectedZoneOption);
-                        const department = findDepartmentOption(chosenDept, organizationDepartments);
-                        setFormData((current) => ({ ...current, department: department ?? current.department, zoneId }));
-                      } else {
-                        setFormData((current) => ({ ...current, zoneId }));
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="department-zone-id">
-                      <SelectValue placeholder="เลือก Zone ID (ไม่บังคับ)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ยังไม่ระบุ Zone ID</SelectItem>
-                      {departmentZoneOptions.map((zone) => (
-                        <SelectItem key={zone.zoneId} value={zone.zoneId}>
-                          {zone.zoneId}{zone.zoneName ? ` · ${zone.zoneName}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {departmentZoneError && <p className="mt-1 text-xs text-red-600" role="alert">{departmentZoneError}</p>}
-                  {!departmentZoneError && !departmentZoneOptions.length && (
-                    <p className="mt-1 text-xs text-gray-500">แผนกนี้ยังไม่มี Zone ID ในโครงสร้างองค์กร</p>
-                  )}
-                </div>
-              )}
               {!formData.department && (
-                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                  <CircleAlert className="w-3 h-3" />
-                  <span className="text-xs text-amber-600">สามารถเลือกแผนกที่รับผิดชอบในภายหลังได้</span>
+                <p className="text-xs text-amber-600 mt-1">
+                  เลือกแผนกจาก Organization ได้ หรือกรอก Zone ID เพื่อให้ระบบเติมแผนกจากข้อมูลพนักงานอัตโนมัติ
                 </p>
               )}
             </div>
