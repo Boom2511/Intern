@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 import { normalizePhoneToE164 } from '@/lib/validations';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { resolveEmployeeReportingLine } from '@/lib/employee-reporting-line';
 import {
   validatePhone,
   validateSalesforceId,
@@ -68,22 +69,22 @@ interface ZoneEmployeeRecord {
   employeeId: string;
   role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
   department: string | null;
-  manager: {
-    name: string;
-    employeeId: string;
-    role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
-  } | null;
+  manager?: ZoneManagerRecord | null;
+}
+
+interface ZoneManagerRecord {
+  name: string;
+  employeeId: string;
+  role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
+  department: string | null;
+  manager: ZoneManagerRecord | null;
 }
 
 interface ZoneEmployeeInfo {
   zoneName: string | null;
   department: string | null;
-  parentZones: Array<{
-    zoneId: string;
-    zoneName: string | null;
-    department: string | null;
-    employees: ZoneEmployeeRecord[];
-  }>;
+  owner: ZoneEmployeeRecord | null;
+  chiefOfficer: ZoneManagerRecord | null;
   employees: ZoneEmployeeRecord[];
 }
 
@@ -93,6 +94,8 @@ interface OrganizationZoneOption {
   zoneName: string | null;
   department: string | null;
   employees?: ZoneEmployeeInfo['employees'];
+  owner?: ZoneEmployeeInfo['owner'];
+  chiefOfficer?: ZoneEmployeeInfo['chiefOfficer'];
 }
 
 /** Convert a Zone returned by `/api/organization/ticket-options` into a select option. */
@@ -102,21 +105,46 @@ const toZoneOption = (zone: {
   zoneName?: string | null;
   department?: string | null;
   employees?: ZoneEmployeeInfo['employees'];
+  owner?: ZoneEmployeeInfo['owner'];
+  chiefOfficer?: ZoneEmployeeInfo['chiefOfficer'];
 }): OrganizationZoneOption => ({
   id: zone.id ?? 0,
   zoneId: zone.zoneId,
   zoneName: zone.zoneName ?? null,
   department: zone.department ?? null,
   employees: zone.employees,
+  owner: zone.owner,
+  chiefOfficer: zone.chiefOfficer,
 });
 
-function getEmployeesForDepartment(zone: ZoneEmployeeInfo, department: string | undefined) {
-  if (!department) return [];
-  const departmentKey = department.trim().toLocaleLowerCase();
-  return [
-    ...zone.employees,
-    ...zone.parentZones.flatMap((parent) => parent.employees),
-  ].filter((employee) => employee.department?.trim().toLocaleLowerCase() === departmentKey);
+function getZoneReportingLine(
+  owner: ZoneEmployeeRecord | null,
+  linkedChief: ZoneManagerRecord | null,
+) {
+  if (!owner) return null;
+
+  const ancestors: ZoneManagerRecord[] = [];
+  let manager = owner.manager;
+  while (manager) {
+    ancestors.push(manager);
+    manager = manager.manager ?? null;
+  }
+
+  const chiefCandidate = owner.role === 'CHIEF' || owner.role === 'DB_HEAD'
+    ? owner
+    : linkedChief?.role === 'CHIEF'
+      ? linkedChief
+      : ancestors.find((employee) => employee.role === 'CHIEF');
+  const chiefManagers: ZoneManagerRecord[] = [];
+  manager = chiefCandidate && chiefCandidate.employeeId !== owner.employeeId
+    ? chiefCandidate.manager
+    : owner.manager;
+  while (manager) {
+    chiefManagers.push(manager);
+    manager = manager.manager ?? null;
+  }
+
+  return resolveEmployeeReportingLine(owner, ancestors, linkedChief, chiefManagers);
 }
 
 export default function TicketForm({ mode = 'create' }: TicketFormProps) {
@@ -240,7 +268,19 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         const response = await fetch(`/api/organization/ticket-options?${params}`, { signal: controller.signal });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to search organization zones');
-        setZoneSuggestions(Array.isArray(data.zones) ? data.zones.map(toZoneOption) : []);
+        const zones = Array.isArray(data.zones) ? data.zones.map(toZoneOption) : [];
+        const exactZone = zones.find((zone: OrganizationZoneOption) =>
+          zone.zoneId.toLocaleUpperCase() === search.toLocaleUpperCase()
+        );
+        if (exactZone) {
+          setZoneSuggestions([]);
+          setSelectedZoneId(exactZone.zoneId);
+          setFormData((current) => current.zoneId === exactZone.zoneId
+            ? current
+            : { ...current, zoneId: exactZone.zoneId });
+        } else {
+          setZoneSuggestions(zones);
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         console.error('Failed to search organization zones:', error);
@@ -285,28 +325,15 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         if (zone) {
           const zoneData: ZoneEmployeeInfo = {
             zoneName: zone.zoneName ?? null,
-            department: zone.department ?? null,
+            owner: zone.owner ?? zone.employees?.[0] ?? null,
+            chiefOfficer: zone.chiefOfficer ?? null,
             employees: zone.employees ?? [],
-            parentZones: zone.parentZones ?? [],
+            department: zone.department ?? zone.owner?.department ?? null,
           };
           setZoneEmployees(zoneData);
 
-          if (zoneData.employees.length > 0 || zoneData.parentZones.some((parent) => parent.employees.length > 0)) {
-            const rolePriority: Record<ZoneEmployeeRecord['role'], number> = {
-              DB_HEAD: 0,
-              CHIEF: 1,
-              STAFF: 2,
-            };
-            const assignedDepartment = [
-              ...zoneData.employees,
-              ...zoneData.parentZones.flatMap((parent) => parent.employees),
-            ]
-              .filter((employee) => employee.department)
-              .sort((left, right) => rolePriority[left.role] - rolePriority[right.role])
-              .map((employee) => employee.department!)
-              .find((department) => organizationDepartments.some(
-                (option) => option.value.trim().toLocaleLowerCase() === department.trim().toLocaleLowerCase(),
-              )) ?? zoneData.department;
+          if (zoneData.owner) {
+            const assignedDepartment = zoneData.department ?? zoneData.owner.department;
             const departmentOption = organizationDepartments.find(
               (option) => option.value.trim().toLocaleLowerCase() === assignedDepartment?.trim().toLocaleLowerCase(),
             );
@@ -864,12 +891,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       <span className="font-medium">{zone.zoneId}</span>
                       {zone.zoneName && <span className="ml-2 text-gray-600">{zone.zoneName}</span>}
                       {zone.department && <span className="ml-2 text-gray-500">แผนก {zone.department}</span>}
-                      {zone.employees?.length ? (
-                        <span className="ml-2 text-xs text-gray-500">
-                          · {zone.employees.slice(0, 3).map((employee) => employee.name).join(', ')}
-                          {zone.employees.length > 3 ? ` และอีก ${zone.employees.length - 3} คน` : ''}
-                        </span>
-                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -880,9 +901,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
               {loadingZoneSearch && <p className="mt-1 text-xs text-blue-600">กำลังค้นหา Zone ในโครงสร้างองค์กร...</p>}
               {!loadingZoneSearch && formData.zoneId && formData.zoneId.length >= 2 &&
                 zoneSuggestions.length === 0 && !zoneSearchError && !organizationOptionsError && selectedZoneId !== formData.zoneId && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    ไม่พบในโครงสร้างองค์กรของสาขานี้ หากใช้ Zone ใหม่ ระบบจะบันทึกเป็นรายการรอจัด mapping
-                  </p>
+                  <p className="mt-1 text-xs text-gray-500">ไม่พบ Zone ID ในสาขานี้</p>
                 )}
 
               {fieldErrors.zoneId && (
@@ -899,76 +918,25 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 </p>
               )}
 
-              {/* Zone Details Card */}
+              {/* Zone reporting line */}
               {!loadingZone && zoneEmployees && (
-                <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                  <div className="flex items-center justify-between px-1">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">ผู้รับผิดชอบตาม Zone ID</p>
-                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                      {zoneEmployees.employees.length} คน
-                    </span>
-                  </div>
-                  {formData.department && getEmployeesForDepartment(zoneEmployees, formData.department).length > 0 && (
-                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                      แผนกที่รับผิดชอบ: <strong>{formData.department}</strong>
-                      <span className="ml-1">
-                        · {getEmployeesForDepartment(zoneEmployees, formData.department).map((employee) => employee.name).join(', ')}
-                      </span>
+                (() => {
+                  const reportingLine = getZoneReportingLine(zoneEmployees.owner, zoneEmployees.chiefOfficer);
+                  const nodeName = zoneEmployees.zoneName || formData.zoneId;
+
+                  return (
+                    <div className="mt-2 rounded-md border px-3 py-2 text-sm text-gray-700">
+                      {reportingLine ? (
+                        <>
+                          <span className="text-gray-500">{nodeName}{zoneEmployees.department ? ` · ${zoneEmployees.department}` : ''}: </span>
+                          {reportingLine.owner.name} → {reportingLine.chief?.name || '-'} → {reportingLine.dbHead?.name || '-'}
+                        </>
+                      ) : (
+                        <span className="text-gray-500">ไม่พบพนักงานที่สังกัด Zone ID นี้</span>
+                      )}
                     </div>
-                  )}
-                  {zoneEmployees.employees.length ? (
-                    <div className="divide-y rounded-xl border bg-white">
-                      {zoneEmployees.employees.map((employee) => (
-                        <div key={employee.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                          <div>
-                            <p className="font-semibold text-gray-900">{employee.name}</p>
-                            <p className="text-xs text-gray-500">
-                              #{employee.employeeId} · {employee.department || 'ไม่ระบุแผนก'}
-                            </p>
-                          </div>
-                          <div className="text-right text-sm">
-                            <p className="font-medium text-gray-700">
-                              {employee.role === 'DB_HEAD' ? 'หัวหน้าแผนก' : employee.role === 'CHIEF' ? 'หัวหน้าโซน' : 'พนักงาน'}
-                            </p>
-                            {employee.manager && (
-                              <p className="text-xs text-gray-500">
-                                ผู้บังคับบัญชา: {employee.manager.name} (#{employee.manager.employeeId})
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-xl border bg-white px-4 py-3 text-sm text-gray-500">
-                      ยังไม่มีพนักงานกำหนด Zone นี้ในข้อมูลพนักงานปัจจุบัน
-                    </p>
-                  )}
-                  {zoneEmployees.parentZones.length > 0 && (
-                    <div className="rounded-xl border bg-white p-3">
-                      <p className="mb-2 text-xs font-semibold text-gray-600">Parent Zone และผู้รับผิดชอบ</p>
-                      <ol className="space-y-2">
-                        {zoneEmployees.parentZones.map((parent) => (
-                          <li key={parent.zoneId} className="border-l-2 border-blue-200 pl-3">
-                            <p className="text-sm font-medium text-gray-800">
-                              {parent.zoneId}{parent.zoneName ? ` · ${parent.zoneName}` : ''}
-                              {parent.department ? ` · ${parent.department}` : ''}
-                            </p>
-                            {parent.employees.length > 0 ? (
-                              <p className="text-xs text-gray-600">
-                                {parent.employees.map((employee) =>
-                                  `${employee.name} (${employee.role === 'DB_HEAD' ? 'หัวหน้าแผนก' : employee.role === 'CHIEF' ? 'หัวหน้าโซน' : 'พนักงาน'})`
-                                ).join(', ')}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-gray-400">ไม่พบพนักงานสังกัด Parent Zone นี้</p>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -1062,11 +1030,6 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                 <p className="mt-1 text-xs text-gray-500">ไม่พบแผนกที่ลงทะเบียนในโครงสร้างองค์กรของสาขานี้</p>
               )}
               {organizationOptionsError && <p className="mt-1 text-xs text-red-600" role="alert">{organizationOptionsError}</p>}
-              {!formData.department && (
-                <p className="text-xs text-amber-600 mt-1">
-                  เลือกแผนกจาก Organization ได้ หรือกรอก Zone ID เพื่อให้ระบบเติมแผนกจากข้อมูลพนักงานอัตโนมัติ
-                </p>
-              )}
             </div>
           </div>
 

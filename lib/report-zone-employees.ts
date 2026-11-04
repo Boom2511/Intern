@@ -1,5 +1,16 @@
 import { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { resolveEmployeeReportingLine } from '@/lib/employee-reporting-line';
+
+interface ReportEmployee {
+  id: number;
+  employeeId: string;
+  name: string;
+  role: Role;
+  branchId: number | null;
+  department: string | null;
+  managerId: number | null;
+}
 
 export interface ReportZoneInfo {
   zoneName: string | null;
@@ -10,6 +21,16 @@ export interface ReportZoneInfo {
   employeeNames: string[];
 }
 
+const employeeSelect = {
+  id: true,
+  employeeId: true,
+  name: true,
+  role: true,
+  branchId: true,
+  department: true,
+  managerId: true,
+} as const;
+
 export async function getReportZoneInfo(
   zoneIds: string[],
   branchId?: number | null,
@@ -18,87 +39,98 @@ export async function getReportZoneInfo(
   const pendingIds = Array.from(new Set(zoneIds.filter(Boolean)));
   if (!pendingIds.length) return result;
 
-  const zones = new Map<string, {
-    zoneId: string;
-    parentZoneId: string | null;
-    zoneName: string | null;
-    branchId: number | null;
-    employees: Array<{ name: string; role: Role; branchId: number | null }>;
-  }>();
-  let frontier = pendingIds;
-  for (let depth = 0; frontier.length && depth < 20; depth += 1) {
-    const newIds = frontier.filter((zoneId) => !zones.has(zoneId));
-    if (!newIds.length) break;
-    const found = await prisma.zone.findMany({
-      where: {
-        zoneId: { in: newIds },
-        ...(branchId === undefined || branchId === null ? {} : { branchId }),
-      },
-      select: {
-        zoneId: true,
-        parentZoneId: true,
-        zoneName: true,
-        branchId: true,
-        managedEmployees: {
-          select: { name: true, role: true, branchId: true },
-          orderBy: [{ role: 'asc' }, { name: 'asc' }],
+  const zones = await prisma.zone.findMany({
+    where: {
+      zoneId: { in: pendingIds },
+      ...(branchId === undefined || branchId === null ? {} : { branchId }),
+    },
+    select: {
+      zoneId: true,
+      zoneName: true,
+      branchId: true,
+      employees: {
+        orderBy: { employeeId: 'asc' },
+        select: {
+          employee: { select: employeeSelect },
+          chiefOfficer: { select: employeeSelect },
         },
       },
-    });
-    const parents: string[] = [];
-    for (const zone of found) {
-      zones.set(zone.zoneId, { ...zone, employees: zone.managedEmployees });
-      if (zone.parentZoneId && !zones.has(zone.parentZoneId)) parents.push(zone.parentZoneId);
+    },
+  });
+
+  const employees = new Map<number, ReportEmployee>();
+  let frontier: number[] = [];
+  for (const zone of zones) {
+    for (const assignment of zone.employees) {
+      employees.set(assignment.employee.id, assignment.employee);
+      if (assignment.chiefOfficer) employees.set(assignment.chiefOfficer.id, assignment.chiefOfficer);
+      if (assignment.employee.managerId !== null) frontier.push(assignment.employee.managerId);
+      if (assignment.chiefOfficer?.managerId !== null && assignment.chiefOfficer?.managerId !== undefined) {
+        frontier.push(assignment.chiefOfficer.managerId);
+      }
     }
-    frontier = parents;
   }
 
-  for (const zoneId of pendingIds) {
-    const zone = zones.get(zoneId);
-    if (!zone) continue;
-
-    const hierarchy = [zone];
-    const visited = new Set([zone.zoneId]);
-    let parentZoneId = zone.parentZoneId;
-    while (parentZoneId && !visited.has(parentZoneId)) {
-      visited.add(parentZoneId);
-      const parent = zones.get(parentZoneId);
-      if (!parent || parent.branchId !== zone.branchId) break;
-      hierarchy.push(parent);
-      parentZoneId = parent.parentZoneId;
+  for (let depth = 0; frontier.length && depth < 20; depth += 1) {
+    const newIds = Array.from(new Set(frontier.filter((id) => !employees.has(id))));
+    if (!newIds.length) break;
+    const managers = await prisma.employee.findMany({
+      where: { id: { in: newIds } },
+      select: employeeSelect,
+    });
+    frontier = [];
+    for (const manager of managers) {
+      employees.set(manager.id, manager);
+      if (manager.managerId !== null) frontier.push(manager.managerId);
     }
-    const employeesByZone = hierarchy.map((item) => item.employees.filter((employee) => employee.branchId === zone.branchId));
+  }
 
-    const findRole = (role: Role) => employeesByZone
-      .flat()
-      .find((employee) => employee.role === role);
-    const currentZoneEmployees = employeesByZone[0];
-    const zoneStaff = currentZoneEmployees.find((employee) => employee.role === Role.STAFF);
-    const zoneChief = currentZoneEmployees.find((employee) => employee.role === Role.CHIEF);
-    const zoneDbHead = currentZoneEmployees.find((employee) => employee.role === Role.DB_HEAD);
-    const chief = zoneChief ?? findRole(Role.CHIEF);
-    const dbHead = zoneDbHead ?? findRole(Role.DB_HEAD);
-    let staffName = zoneStaff?.name;
-    let chiefName = chief?.name;
-
-    if (zoneDbHead) {
-      staffName = zoneDbHead.name;
-      chiefName = zoneDbHead.name;
-    } else if (zoneChief && !zoneStaff) {
-      staffName = zoneChief.name;
-      chiefName = dbHead?.name;
+  const getManagerChain = (employee: ReportEmployee, sameBranch: number | null) => {
+    const chain: ReportEmployee[] = [];
+    const visited = new Set([employee.id]);
+    let managerId = employee.managerId;
+    while (managerId !== null && !visited.has(managerId)) {
+      visited.add(managerId);
+      const manager = employees.get(managerId);
+      if (!manager || manager.branchId !== sameBranch) break;
+      chain.push(manager);
+      managerId = manager.managerId;
     }
+    return chain;
+  };
 
-    result.set(zoneId, {
+  for (const zone of zones) {
+    const owner = zone.employees.find(({ employee }) => employee.branchId === zone.branchId)?.employee;
+    if (!owner) continue;
+
+    const assignment = zone.employees.find(({ employee }) => employee.id === owner.id);
+    const managerChain = getManagerChain(owner, zone.branchId);
+    const linkedChief = assignment?.chiefOfficer?.branchId === zone.branchId &&
+      assignment.chiefOfficer.role === Role.CHIEF
+      ? assignment.chiefOfficer
+      : undefined;
+    const chiefCandidate = owner.role === Role.DB_HEAD || owner.role === Role.CHIEF
+      ? owner
+      : linkedChief ?? managerChain.find((employee) => employee.role === Role.CHIEF);
+    const chiefManagerChain = chiefCandidate && chiefCandidate.id !== owner.id
+      ? getManagerChain(chiefCandidate, zone.branchId)
+      : managerChain;
+    const { chief, dbHead } = resolveEmployeeReportingLine(
+      owner,
+      managerChain,
+      linkedChief,
+      chiefManagerChain,
+    );
+
+    result.set(zone.zoneId, {
       zoneName: zone.zoneName,
-      staffName,
-      chief: chiefName,
+      staffName: owner.name,
+      chief: chief?.name,
       dbHead: dbHead?.name,
       chiefName: chief?.name,
-      employeeNames: currentZoneEmployees
-        .filter((employee) => employee.role === Role.STAFF)
-        .map((employee) => employee.name),
+      employeeNames: owner.role === Role.STAFF ? [owner.name] : [],
     });
   }
+
   return result;
 }

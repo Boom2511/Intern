@@ -292,28 +292,6 @@ export default function TicketDetail({ ticket, mutate, viewMode = 'staff', clien
     }
   };
 
-  const copyClientLink = async () => {
-    try {
-      const response = await fetch(`/api/tickets/${ticket.id}/client-link`, { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok || !data.link) {
-        throw new Error(data.error || 'Unable to create a client link');
-      }
-      await navigator.clipboard.writeText(data.link);
-      toast({
-        title: 'คัดลอกลิงก์สำหรับลูกค้าแล้ว',
-        description: `ลิงก์นี้หมดอายุ ${new Date(data.expiresAt).toLocaleDateString('th-TH')}`,
-      });
-    } catch (error) {
-      console.error('Failed to create client ticket link:', error);
-      toast({
-        variant: 'error',
-        title: 'สร้างลิงก์ไม่สำเร็จ',
-        description: error instanceof Error ? error.message : 'ไม่สามารถสร้างลิงก์ได้',
-      });
-    }
-  };
-
   const handleSaveEdit = async () => {
     // Validate required fields
     if (!editForm.recipientName.trim()) {
@@ -601,11 +579,6 @@ export default function TicketDetail({ ticket, mutate, viewMode = 'staff', clien
                   <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                     <Edit className="h-4 w-4 mr-2" />
                     แก้ไข
-                  </Button>
-                )}
-                {canEditTickets && (
-                  <Button variant="outline" size="sm" onClick={copyClientLink}>
-                    <Copy className="h-4 w-4 mr-2" /> ลิงก์ลูกค้า
                   </Button>
                 )}
                 {canDeleteTickets && (

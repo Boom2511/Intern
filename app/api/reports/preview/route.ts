@@ -9,6 +9,7 @@ import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
 import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,20 +23,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { startDate, endDate, sourceSystem, includeSamples, sampleLimit = 5 } = body as any;
 
+    let reportDateRange;
+    try {
+      reportDateRange = getReportDateRange(startDate, endDate || startDate);
+    } catch (error) {
+      if (error instanceof RangeError) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     // Build query filters
     const whereClause: any = {
       ...branchScope,
-      createdAt: { gte: new Date(startDate) }
+      createdAt: reportDateRange,
     };
-
-    // Default endDate to end of day if daily (when endDate not provided but startDate is)
-    if (!endDate) {
-      const end = new Date(startDate);
-      end.setHours(23, 59, 59, 999);
-      whereClause.createdAt.lte = end;
-    } else {
-      whereClause.createdAt.lte = new Date(endDate);
-    }
 
     if (sourceSystem && sourceSystem !== 'ALL') {
       whereClause.channel = sourceSystem;

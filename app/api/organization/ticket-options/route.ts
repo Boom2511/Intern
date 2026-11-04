@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { departmentsMatch, getBranchDepartments, resolveBranchDepartment } from '@/lib/branch-organization';
@@ -74,110 +75,84 @@ export async function GET(request: NextRequest) {
         ? [{ OR: [{ zoneId: { contains: search, mode: 'insensitive' as const } }, { zoneName: { contains: search, mode: 'insensitive' as const } }] }]
         : []),
     ];
-    const zones = (requestedDepartment || (search && search.length >= 2))
-      ? await prisma.zone.findMany({
-          where: { AND: zoneFilters },
-          select: {
-            id: true,
-            zoneId: true,
-            zoneName: true,
-            department: true,
-            parentZoneId: true,
-            branchId: true,
-            employees: {
-              where: { employee: { branchId: { in: branchIds } } },
-              select: {
-                employee: {
-                  select: {
-                    id: true,
-                    employeeId: true,
-                    name: true,
-                    role: true,
-                    department: true,
-                    manager: { select: { employeeId: true, name: true, role: true } },
-                  },
-                },
-              },
-              take: includeEmployees ? 100 : 0,
-            },
-            managedEmployees: {
-              where: { branchId: { in: branchIds } },
-              select: {
-                id: true,
-                employeeId: true,
-                name: true,
-                role: true,
-                department: true,
-                manager: {
-                  select: { employeeId: true, name: true, role: true },
-                },
-              },
-              orderBy: [{ role: 'asc' as const }, { name: 'asc' as const }],
-              take: includeEmployees ? 100 : 0,
-            },
-          },
-          orderBy: { zoneId: 'asc' },
-          take: requestedDepartment ? 200 : 15,
-        })
-      : [];
-
-    const hierarchyZones = new Map(zones.map((zone) => [zone.zoneId, zone]));
-    let parentIds = Array.from(new Set(zones.map((zone) => zone.parentZoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
-    for (let depth = 0; includeEmployees && parentIds.length > 0 && depth < 20; depth += 1) {
-      const missingParentIds = parentIds.filter((zoneId) => !hierarchyZones.has(zoneId));
-      if (missingParentIds.length === 0) break;
-      const parents = await prisma.zone.findMany({
-        where: {
-          zoneId: { in: missingParentIds },
-          branchId: { in: branchIds },
-        },
+    const zoneSelect = {
+      id: true,
+      zoneId: true,
+      zoneName: true,
+      department: true,
+      branchId: true,
+      employees: {
+        where: { employee: { branchId: { in: branchIds } } },
+        orderBy: { employeeId: 'asc' },
         select: {
-          id: true,
-          zoneId: true,
-          zoneName: true,
-          department: true,
-          parentZoneId: true,
-          branchId: true,
-          employees: {
-            where: { employee: { branchId: { in: branchIds } } },
-            select: {
-              employee: {
-                select: {
-                  id: true,
-                  employeeId: true,
-                  name: true,
-                  role: true,
-                  department: true,
-                  manager: { select: { employeeId: true, name: true, role: true } },
-                },
-              },
-            },
-            take: 100,
-          },
-          managedEmployees: {
-            where: { branchId: { in: branchIds } },
+          employee: {
             select: {
               id: true,
               employeeId: true,
               name: true,
               role: true,
               department: true,
-              manager: { select: { employeeId: true, name: true, role: true } },
+              manager: {
+                select: {
+                  employeeId: true,
+                  name: true,
+                  role: true,
+                  department: true,
+                  manager: {
+                    select: {
+                      employeeId: true,
+                      name: true,
+                      role: true,
+                      department: true,
+                    },
+                  },
+                },
+              },
             },
-            orderBy: [{ role: 'asc' }, { name: 'asc' }],
-            take: 100,
+          },
+          chiefOfficer: {
+            select: {
+              employeeId: true,
+              name: true,
+              role: true,
+              department: true,
+              manager: {
+                select: {
+                  employeeId: true,
+                  name: true,
+                  role: true,
+                  department: true,
+                },
+              },
+            },
           },
         },
-      });
-      parents.forEach((parent) => hierarchyZones.set(parent.zoneId, parent));
-      parentIds = Array.from(new Set(parents.map((parent) => parent.parentZoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
-    }
-
-    const employeesForZone = (zone: (typeof zones)[number]) => Array.from(new Map([
-      ...zone.managedEmployees,
-      ...zone.employees.map(({ employee }) => employee),
-    ].map((employee) => [employee.id, employee])).values())
-      .sort((left, right) => left.name.localeCompare(right.name));
+        take: includeEmployees ? 100 : 0,
+      },
+    } satisfies Prisma.ZoneSelect;
+    const exactZone = search && search.length >= 2
+      ? await prisma.zone.findFirst({
+          where: {
+            zoneId: { equals: search, mode: 'insensitive' },
+            branchId: { in: branchIds },
+            ...(selectedDepartment
+              ? { department: { equals: selectedDepartment, mode: 'insensitive' as const } }
+              : {}),
+          },
+          select: zoneSelect,
+        })
+      : null;
+    const matchingZones = (requestedDepartment || (search && search.length >= 2))
+      ? await prisma.zone.findMany({
+          where: { AND: zoneFilters },
+          select: zoneSelect,
+          orderBy: { zoneId: 'asc' },
+          take: requestedDepartment ? 200 : 15,
+        })
+      : [];
+    const zones = exactZone
+      ? [exactZone, ...matchingZones.filter((zone) => zone.id !== exactZone.id).slice(0, requestedDepartment ? 199 : 14)]
+      : matchingZones;
 
     return NextResponse.json({
       branch,
@@ -192,30 +167,9 @@ export async function GET(request: NextRequest) {
         department: zone.department,
         ...(includeEmployees
           ? {
-              employees: employeesForZone(zone),
-              parentZones: (() => {
-                const parents: Array<{
-                  zoneId: string;
-                  zoneName: string | null;
-                  department: string | null;
-                  employees: ReturnType<typeof employeesForZone>;
-                }> = [];
-                const visited = new Set([zone.zoneId]);
-                let parentZoneId = zone.parentZoneId;
-                while (parentZoneId && !visited.has(parentZoneId)) {
-                  visited.add(parentZoneId);
-                  const parent = hierarchyZones.get(parentZoneId);
-                  if (!parent || parent.branchId !== zone.branchId) break;
-                  parents.push({
-                    zoneId: parent.zoneId,
-                    zoneName: parent.zoneName,
-                    department: parent.department,
-                    employees: employeesForZone(parent),
-                  });
-                  parentZoneId = parent.parentZoneId;
-                }
-                return parents;
-              })(),
+              employees: zone.employees.map(({ employee }) => employee),
+              owner: zone.employees[0]?.employee ?? null,
+              chiefOfficer: zone.employees[0]?.chiefOfficer ?? null,
             }
           : {}),
       })),

@@ -140,7 +140,7 @@ export default function ReportsPage() {
   }, [previewData]);
 
   const dateRangeText = useMemo(() => {
-    const date = new Date(startDate);
+    const date = parseISO(startDate);
     return reportType === 'daily' ? format(date, 'd MMM yyyy', { locale: th }) : format(date, 'MMMM yyyy', { locale: th });
   }, [startDate, reportType]);
 
@@ -161,7 +161,7 @@ export default function ReportsPage() {
         const a = document.createElement('a');
         a.href = url;
         // Generate filename with Thai date format
-        const date = new Date(startDate);
+        const date = parseISO(startDate);
         const thaiDateStr = format(date, 'd MMM yyyy', { locale: th });
         const reportTypeText = reportType === 'daily' ? 'ประจำวันที่' : 'ประจำเดือน';
         a.download = `รายงาน${reportTypeText} ${thaiDateStr} เรื่องร้องเรียน ปณศ.บางนา.xlsx`;

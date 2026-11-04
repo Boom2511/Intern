@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { lineService } from '@/lib/line';
@@ -15,6 +15,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
 import { getLineGroupForDepartment } from '@/lib/line-groups';
 import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Vercel function timeout
@@ -39,17 +40,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { reportType, startDate, endDate, department, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
 
+    let reportDateRange;
+    try {
+      reportDateRange = getReportDateRange(startDate, endDate || startDate);
+    } catch (error) {
+      if (error instanceof RangeError) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     // Build query filters
     const whereClause: any = {
       ...branchScope,
-      createdAt: {
-        gte: new Date(startDate),
-      },
+      createdAt: reportDateRange,
     };
-
-    if (endDate) {
-      whereClause.createdAt.lte = new Date(endDate);
-    }
 
     if (department && department !== 'ALL') {
       whereClause.department = department;
@@ -78,8 +83,8 @@ export async function POST(request: NextRequest) {
     const worksheet = workbook.addWorksheet('Report');
 
     const reportTitle = reportType === 'daily'
-      ? `รายงานประจำวัน - ${format(new Date(startDate), 'dd MMMM yyyy', { locale: th })}`
-      : `รายงานประจำเดือน - ${format(new Date(startDate), 'dd MMM', { locale: th })} ถึง ${format(new Date(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
+      ? `รายงานประจำวัน - ${format(parseISO(startDate), 'dd MMMM yyyy', { locale: th })}`
+      : `รายงานประจำเดือน - ${format(parseISO(startDate), 'dd MMM', { locale: th })} ถึง ${format(parseISO(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
 
     worksheet.mergeCells('A1:M1');
     const titleCell = worksheet.getCell('A1');
@@ -136,7 +141,7 @@ export async function POST(request: NextRequest) {
         ticket.recipientName, // ใช้ recipientName จาก Ticket แทน customer.name
         ticket.recipientPhone, // ใช้ recipientPhone จาก Ticket - แสดงเป็น +66XXXXXXXXX (E.164)
         ticket.recipientAddress || '-',
-        ticket.assignedTo || ticket.createdBy || '-',
+        zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-',
         ticket.department || '-',
         zoneInfo?.chief || '-',
         zoneInfo?.dbHead || '-',

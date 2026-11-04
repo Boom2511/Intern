@@ -7,12 +7,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
 import { getTicketBranchScope } from '@/lib/branch-access';
 import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,24 +33,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { reportType, startDate, endDate }: ReportFilters = body;
 
+    let reportDateRange;
+    try {
+      reportDateRange = getReportDateRange(startDate, endDate || startDate);
+    } catch (error) {
+      if (error instanceof RangeError) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     // Build query filters
     const whereClause: any = {
       ...branchScope,
-      createdAt: {
-        gte: new Date(startDate),
-      },
+      createdAt: reportDateRange,
     };
-
-    // For daily report, default endDate to end of the same day to include all statuses that day
-    if (reportType === 'daily' && !endDate) {
-      const end = new Date(startDate);
-      end.setHours(23, 59, 59, 999);
-      whereClause.createdAt.lte = end;
-    }
-
-    if (endDate) {
-      whereClause.createdAt.lte = new Date(endDate);
-    }
 
     // Fetch tickets with related data
     const tickets = await prisma.ticket.findMany({
@@ -79,8 +77,8 @@ export async function POST(request: NextRequest) {
 
       // Header row 1: Report title and date
       const reportTitle = reportType === 'daily'
-        ? `รายงานประจำวัน - ${format(new Date(startDate), 'dd MMMM yyyy', { locale: th })}`
-        : `รายงานประจำเดือน - ${format(new Date(startDate), 'dd MMM', { locale: th })} ถึง ${format(new Date(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
+        ? `รายงานประจำวัน - ${format(parseISO(startDate), 'dd MMMM yyyy', { locale: th })}`
+        : `รายงานประจำเดือน - ${format(parseISO(startDate), 'dd MMM', { locale: th })} ถึง ${format(parseISO(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
 
       const totalColumns = includeSalesforceId ? 'O' : 'N';
       worksheet.mergeCells(`A1:${totalColumns}1`);
