@@ -161,7 +161,56 @@ export async function GET(request: NextRequest) {
   const where: Prisma.EmployeeWhereInput = filters.length ? { AND: filters } : {};
 
   try {
-    const [total, employees, branches, departments, zoneDepartments, registeredDepartments, zones, managers, totalEmployees, withoutManager, incomplete, zonesWithoutManager, hierarchyZones] = await Promise.all([
+    const initialUnscopedAdminLoad = user.isSuperAdmin &&
+      !params.has('branchId') &&
+      !search &&
+      !params.has('department') &&
+      !role &&
+      !zoneId &&
+      !status &&
+      !nodeStatus &&
+      !responsibility &&
+      !employeeIds.length &&
+      !ownerCandidatesDepartment;
+
+    if (initialUnscopedAdminLoad) {
+      const [branches, totalEmployees, withoutManager, incomplete, zonesWithoutManager] = await Promise.all([
+        prisma.branch.findMany({
+          orderBy: { name: 'asc' },
+          include: { _count: { select: { employees: true } } },
+        }),
+        prisma.employee.count({ where: summaryBranchScope }),
+        prisma.employee.count({ where: { ...summaryBranchScope, role: { not: Role.DB_HEAD }, managerId: null } }),
+        prisma.employee.count({
+          where: {
+            ...summaryBranchScope,
+            OR: [
+              { department: null },
+              { branchId: null },
+              { zones: { none: {} } },
+              { role: { not: Role.DB_HEAD }, managerId: null },
+            ],
+          },
+        }),
+        prisma.zone.count({
+          where: {
+            ...zoneBranchScope,
+            employees: { none: { employee: { role: Role.CHIEF } } },
+          },
+        }),
+      ]);
+
+      return NextResponse.json({
+        employees: [],
+        pagination: { page, pageSize, total: totalEmployees, pageCount: Math.ceil(totalEmployees / pageSize) },
+        summary: { total: totalEmployees, withoutManager, incomplete, zonesWithoutManager },
+        isSuperAdmin: true,
+        canManageBranches: user.role === 'ADMINISTRATOR',
+        options: { branches, departments: [], zones: [], managers: [], roles: Object.values(Role) },
+      });
+    }
+
+    const [total, employees, branches, departments, zoneDepartments, registeredDepartments, zones, managers, totalEmployees, withoutManager, incomplete, zonesWithoutManager] = await Promise.all([
       prisma.employee.count({ where }),
       prisma.employee.findMany({
         where,
@@ -205,9 +254,29 @@ export async function GET(request: NextRequest) {
         where: user.isSuperAdmin && Number.isInteger(branchId) && branchId > 0 ? { branchId } : user.isSuperAdmin ? {} : { branchId: user.branchId ?? -1 },
         select: { name: true },
       }),
-      prisma.zone.findMany({ where: zoneBranchScope, orderBy: { zoneId: 'asc' }, select: { id: true, zoneId: true, zoneName: true, nodeKind: true, parentZoneId: true, branchId: true, department: true } }),
+      prisma.zone.findMany({
+        where: zoneBranchScope,
+        orderBy: { zoneId: 'asc' },
+        select: {
+          id: true,
+          zoneId: true,
+          zoneName: true,
+          nodeKind: true,
+          department: true,
+          parentZoneId: true,
+          branchId: true,
+          employees: {
+            select: {
+              employee: { select: { id: true, employeeId: true, name: true, role: true } },
+            },
+          },
+        },
+      }),
       prisma.employee.findMany({
-        where: optionBranchScope,
+        where: {
+          ...optionBranchScope,
+          zones: { some: { zone: { nodeKind: { not: null } } } },
+        },
         select: {
           id: true,
           employeeId: true,
@@ -239,21 +308,6 @@ export async function GET(request: NextRequest) {
           employees: { none: { employee: { role: Role.CHIEF } } },
         },
       }),
-      prisma.zone.findMany({
-        where: zoneBranchScope,
-        select: {
-          zoneId: true,
-          zoneName: true,
-          nodeKind: true,
-          department: true,
-          parentZoneId: true,
-          employees: {
-            select: {
-              employee: { select: { id: true, employeeId: true, name: true, role: true } },
-            },
-          },
-        },
-      }),
     ]);
 
     const hierarchyManagers = managers.flatMap((employee) => {
@@ -270,9 +324,18 @@ export async function GET(request: NextRequest) {
         }]
         : [];
     });
-    const organizationZones = hierarchyZones.map((zone) => ({
+    const organizationZones = zones.map((zone) => ({
       ...zone,
       owners: zone.employees.map(({ employee }) => employee),
+    }));
+    const zoneOptions = zones.map(({ id, zoneId, zoneName, nodeKind, parentZoneId, branchId, department }) => ({
+      id,
+      zoneId,
+      zoneName,
+      nodeKind,
+      parentZoneId,
+      branchId,
+      department,
     }));
 
     return NextResponse.json({
@@ -308,7 +371,7 @@ export async function GET(request: NextRequest) {
         ].filter((item): item is string => Boolean(item)))).sort((left, right) =>
           left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
         ),
-        zones,
+        zones: zoneOptions,
         managers: hierarchyManagers,
         roles: Object.values(Role),
       },

@@ -433,6 +433,7 @@ export default function ZoneHierarchy() {
   const [branchId, setBranchId] = useState('');
   const [superAdmin, setSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [branchContextLoaded, setBranchContextLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [zoneDialog, setZoneDialog] = useState(false);
@@ -710,6 +711,7 @@ export default function ZoneHierarchy() {
         } else if (availableBranches.length === 1) {
           setBranchId(String(availableBranches[0].id));
         }
+        setBranchContextLoaded(true);
       } catch (branchError) {
         toast({ variant: 'error', title: 'โหลดข้อมูลสาขาไม่สำเร็จ', description: branchError instanceof Error ? branchError.message : 'Unable to load branches' });
         setLoading(false);
@@ -718,7 +720,14 @@ export default function ZoneHierarchy() {
     void loadBranchContext();
   }, [toast]);
 
-  useEffect(() => { void loadZones(); }, [loadZones]);
+  useEffect(() => {
+    if (!branchContextLoaded) return;
+    if (superAdmin && !branchId) {
+      setLoading(false);
+      return;
+    }
+    void loadZones();
+  }, [branchContextLoaded, branchId, loadZones, superAdmin]);
 
   useEffect(() => {
     try {

@@ -264,10 +264,29 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
         );
         if (exactZone) {
           setZoneSuggestions([]);
+          setZoneEmployees({
+            zoneId: exactZone.zoneId,
+            zoneName: exactZone.zoneName,
+            nodeKind: exactZone.nodeKind,
+            owner: exactZone.owner ?? null,
+            responsible: exactZone.responsible ?? null,
+            dbHead: exactZone.dbHead ?? null,
+            department: exactZone.department ?? exactZone.owner?.department ?? null,
+          });
+          setZoneDetailsError('');
           setSelectedZoneId(exactZone.zoneId);
           setFormData((current) => current.zoneId === exactZone.zoneId
             ? current
             : { ...current, zoneId: exactZone.zoneId });
+          if (exactZone.owner) {
+            const assignedDepartment = exactZone.department ?? exactZone.owner.department;
+            const departmentOption = organizationDepartments.find(
+              (option) => option.value.trim().toLocaleLowerCase() === assignedDepartment?.trim().toLocaleLowerCase(),
+            );
+            if (departmentOption) {
+              setFormData((current) => ({ ...current, department: departmentOption.value }));
+            }
+          }
         } else {
           setZoneSuggestions(zones);
         }
@@ -284,12 +303,17 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [currentUser, formData.branchId, formData.zoneId, selectedZoneId]);
+  }, [currentUser, formData.branchId, formData.zoneId, organizationDepartments, selectedZoneId]);
 
   // Load employees when Zone ID is entered
   useEffect(() => {
     const zoneIdInput = formData.zoneId?.trim();
     const branchId = currentUser?.isSuperAdmin ? formData.branchId : currentUser?.branchId;
+    if (zoneEmployees?.zoneId === zoneIdInput && selectedZoneId === zoneIdInput) {
+      setLoadingZone(false);
+      setZoneDetailsError('');
+      return;
+    }
     if (!zoneIdInput || zoneIdInput.length < 3 || !branchId || selectedZoneId !== zoneIdInput) {
       setZoneEmployees(null);
       setLoadingZone(false);
@@ -351,7 +375,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [currentUser, formData.branchId, formData.zoneId, organizationDepartments, selectedZoneId]);
+  }, [currentUser, formData.branchId, formData.zoneId, organizationDepartments, selectedZoneId, zoneEmployees]);
 
   const departmentOptions = organizationDepartments;
 
@@ -872,12 +896,29 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                         const chosenZoneId = zone.zoneId;
                         setSelectedZoneId(chosenZoneId);
                         setZoneSuggestions([]);
-                        setZoneEmployees(null);
+                        setZoneEmployees({
+                          zoneId: zone.zoneId,
+                          zoneName: zone.zoneName,
+                          nodeKind: zone.nodeKind,
+                          owner: zone.owner ?? null,
+                          responsible: zone.responsible ?? null,
+                          dbHead: zone.dbHead ?? null,
+                          department: zone.department ?? zone.owner?.department ?? null,
+                        });
                         setZoneDetailsError('');
                         setFormData((current) => ({
                           ...current,
                           zoneId: chosenZoneId,
                         }));
+                        if (zone.owner) {
+                          const assignedDepartment = zone.department ?? zone.owner.department;
+                          const departmentOption = organizationDepartments.find(
+                            (option) => option.value.trim().toLocaleLowerCase() === assignedDepartment?.trim().toLocaleLowerCase(),
+                          );
+                          if (departmentOption) {
+                            setFormData((current) => ({ ...current, department: departmentOption.value }));
+                          }
+                        }
                       }}
                     >
                       <span className="font-medium">{zone.zoneId}</span>
