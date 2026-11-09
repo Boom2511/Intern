@@ -39,7 +39,6 @@ type ZoneMoveSnapshot = {
 type ZoneEmployeeSnapshot = {
   employeeId: number;
   zoneId: number;
-  chiefOfficerId: number | null;
 };
 
 type EmployeeSnapshot = {
@@ -48,8 +47,9 @@ type EmployeeSnapshot = {
   branchId: number | null;
   department: string | null;
   managerZoneId: string | null;
+  managerId?: number | null;
   updatedAt: string;
-  zones: Array<{ zoneId: string; zoneRecordId: number; chiefOfficerId: number | null }>;
+  zones: Array<{ zoneId: string; zoneRecordId: number }>;
   subordinates: Array<{ id: number; managerId: number | null }>;
 };
 type EmployeeDeletionSnapshot = EmployeeSnapshot & {
@@ -57,12 +57,6 @@ type EmployeeDeletionSnapshot = EmployeeSnapshot & {
   name: string;
   managerId: number | null;
   createdAt: string;
-  chiefOfZones: Array<{
-    id: number;
-    employeeId: number;
-    zoneId: number;
-    chiefOfficerId: number | null;
-  }>;
   history: Array<{
     actorId: string | null;
     actorName: string;
@@ -74,6 +68,10 @@ type EmployeeDeletionSnapshot = EmployeeSnapshot & {
     relatedImportId: number | null;
     createdAt: string;
   }>;
+};
+type EmployeeCreateSnapshot = EmployeeSnapshot & {
+  employeeId: string;
+  name: string;
 };
 type BranchSnapshot = {
   id: number;
@@ -301,12 +299,12 @@ export async function POST(request: NextRequest) {
           const zoneRecordIds = beforeZones.map((zone) => zone.id);
           const currentAssignments = await transaction.zoneEmployee.findMany({
             where: { zoneId: { in: zoneRecordIds } },
-            select: { employeeId: true, zoneId: true, chiefOfficerId: true },
+            select: { employeeId: true, zoneId: true },
             orderBy: [{ zoneId: 'asc' }, { employeeId: 'asc' }],
           });
           const expectedAssignments = afterAssignments.slice()
             .sort((left, right) => left.zoneId - right.zoneId || left.employeeId - right.employeeId)
-            .map(({ employeeId, zoneId, chiefOfficerId }) => ({ employeeId, zoneId, chiefOfficerId }));
+            .map(({ employeeId, zoneId }) => ({ employeeId, zoneId }));
           if (JSON.stringify(currentAssignments) !== JSON.stringify(expectedAssignments)) {
             return { error: 'Employee Zone assignments have changed since this history entry; rollback was stopped', status: 409 as const };
           }
@@ -352,7 +350,7 @@ export async function POST(request: NextRequest) {
           }
           const beforeAssignmentValues = beforeAssignments.slice()
             .sort((left, right) => left.zoneId - right.zoneId || left.employeeId - right.employeeId)
-            .map(({ employeeId, zoneId, chiefOfficerId }) => ({ employeeId, zoneId, chiefOfficerId }));
+            .map(({ employeeId, zoneId }) => ({ employeeId, zoneId }));
           if (JSON.stringify(beforeAssignmentValues) !== JSON.stringify(expectedAssignments)) {
             await transaction.zoneEmployee.deleteMany({ where: { zoneId: { in: zoneRecordIds } } });
           }
@@ -366,10 +364,9 @@ export async function POST(request: NextRequest) {
               return { error: 'An employee from the saved Zone assignment no longer exists', status: 409 as const };
             }
             await transaction.zoneEmployee.createMany({
-              data: beforeAssignments.map(({ employeeId, zoneId, chiefOfficerId }) => ({
+              data: beforeAssignments.map(({ employeeId, zoneId }) => ({
                 employeeId,
                 zoneId,
-                chiefOfficerId,
               })),
             });
           }
@@ -398,12 +395,42 @@ export async function POST(request: NextRequest) {
       } else if (history.entityType === 'EMPLOYEE') {
         const beforeEmployees = jsonArray<EmployeeSnapshot>(history.beforeValues.employees);
         const afterEmployees = jsonArray<EmployeeSnapshot>(history.afterValues.employees);
-        if (history.operation === 'EMPLOYEE_DELETE') {
+        if (history.operation === 'EMPLOYEE_CREATE') {
+          const createdRecords = jsonArray<EmployeeCreateSnapshot>(history.afterValues.employees);
+          if (beforeEmployees.length || createdRecords.length !== 1) {
+            return { error: 'The saved employee creation is incomplete and cannot be rolled back', status: 409 as const };
+          }
+          const [snapshot] = createdRecords;
+          const current = await transaction.employee.findUnique({
+            where: { id: snapshot.id },
+            select: {
+              id: true,
+              employeeId: true,
+              name: true,
+              role: true,
+              branchId: true,
+              department: true,
+              managerId: true,
+              managerZoneId: true,
+              updatedAt: true,
+              zones: { select: { id: true } },
+              subordinates: { select: { id: true } },
+            },
+          });
+          if (!current || current.employeeId !== snapshot.employeeId ||
+              current.name !== snapshot.name || current.role !== snapshot.role ||
+              current.branchId !== snapshot.branchId || current.department !== snapshot.department ||
+              current.managerId !== snapshot.managerId || current.managerZoneId !== snapshot.managerZoneId ||
+              current.updatedAt.toISOString() !== snapshot.updatedAt ||
+              current.zones.length || current.subordinates.length) {
+            return { error: 'The employee has changed or is referenced by other records; rollback was stopped', status: 409 as const };
+          }
+          await transaction.employee.delete({ where: { id: snapshot.id } });
+        } else if (history.operation === 'EMPLOYEE_DELETE') {
           const snapshots = jsonArray<EmployeeDeletionSnapshot>(history.beforeValues.employees);
           const postDelete = jsonArray<{
             id: number;
             subordinates: Array<{ id: number; managerId: null }>;
-            chiefOfZones: EmployeeDeletionSnapshot['chiefOfZones'];
           }>(history.afterValues.employees);
           if (snapshots.length !== 1 || postDelete.length !== 1) {
             return { error: 'The saved employee deletion is incomplete and cannot be rolled back', status: 409 as const };
@@ -429,7 +456,6 @@ export async function POST(request: NextRequest) {
           }
           const requiredZones = Array.from(new Set([
             ...snapshot.zones.map((zone) => zone.zoneRecordId),
-            ...snapshot.chiefOfZones.map((assignment) => assignment.zoneId),
           ]));
           const availableZones = requiredZones.length
             ? await transaction.zone.findMany({ where: { id: { in: requiredZones } }, select: { id: true } })
@@ -462,17 +488,6 @@ export async function POST(request: NextRequest) {
               status: 409 as const,
             };
           }
-          for (const assignment of expected.chiefOfZones) {
-            const current = await transaction.zoneEmployee.findUnique({
-              where: { id: assignment.id },
-              select: { employeeId: true, zoneId: true, chiefOfficerId: true },
-            });
-            if (!current || current.employeeId !== assignment.employeeId ||
-                current.zoneId !== assignment.zoneId || current.chiefOfficerId !== null) {
-              return { error: 'An employee-to-Zone chief assignment changed since deletion; rollback was stopped', status: 409 as const };
-            }
-          }
-
           await transaction.employee.create({
             data: {
               id: snapshot.id,
@@ -489,23 +504,13 @@ export async function POST(request: NextRequest) {
           });
           if (snapshot.zones.length) {
             await transaction.zoneEmployee.createMany({
-              data: snapshot.zones.map((zone) => ({
-                employeeId: snapshot.id,
-                zoneId: zone.zoneRecordId,
-                chiefOfficerId: zone.chiefOfficerId,
-              })),
+              data: snapshot.zones.map((zone) => ({ employeeId: snapshot.id, zoneId: zone.zoneRecordId })),
             });
           }
           for (const subordinate of snapshot.subordinates) {
             await transaction.employee.update({
               where: { id: subordinate.id },
               data: { managerId: snapshot.id },
-            });
-          }
-          for (const assignment of snapshot.chiefOfZones) {
-            await transaction.zoneEmployee.update({
-              where: { id: assignment.id },
-              data: { chiefOfficerId: snapshot.id },
             });
           }
           if (snapshot.history.length) {
@@ -546,16 +551,17 @@ export async function POST(request: NextRequest) {
               branchId: true,
               department: true,
               managerZoneId: true,
-              zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
+              managerId: true,
+              zones: { select: { zone: { select: { id: true, zoneId: true } } } },
               subordinates: { select: { id: true, managerId: true } },
             },
           });
           const currentZones = current?.zones.map((item) => ({
             zoneId: item.zone.zoneId,
             zoneRecordId: item.zone.id,
-            chiefOfficerId: item.chiefOfficerId,
           })).sort((left, right) => left.zoneId.localeCompare(right.zoneId)) ?? [];
-          const expectedZones = expected.zones.slice().sort((left, right) => left.zoneId.localeCompare(right.zoneId));
+          const expectedZones = expected.zones.map(({ zoneId, zoneRecordId }) => ({ zoneId, zoneRecordId }))
+            .sort((left, right) => left.zoneId.localeCompare(right.zoneId));
           const currentSubordinates = current?.subordinates.slice()
             .sort((left, right) => left.id - right.id) ?? [];
           const expectedSubordinates = expected.subordinates.slice()
@@ -564,6 +570,7 @@ export async function POST(request: NextRequest) {
               current.branchId !== expected.branchId ||
               current.department !== expected.department ||
               current.managerZoneId !== expected.managerZoneId ||
+              (expected.managerId !== undefined && current.managerId !== expected.managerId) ||
               JSON.stringify(currentZones) !== JSON.stringify(expectedZones) ||
               JSON.stringify(currentSubordinates) !== JSON.stringify(expectedSubordinates)) {
             return { error: `Employee record ${expected.id} has changed since this history entry; rollback was stopped`, status: 409 as const };
@@ -601,16 +608,13 @@ export async function POST(request: NextRequest) {
               branchId: snapshot.branchId,
               department: snapshot.department,
               managerZoneId: snapshot.managerZoneId,
+              ...(snapshot.managerId !== undefined ? { managerId: snapshot.managerId } : {}),
             },
           });
           await transaction.zoneEmployee.deleteMany({ where: { employeeId: snapshot.id } });
           if (snapshot.zones.length) {
             await transaction.zoneEmployee.createMany({
-              data: snapshot.zones.map((zone) => ({
-                employeeId: snapshot.id,
-                zoneId: zone.zoneRecordId,
-                chiefOfficerId: zone.chiefOfficerId,
-              })),
+              data: snapshot.zones.map((zone) => ({ employeeId: snapshot.id, zoneId: zone.zoneRecordId })),
             });
           }
           for (const subordinate of snapshot.subordinates) {

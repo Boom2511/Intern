@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, ZoneNodeKind, ZoneSource } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getPositionFromNodeKind } from '@/lib/organization-position';
 import { parseZoneIdentity } from '@/lib/zone-hierarchy';
 
 class ZoneAssignmentConflict extends Error {}
@@ -13,9 +14,9 @@ async function getAdministrator() {
 
 function getNodeLabel(nodeKind: ZoneNodeKind, department: string | null, labelNumber: number | null) {
   if (nodeKind === ZoneNodeKind.DELIVERY_HEAD) return department ? `หัวหน้านำจ่าย ${department}` : null;
-  if (nodeKind === ZoneNodeKind.DELIVERY_ZONE) return labelNumber ? `โซนนำจ่าย ${labelNumber}` : null;
+  if (nodeKind === ZoneNodeKind.DELIVERY_ZONE) return labelNumber ? `โซนนำจ่ายที่ ${labelNumber}` : null;
   if (nodeKind === ZoneNodeKind.DELIVERY_SIDE) return labelNumber ? `ด้านจ่ายที่ ${labelNumber}` : null;
-  return department ? `รถยนต์ ${department}` : null;
+  return department ? `นำจ่ายรถยนต์ ${department}` : null;
 }
 
 function getScopedBranchId(
@@ -86,14 +87,36 @@ export async function GET(request: NextRequest) {
 
     type ZoneRecord = (typeof zones)[number];
     type ZoneNode = Omit<ZoneRecord, 'employees'> & {
+      organizationalPosition: ReturnType<typeof getPositionFromNodeKind>;
       employees: ZoneRecord['employees'][number]['employee'][];
+      chiefController: ZoneRecord['employees'][number]['employee'] | null;
       children: ZoneNode[];
     };
     const nodes = new Map<string, ZoneNode>();
+    const zonesById = new Map(zones.map((zone) => [zone.zoneId, zone]));
     for (const zone of zones) {
+      const currentPosition = getPositionFromNodeKind(zone.nodeKind);
+      let controllerZone = currentPosition === 'CHIEF' || currentPosition === 'DB_HEAD'
+        ? zone
+        : zone.parentZoneId ? zonesById.get(zone.parentZoneId) : undefined;
+      const visited = new Set<string>();
+      while (controllerZone && getPositionFromNodeKind(controllerZone.nodeKind) !== 'CHIEF') {
+        if (visited.has(controllerZone.zoneId)) {
+          controllerZone = undefined;
+          break;
+        }
+        visited.add(controllerZone.zoneId);
+        controllerZone = controllerZone.parentZoneId
+          ? zonesById.get(controllerZone.parentZoneId)
+          : undefined;
+      }
       nodes.set(zone.zoneId, {
         ...zone,
+        organizationalPosition: getPositionFromNodeKind(zone.nodeKind),
         employees: zone.employees.map((assignment) => assignment.employee),
+        chiefController: controllerZone?.employees.length === 1
+          ? controllerZone.employees[0].employee
+          : null,
         children: [],
       });
     }
@@ -219,27 +242,31 @@ export async function POST(request: NextRequest) {
     const nodeKind = typeof item.nodeKind === 'string' && Object.values(ZoneNodeKind).includes(item.nodeKind as ZoneNodeKind)
       ? item.nodeKind as ZoneNodeKind
       : null;
+    const rowDepartment = typeof item.department === 'string'
+      ? item.department.trim() || null
+      : department;
     const labelNumber = Number(item.labelNumber);
     const needsNumber = nodeKind === ZoneNodeKind.DELIVERY_ZONE || nodeKind === ZoneNodeKind.DELIVERY_SIDE;
-    const zoneName = nodeKind && getNodeLabel(nodeKind, department, needsNumber ? labelNumber : null);
+    const zoneName = nodeKind && getNodeLabel(nodeKind, rowDepartment, needsNumber ? labelNumber : null);
     const employeeId = typeof item.employeeId === 'number' ? item.employeeId : null;
     const expectedUpdatedAt = typeof item.expectedUpdatedAt === 'string' ? item.expectedUpdatedAt : null;
     const invalidEmployeeId = item.employeeId !== undefined && item.employeeId !== null &&
       (typeof item.employeeId !== 'number' || !Number.isInteger(item.employeeId));
-    return { zoneId, nodeKind, labelNumber, zoneName, employeeId, expectedUpdatedAt, invalidEmployeeId };
+    const invalidDepartment = item.department !== undefined && item.department !== null && typeof item.department !== 'string';
+    return { zoneId, nodeKind, labelNumber, zoneName, department: rowDepartment, employeeId, expectedUpdatedAt, invalidEmployeeId, invalidDepartment };
   });
   const zoneIds = rows.map((row) => row.zoneId);
   const assignedEmployeeIds = rows.map((row) => row.employeeId).filter((id): id is number => id !== null);
-  if (branchId === undefined || !department || department.length > 120 ||
+  if (branchId === undefined ||
       (body.department !== undefined && body.department !== null && typeof body.department !== 'string') ||
       (body.parentZoneId !== undefined && body.parentZoneId !== null && typeof body.parentZoneId !== 'string') ||
       (batchRows && (!batchRows.length || batchRows.length > 100)) ||
-      rows.some(({ zoneId, nodeKind, labelNumber, zoneName, employeeId, expectedUpdatedAt, invalidEmployeeId }) => {
+      rows.some(({ zoneId, nodeKind, labelNumber, zoneName, department: rowDepartment, employeeId, expectedUpdatedAt, invalidEmployeeId, invalidDepartment }) => {
         const needsNumber = nodeKind === ZoneNodeKind.DELIVERY_ZONE || nodeKind === ZoneNodeKind.DELIVERY_SIDE;
-        return !zoneId || zoneId.length > 120 || !nodeKind ||
+        return !zoneId || zoneId.length > 120 || !nodeKind || !rowDepartment || rowDepartment.length > 120 ||
           (needsNumber && (!Number.isInteger(labelNumber) || labelNumber <= 0)) ||
           !zoneName || zoneName.length > 255 ||
-          invalidEmployeeId ||
+          invalidEmployeeId || invalidDepartment ||
           (employeeId !== null && (employeeId <= 0 || !expectedUpdatedAt || Number.isNaN(new Date(expectedUpdatedAt).getTime())));
       }) ||
       new Set(zoneIds).size !== zoneIds.length ||
@@ -253,25 +280,42 @@ export async function POST(request: NextRequest) {
   try {
     const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true } });
     if (!branch) return NextResponse.json({ error: 'Selected branch was not found' }, { status: 404 });
-    const registeredDepartment = await prisma.organizationDepartment.findFirst({
-      where: { branchId, name: { equals: department ?? '', mode: 'insensitive' } },
-      select: { id: true },
+    const registeredDepartments = await prisma.organizationDepartment.findMany({
+      where: { branchId },
+      select: { name: true },
     });
-    if (!registeredDepartment) {
-      return NextResponse.json({ error: 'Create or select a registered department before adding a Zone' }, { status: 400 });
+    const registeredDepartmentNames = new Set(registeredDepartments.map((item) => item.name.toLocaleUpperCase()));
+    const missingDepartment = rows.find((row) => !row.department || !registeredDepartmentNames.has(row.department.toLocaleUpperCase()));
+    if (missingDepartment) {
+      return NextResponse.json({ error: `Select a registered department for Zone ${missingDepartment.zoneId}` }, { status: 400 });
     }
 
-    const departmentHead = await prisma.zone.findFirst({
-      where: {
-        branchId,
-        department: { equals: department, mode: 'insensitive' },
-        nodeKind: ZoneNodeKind.DELIVERY_HEAD,
-      },
+    const existingZoneIds = await prisma.zone.findMany({
+      where: { OR: zoneIds.map((id) => ({ zoneId: { equals: id, mode: 'insensitive' as const } })) },
       select: { zoneId: true },
     });
-    const headCount = rows.filter((row) => row.nodeKind === ZoneNodeKind.DELIVERY_HEAD).length;
-    if (headCount && (departmentHead || headCount > 1)) {
-      return NextResponse.json({ error: 'This department already has a department head Zone or the batch contains duplicates' }, { status: 409 });
+    if (existingZoneIds.length) {
+      return NextResponse.json({ error: `Zone ID already exists: ${existingZoneIds.map((zone) => zone.zoneId).join(', ')}` }, { status: 409 });
+    }
+
+    const existingHeadDepartments = new Set(
+      (await prisma.zone.findMany({
+        where: { branchId, nodeKind: ZoneNodeKind.DELIVERY_HEAD },
+        select: { zoneId: true, department: true },
+      })).map((head) => head.department?.toLocaleUpperCase()).filter((value): value is string => Boolean(value)),
+    );
+    const requestedHeadDepartments = new Set<string>();
+    let duplicateHead: (typeof rows)[number] | undefined;
+    for (const row of rows.filter((item) => item.nodeKind === ZoneNodeKind.DELIVERY_HEAD)) {
+      const key = row.department!.toLocaleUpperCase();
+      if (existingHeadDepartments.has(key) || requestedHeadDepartments.has(key)) {
+        duplicateHead = row;
+        break;
+      }
+      requestedHeadDepartments.add(key);
+    }
+    if (duplicateHead) {
+      return NextResponse.json({ error: `The department already has a head Zone: ${duplicateHead.department}` }, { status: 409 });
     }
 
     if (rows.some((row) => row.nodeKind === ZoneNodeKind.DELIVERY_HEAD) && requestedParentZoneId) {
@@ -284,7 +328,8 @@ export async function POST(request: NextRequest) {
         select: { branchId: true, department: true, nodeKind: true },
       });
       if (!parent || parent.branchId !== branchId ||
-          parent.department?.toUpperCase() !== department?.toUpperCase() ||
+          parent.department?.toUpperCase() !== rows[0]?.department?.toUpperCase() ||
+          rows.length !== 1 ||
           parent.nodeKind === ZoneNodeKind.DELIVERY_SIDE) {
         return NextResponse.json({ error: 'Choose a parent Zone from the same branch and department; delivery sides cannot be parents' }, { status: 400 });
       }
@@ -298,11 +343,12 @@ export async function POST(request: NextRequest) {
         });
         const selectedEmployees = await transaction.employee.findMany({
           where: { id: { in: assignedEmployeeIds } },
-          select: { id: true, branchId: true, updatedAt: true, zones: { select: { zoneId: true } } },
+          select: { id: true, branchId: true, department: true, updatedAt: true, zones: { select: { zoneId: true } } },
         });
         if (selectedEmployees.length !== assignedEmployeeIds.length ||
             selectedEmployees.some((employee) =>
               employee.branchId !== branchId ||
+              (employee.department !== null && employee.department.toLocaleUpperCase() !== rowByEmployeeId.get(employee.id)!.department!.toLocaleUpperCase()) ||
               employee.zones.length > 0 ||
               employee.updatedAt.getTime() !== new Date(rowByEmployeeId.get(employee.id)!.expectedUpdatedAt!).getTime()
             )) {
@@ -317,7 +363,7 @@ export async function POST(request: NextRequest) {
         const currentHead = row.nodeKind === ZoneNodeKind.DELIVERY_HEAD
           ? null
           : await transaction.zone.findFirst({
-            where: { branchId, department: { equals: department, mode: 'insensitive' }, nodeKind: ZoneNodeKind.DELIVERY_HEAD },
+            where: { branchId, department: { equals: row.department!, mode: 'insensitive' }, nodeKind: ZoneNodeKind.DELIVERY_HEAD },
             select: { zoneId: true },
           });
         const parentZoneId = requestedParentZoneId ??
@@ -327,7 +373,7 @@ export async function POST(request: NextRequest) {
             zoneId: row.zoneId,
             zoneName: row.zoneName!,
             nodeKind: row.nodeKind!,
-            department,
+            department: row.department!,
             branchId,
             parentZoneId,
             zoneType: parseZoneIdentity(row.zoneId)?.zoneType ?? 'OTHER',
@@ -338,6 +384,10 @@ export async function POST(request: NextRequest) {
         });
         createdByZoneId.set(row.zoneId, { zoneId: created.zoneId });
         if (row.employeeId !== null) {
+          const targetPosition = getPositionFromNodeKind(row.nodeKind);
+          if (!targetPosition) {
+            throw new ZoneAssignmentConflict(`Zone ${row.zoneId} has no mapped Node type`);
+          }
           const before = await transaction.employee.findUniqueOrThrow({
             where: { id: row.employeeId },
             select: {
@@ -349,7 +399,7 @@ export async function POST(request: NextRequest) {
               department: true,
               managerZoneId: true,
               updatedAt: true,
-              zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
+              zones: { select: { zone: { select: { id: true, zoneId: true } } } },
               subordinates: { select: { id: true, managerId: true } },
             },
           });
@@ -360,7 +410,11 @@ export async function POST(request: NextRequest) {
               updatedAt: new Date(row.expectedUpdatedAt!),
               zones: { none: {} },
             },
-            data: { department, updatedAt: new Date() },
+            data: {
+              department: row.department,
+              role: targetPosition,
+              updatedAt: new Date(),
+            },
           });
           if (claimed.count !== 1) {
             throw new ZoneAssignmentConflict(`${before.name} (${before.employeeId}) ถูกกำหนด Zone แล้ว กรุณาโหลดรายชื่อใหม่`);
@@ -377,7 +431,7 @@ export async function POST(request: NextRequest) {
               department: true,
               managerZoneId: true,
               updatedAt: true,
-              zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
+              zones: { select: { zone: { select: { id: true, zoneId: true } } } },
               subordinates: { select: { id: true, managerId: true } },
             },
           });
@@ -400,7 +454,6 @@ export async function POST(request: NextRequest) {
             zones: employee.zones.map((zone) => ({
               zoneId: zone.zone.zoneId,
               zoneRecordId: zone.zone.id,
-              chiefOfficerId: zone.chiefOfficerId,
             })),
             subordinates: employee.subordinates,
           });
@@ -432,7 +485,7 @@ export async function POST(request: NextRequest) {
           await transaction.zone.updateMany({
             where: {
               branchId,
-              department: { equals: department, mode: 'insensitive' },
+              department: { equals: row.department!, mode: 'insensitive' },
               parentZoneId: null,
               zoneId: { not: row.zoneId },
             },

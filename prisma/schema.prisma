@@ -296,9 +296,9 @@ model LineApiLog {
 
 // Employee Role enum - Hierarchy: DB_HEAD > CHIEF > STAFF
 enum Role {
-  STAFF // พนักงานทั่วไป (EMS)
-  CHIEF // หัวหน้าโซน (ZNE)
-  DB_HEAD // หัวหน้าแผนก (REG)
+  STAFF // Operational employee
+  CHIEF // Zone supervisor
+  DB_HEAD // Department head
 }
 
 // Zone Source enum - Where the zone data came from
@@ -341,7 +341,6 @@ model Employee {
   updatedAt DateTime @default(now()) @updatedAt
 
   zones        ZoneEmployee[]
-  chiefOfZones ZoneEmployee[]          @relation("EmployeeChief")
   history      EmployeeChangeHistory[]
 
   @@index([employeeId])
@@ -388,7 +387,7 @@ model EmployeeChangeHistory {
 // Zone - Store zone/area information
 model Zone {
   id              Int           @id @default(autoincrement())
-  zoneId          String        @unique // Zone ID (e.g., "REG10260EVD0001", "ZNE10260EVD1001")
+  zoneId          String        @unique // Unique Zone identifier; position is determined by nodeKind
   zoneName        String? // Zone Thai name
   zoneType        ZoneType      @default(OTHER)
   nodeKind        ZoneNodeKind?
@@ -459,21 +458,18 @@ model OrganizationChangeHistory {
   @@index([rolledBackAt])
 }
 
-// ZoneEmployee - Junction table for many-to-many relationship between Zone and Employee
+// One employee may own at most one Zone, and each Zone may have at most one owner.
 model ZoneEmployee {
   id             Int  @id @default(autoincrement())
   zoneId         Int
   employeeId     Int
-  chiefOfficerId Int? // Optional: CHIEF OFFICER who manages this employee in this zone
+  zone     Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  zone         Zone      @relation(fields: [zoneId], references: [id], onDelete: Cascade)
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  chiefOfficer Employee? @relation("EmployeeChief", fields: [chiefOfficerId], references: [id], onDelete: SetNull)
-
-  @@unique([zoneId, employeeId])
+  @@unique([zoneId])
+  @@unique([employeeId])
   @@index([zoneId])
   @@index([employeeId])
-  @@index([chiefOfficerId])
 }
 
 // ZoneImportLog - Track Excel import history for zone-employee assignments

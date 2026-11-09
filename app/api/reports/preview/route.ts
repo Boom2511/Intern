@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
-import { getTicketBranchScope } from '@/lib/branch-access';
-import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportBranchScope } from '@/lib/branch-access';
+import { getReportNodeKindLabel, getReportZoneInfo } from '@/lib/report-zone-employees';
 import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
@@ -17,11 +16,16 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    const branchScope = getTicketBranchScope(user);
-    if (!branchScope) return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
-
     const body = await request.json();
     const { startDate, endDate, sourceSystem, includeSamples, sampleLimit = 5 } = body as any;
+    const branchScope = getReportBranchScope(user, body.branchId);
+    if (!branchScope) {
+      return NextResponse.json({
+        success: false,
+        error: user.isSuperAdmin ? 'Choose a valid branch' : 'Your account is not assigned to a branch',
+      }, { status: 403 });
+    }
+    const reportBranchId = user.isSuperAdmin ? Number(body.branchId) : user.branchId!;
 
     let reportDateRange;
     try {
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
       });
 
       const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
-      const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
+      const zoneMap = await getReportZoneInfo(zoneIds, reportBranchId);
 
       samples = tickets.map((ticket) => {
         const latestClosed = (ticket as any).statusHistory?.[0];
@@ -86,8 +90,11 @@ export async function POST(request: NextRequest) {
           customerName: ticket.recipientName, // ชื่อผู้รับจาก Ticket (แก้ไขได้)
           customerPhone: ticket.recipientPhone, // เบอร์ผู้รับจาก Ticket (แก้ไขได้) - แสดงเป็น +66XXXXXXXXX (E.164)
           customerAddress: ticket.recipientAddress || '-',
-          staffName: zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-',
-          department: ticket.department || '-',
+          staffName: zoneInfo?.staffName || '-',
+          staffEmployeeId: zoneInfo?.staffEmployeeId || '-',
+          department: zoneInfo?.department || ticket.department || '-',
+          zoneId: zoneInfo?.zoneId || ticket.zoneId || '-',
+          nodeKind: getReportNodeKindLabel(zoneInfo?.nodeKind),
           chief: zoneInfo?.chief || '-',
           dbHead: zoneInfo?.dbHead || '-',
           description: ticket.description,

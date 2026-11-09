@@ -13,19 +13,8 @@ export function validateRows(rows: ImportRow[]): ValidationResult[] {
       errors.push('Missing Employee info');
     }
 
-    const selfChief = row.employeeId === row.chiefOfficerId;
-    const selfHead = row.employeeId === row.dbHeadId;
-
-    if (row.role === 'STAFF' && (selfChief || selfHead)) {
-      errors.push('STAFF cannot be their own manager');
-    }
-
-    if (row.role === 'CHIEF' && !row.dbHeadId) {
-      warnings.push('CHIEF has no DB_HEAD');
-    }
-
-    if (row.role === 'STAFF' && !row.chiefOfficerId) {
-      warnings.push('STAFF has no CHIEF');
+    if (row.zoneId && row.employeeId) {
+      warnings.push('Position and reporting path are derived from the Zone hierarchy; review them in Zone Hierarchy.');
     }
 
     return {

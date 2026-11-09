@@ -21,21 +21,34 @@ type Branch = { id: number; name: string; _count?: { employees: number } };
 type Manager = { id: number; employeeId: string; name: string; role: Role; branchId: number | null; department: string | null };
 type ZoneNodeKind = 'DELIVERY_HEAD' | 'DELIVERY_ZONE' | 'DELIVERY_SIDE' | 'CAR';
 type Zone = { id: number; zoneId: string; zoneName: string | null; nodeKind: ZoneNodeKind | null; parentZoneId: string | null; branchId: number | null; department: string | null };
+type ZoneAuthorityPerson = { id: number; employeeId: string; name: string; role: Role };
+type ZoneAuthorityParent = Pick<Zone, 'zoneId' | 'zoneName' | 'nodeKind' | 'department'> | 'Missing' | null;
+type ZoneAuthorityValue = ZoneAuthorityPerson | 'Missing' | null;
 type Employee = {
   id: number;
   employeeId: string;
   name: string;
   role: Role;
+  organizationalPosition: Role | null;
   department: string | null;
   branchId: number | null;
   branch: Branch | null;
   managerId: number | null;
-  manager: { id: number; employeeId: string; name: string } | null;
+  manager: {
+    id: number;
+    employeeId: string;
+    name: string;
+    role: Role;
+    manager: { id: number; employeeId: string; name: string; role: Role } | null;
+  } | null;
   managerZoneId: string | null;
   managerZone: { zoneId: string; zoneName: string | null; nodeKind: ZoneNodeKind | null; department: string | null } | null;
   subordinates: Manager[];
-  zones: Array<{ zone: Zone }>;
+  zones: Array<{
+    zone: Zone;
+  }>;
   zone: Zone | null;
+  zoneAuthority?: { parent: ZoneAuthorityParent; chief: ZoneAuthorityValue; dbHead: ZoneAuthorityValue };
   updatedAt: string;
   zoneAssignmentStatus: 'assigned' | 'unassigned';
 };
@@ -62,6 +75,16 @@ type BulkEmployeeEdit = {
   status?: string;
   autoAdded?: boolean;
 };
+type NewEmployeeForm = {
+  employeeId: string;
+  name: string;
+};
+type DirectReportPlan = {
+  action: 'follow' | 'retain' | 'reassign' | 'unassign';
+  branchId: string;
+  department: string;
+  managerId: string;
+};
 type PageData = {
   employees: Employee[];
   isSuperAdmin: boolean;
@@ -70,13 +93,19 @@ type PageData = {
   summary: { total: number; withoutManager: number; incomplete: number; zonesWithoutManager: number };
   options: { branches: Branch[]; departments: string[]; zones: Zone[]; managers: Manager[]; roles: Role[] };
 };
+type BranchEmployeeOptions = {
+  branchId: string;
+  managers: Manager[];
+  departments: string[];
+};
 
 const roleLabels: Record<Role, string> = { DB_HEAD: 'หัวหน้าแผนก', CHIEF: 'หัวหน้าโซน', STAFF: 'พนักงาน' };
+const reportingManagerRole: Partial<Record<Role, Role>> = { STAFF: 'CHIEF', CHIEF: 'DB_HEAD' };
 const zoneKindLabels: Record<ZoneNodeKind, string> = {
   DELIVERY_HEAD: 'หัวหน้านำจ่าย',
   DELIVERY_ZONE: 'โซนนำจ่ายที่',
   DELIVERY_SIDE: 'ด้านจ่ายที่',
-  CAR: 'รถยนต์',
+  CAR: 'นำจ่ายรถยนต์',
 };
 
 function getZoneDisplayName(zone: Pick<Zone, 'zoneId' | 'zoneName' | 'nodeKind' | 'department'> | null | undefined) {
@@ -85,12 +114,34 @@ function getZoneDisplayName(zone: Pick<Zone, 'zoneId' | 'zoneName' | 'nodeKind' 
   if (zone.nodeKind === 'DELIVERY_HEAD') return `${zoneKindLabels[zone.nodeKind]} ${zone.department || ''}`.trim();
   if (zone.nodeKind === 'CAR') return `${zoneKindLabels[zone.nodeKind]} ${zone.department || ''}`.trim();
   const number = zone.zoneName?.match(/(\d+)\s*$/)?.[1] ?? zone.zoneId.match(/(\d+)\s*$/)?.[1];
-  return number ? `${zoneKindLabels[zone.nodeKind]} ${number}` : zoneKindLabels[zone.nodeKind];
+  if (zone.nodeKind === 'DELIVERY_ZONE') return number ? `${zoneKindLabels[zone.nodeKind]} ${number}` : zoneKindLabels[zone.nodeKind];
+  if (zone.nodeKind === 'DELIVERY_SIDE') return number ? `${zoneKindLabels[zone.nodeKind]} ${number}` : zoneKindLabels[zone.nodeKind];
+  return zoneKindLabels[zone.nodeKind];
 }
 
 function getEmployeeZoneLabel(zone: Zone | null) {
   if (!zone) return '';
   return zone.zoneId;
+}
+
+function getAuthorityDisplay(employee: Employee) {
+  const display = (authority: ZoneAuthorityValue | undefined) => {
+    if (authority === 'Missing') return 'ข้อมูลไม่ครบ';
+    if (!authority) return 'ยังไม่ได้กำหนด';
+    return `${authority.name} (${authority.employeeId})`;
+  };
+  const parent = employee.zoneAuthority?.parent;
+  const dbHead = employee.zoneAuthority?.dbHead;
+  const chief = employee.zoneAuthority?.chief;
+  return {
+    parent: parent === 'Missing'
+      ? 'ข้อมูลไม่ครบ'
+      : parent
+        ? `${parent.zoneId} · ${getZoneDisplayName(parent)}`
+        : 'ยังไม่ได้กำหนด',
+    chief: display(chief && chief !== 'Missing' ? chief : dbHead),
+    dbHead: display(dbHead),
+  };
 }
 
 function sortZonesByHierarchy(zones: Zone[]) {
@@ -153,17 +204,18 @@ export default function OrganizationManagement({ initialView }: { initialView: '
   const [page, setPage] = useState(1);
   const [branchFilter, setBranchFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [zoneFilter, setZoneFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [responsibilityFilter, setResponsibilityFilter] = useState('');
   const view = initialView;
   const [sort, setSort] = useState<'name' | 'employeeId' | 'updatedAt'>('name');
   const [direction, setDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [employeeCache, setEmployeeCache] = useState<Record<number, Employee>>({});
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
-  const [editOperation, setEditOperation] = useState<'profile' | 'role' | 'assignment' | 'zone'>('profile');
-  const [editForm, setEditForm] = useState({ name: '', employeeId: '', role: 'STAFF' as Role, branchId: '', department: '', zoneId: '', managerZoneId: '' });
+  const [editOperation, setEditOperation] = useState<'profile' | 'role' | 'assignment' | 'reporting' | 'zone'>('profile');
+  const [editForm, setEditForm] = useState({ name: '', employeeId: '', role: 'STAFF' as Role, branchId: '', department: '', zoneId: '', managerZoneId: '', managerId: '' });
   const [subordinateAction, setSubordinateAction] = useState<'retain' | 'unassign' | 'reassign'>('retain');
+  const [subordinateTransferMode, setSubordinateTransferMode] = useState<'follow' | 'retain' | 'individual' | ''>('');
+  const [individualSubordinatePlans, setIndividualSubordinatePlans] = useState<Record<number, DirectReportPlan>>({});
   const [reassignManagerId, setReassignManagerId] = useState('');
   const [saving, setSaving] = useState(false);
   const [editReview, setEditReview] = useState(false);
@@ -178,7 +230,10 @@ export default function OrganizationManagement({ initialView }: { initialView: '
   const [branchDeleteId, setBranchDeleteId] = useState('');
   const [newEmployeeDialog, setNewEmployeeDialog] = useState(false);
   const [employeeDeleteTarget, setEmployeeDeleteTarget] = useState<Employee | null>(null);
-  const [newEmployeeForms, setNewEmployeeForms] = useState([{ employeeId: '', name: '' }]);
+  const [newEmployeeForms, setNewEmployeeForms] = useState<NewEmployeeForm[]>([
+    { employeeId: '', name: '' },
+  ]);
+  const [branchEmployeeOptions, setBranchEmployeeOptions] = useState<Record<string, BranchEmployeeOptions>>({});
   const [newEmployeeBranchId, setNewEmployeeBranchId] = useState('');
   const [bulkDialog, setBulkDialog] = useState(false);
   const [bulkClearOnly, setBulkClearOnly] = useState(false);
@@ -202,8 +257,7 @@ export default function OrganizationManagement({ initialView }: { initialView: '
     if (delayedSearch) params.set('search', delayedSearch);
     if (branchFilter) params.set('branchId', branchFilter);
     if (departmentFilter) params.set('department', departmentFilter);
-    if (zoneFilter) params.set('zoneId', zoneFilter);
-    if (statusFilter) params.set('nodeStatus', statusFilter);
+    if (responsibilityFilter) params.set('responsibility', responsibilityFilter);
     try {
       const response = await fetch(`/api/organization/employees?${params}`);
       const result = await response.json();
@@ -220,11 +274,45 @@ export default function OrganizationManagement({ initialView }: { initialView: '
     } finally {
       setLoading(false);
     }
-  }, [page, sort, direction, delayedSearch, branchFilter, departmentFilter, zoneFilter, statusFilter]);
+  }, [page, sort, direction, delayedSearch, branchFilter, departmentFilter, responsibilityFilter]);
 
   useEffect(() => {
     if (view !== 'zones') void load(page);
   }, [load, page, view]);
+
+  const optionLookupBranchIds = Array.from(new Set([
+    ...(editEmployee && editOperation === 'assignment' ? [editForm.branchId] : []),
+    ...(editEmployee && subordinateTransferMode === 'individual'
+      ? Object.values(individualSubordinatePlans).map((plan) => plan.branchId)
+      : []),
+  ].filter(Boolean))).sort();
+  const optionLookupBranchKey = optionLookupBranchIds.join(',');
+  useEffect(() => {
+    if (!optionLookupBranchKey) return;
+    const controller = new AbortController();
+    const loadBranchOptions = async () => {
+      try {
+        const options = await Promise.all(optionLookupBranchKey.split(',').map(async (branchId) => {
+          const params = new URLSearchParams({ branchId, page: '1', pageSize: '1' });
+          const response = await fetch(`/api/organization/employees?${params}`, { signal: controller.signal });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Unable to load branch options');
+          return [branchId, {
+            branchId,
+            managers: result.options.managers,
+            departments: result.options.departments,
+          } satisfies BranchEmployeeOptions] as const;
+        }));
+        setBranchEmployeeOptions((current) => ({ ...current, ...Object.fromEntries(options) }));
+      } catch (optionError) {
+        if (optionError instanceof Error && optionError.name === 'AbortError') return;
+        setDialogError(optionError instanceof Error ? optionError.message : 'Unable to load branch options');
+      }
+    };
+    void loadBranchOptions();
+    return () => controller.abort();
+  }, [optionLookupBranchKey]);
+
   const openEditor = (employee: Employee) => {
     setEditEmployee(employee);
     setEditOperation('profile');
@@ -234,6 +322,16 @@ export default function OrganizationManagement({ initialView }: { initialView: '
     setEditReview(false);
     setDialogError('');
     setSubordinateAction('retain');
+    setSubordinateTransferMode('');
+    setIndividualSubordinatePlans(Object.fromEntries(employee.subordinates.map((report) => [
+      report.id,
+      {
+        action: 'retain' as const,
+        branchId: report.branchId ? String(report.branchId) : '',
+        department: report.department ?? '',
+        managerId: '',
+      },
+    ])));
     setReassignManagerId('');
     setEditForm({
       name: employee.name,
@@ -243,6 +341,7 @@ export default function OrganizationManagement({ initialView }: { initialView: '
       department: employee.department ?? '',
       zoneId: employee.zone?.zoneId ?? '',
       managerZoneId: employee.managerZoneId ?? '',
+      managerId: employee.managerId ? String(employee.managerId) : '',
     });
   };
 
@@ -290,36 +389,13 @@ export default function OrganizationManagement({ initialView }: { initialView: '
 
   const saveEmployee = async () => {
     if (!editEmployee || !data) return;
-    if (editOperation === 'profile' && editForm.zoneId.trim() &&
-        !data.options.zones.some((zone) => zone.zoneId === editForm.zoneId.trim().toUpperCase())) {
-      setDialogError('ไม่พบ Zone ID นี้ในระบบ กรุณาสร้าง Zone ในแท็บ Hierarchy & Zones ก่อน assign');
-      return;
-    }
     setSaving(true);
     setDialogError('');
     const body = {
-      operation: editOperation,
+      operation: 'profile',
       expectedUpdatedAt: editEmployee.updatedAt,
-      ...(editOperation === 'profile' ? {
-        name: editForm.name,
-        employeeId: editForm.employeeId,
-        zoneId: editForm.zoneId.trim().toUpperCase() || null,
-      } : {}),
-      ...(editOperation === 'role' ? {
-        role: editForm.role,
-        managerZoneId: editForm.managerZoneId || null,
-        subordinateAction,
-        reassignManagerId: reassignManagerId ? Number(reassignManagerId) : undefined,
-      } : {}),
-      ...(editOperation === 'assignment' ? {
-        branchId: editForm.branchId ? Number(editForm.branchId) : null,
-        department: editForm.department || null,
-        zoneId: editForm.zoneId.trim().toUpperCase() || null,
-        managerZoneId: editForm.managerZoneId || null,
-        subordinateAction,
-        reassignManagerId: reassignManagerId ? Number(reassignManagerId) : undefined,
-      } : {}),
-      ...(editOperation === 'zone' ? { zoneId: editForm.zoneId.trim().toUpperCase() || null } : {}),
+      name: editForm.name,
+      employeeId: editForm.employeeId,
     };
     try {
       const response = await fetch(`/api/organization/employees/${editEmployee.id}`, {
@@ -701,6 +777,7 @@ export default function OrganizationManagement({ initialView }: { initialView: '
   };
 
   const optionData = data?.options;
+  const editBranchOptions = branchEmployeeOptions[editForm.branchId] ?? null;
   const hierarchyOrderedZones = sortZonesByHierarchy(optionData?.zones ?? []);
   const editAvailableZones = hierarchyOrderedZones.filter((zone) =>
     zone.branchId === editEmployee?.branchId &&
@@ -722,36 +799,57 @@ export default function OrganizationManagement({ initialView }: { initialView: '
   const editCurrentSummary = editEmployee ? {
     name: editEmployee.name,
     employeeId: editEmployee.employeeId,
-    role: roleLabels[editEmployee.role],
+    position: editEmployee.organizationalPosition
+      ? roleLabels[editEmployee.organizationalPosition]
+      : editEmployee.zone ? 'Unmapped Node type' : 'Pending placement',
     branch: editEmployee.branch?.name || 'Unassigned',
     department: editEmployee.department || 'Unassigned',
     zone: editEmployee.zone ? `${getEmployeeZoneLabel(editEmployee.zone)} · ${getZoneDisplayName(editEmployee.zone)}` : 'Unassigned',
-    manager: editEmployee.managerZoneId
-      ? `${editEmployee.managerZoneId}${getZoneDisplayName(editEmployee.managerZone) ? ` · ${getZoneDisplayName(editEmployee.managerZone)}` : ''}`
-      : 'Unassigned',
+    reportingPath: (() => {
+      const authority = getAuthorityDisplay(editEmployee);
+      return `${authority.parent} → ${authority.chief} → ${authority.dbHead}`;
+    })(),
   } : null;
+  const proposedManagerRole = editOperation === 'role' ? reportingManagerRole[editForm.role] : reportingManagerRole[editEmployee?.role ?? 'STAFF'];
+  const proposedBranchId = editOperation === 'assignment' ? Number(editForm.branchId) : editEmployee?.branchId;
+  const proposedDepartment = editOperation === 'assignment' ? editForm.department : editEmployee?.department;
+  const proposedEmployeeRole = editOperation === 'role' ? editForm.role : editEmployee?.role;
+  const chiefSubordinateActionsVisible = editEmployee?.role === 'CHIEF' &&
+    editEmployee.subordinates.length > 0 &&
+    ['role', 'assignment', 'reporting'].includes(editOperation);
+  const reportingManagers = (editBranchOptions?.managers ?? optionData?.managers ?? []).filter((manager) =>
+    manager.role === proposedManagerRole &&
+    manager.id !== editEmployee?.id &&
+    manager.branchId === proposedBranchId &&
+    (manager.department ?? '').toLocaleUpperCase() === (proposedDepartment ?? '').toLocaleUpperCase()
+  ) ?? [];
+  const selectedReportingManager = (editBranchOptions?.managers ?? optionData?.managers ?? []).find((manager) => String(manager.id) === editForm.managerId)
+    ?? (editEmployee?.manager?.id === Number(editForm.managerId) ? editEmployee.manager : null);
+  const individualPlanIncomplete = chiefSubordinateActionsVisible &&
+    subordinateTransferMode === 'individual' &&
+    editEmployee?.subordinates.some((report) => {
+      const plan = individualSubordinatePlans[report.id];
+      return !plan || (plan.action === 'reassign' && (!plan.branchId || !plan.managerId));
+    });
   const editProposedSummary = editEmployee ? {
     name: editOperation === 'profile' ? editForm.name : editEmployee.name,
     employeeId: editOperation === 'profile' ? editForm.employeeId : editEmployee.employeeId,
-    role: roleLabels[editOperation === 'role' ? editForm.role : editEmployee.role],
+    position: editEmployee.organizationalPosition
+      ? roleLabels[editEmployee.organizationalPosition]
+      : editEmployee.zone ? 'Unmapped Node type' : 'Pending placement',
     branch: editOperation === 'assignment' ? optionData?.branches.find((branch) => String(branch.id) === editForm.branchId)?.name || 'Unassigned' : editEmployee.branch?.name || 'Unassigned',
     department: editOperation === 'assignment'
       ? editForm.department || 'Unassigned'
-      : editOperation === 'zone'
-        ? optionData?.zones.find((zone) => zone.zoneId === editForm.zoneId)?.department || 'Unassigned'
-        : editEmployee.department || 'Unassigned',
+      : editEmployee.department || 'Unassigned',
     zone: editOperation === 'profile' || editOperation === 'assignment' || editOperation === 'zone'
       ? editForm.zoneId
         ? `${getEmployeeZoneLabel(optionData?.zones.find((zone) => zone.zoneId === editForm.zoneId) ?? null)} · ${getZoneDisplayName(optionData?.zones.find((zone) => zone.zoneId === editForm.zoneId))}`
         : 'Unassigned'
       : getZoneDisplayName(editEmployee.zone) || 'Unassigned',
-    manager: editOperation === 'assignment' || editOperation === 'role'
-      ? editForm.managerZoneId
-        ? `${editForm.managerZoneId}${getZoneDisplayName(optionData?.zones.find((zone) => zone.zoneId === editForm.managerZoneId)) ? ` · ${getZoneDisplayName(optionData?.zones.find((zone) => zone.zoneId === editForm.managerZoneId))}` : ''}`
-        : 'Unassigned'
-      : editEmployee.managerZoneId
-        ? `${editEmployee.managerZoneId}${getZoneDisplayName(editEmployee.managerZone) ? ` · ${getZoneDisplayName(editEmployee.managerZone)}` : ''}`
-        : 'Unassigned',
+    reportingPath: (() => {
+      const authority = getAuthorityDisplay(editEmployee);
+      return `${authority.parent} → ${authority.chief} → ${authority.dbHead}`;
+    })(),
   } : null;
 
   if (forbidden) {
@@ -854,8 +952,7 @@ export default function OrganizationManagement({ initialView }: { initialView: '
                 <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15" value={branchFilter} onChange={(event) => {
                   setBranchFilter(event.target.value);
                   setDepartmentFilter('');
-                  setZoneFilter('');
-                  setStatusFilter('');
+                  setResponsibilityFilter('');
                   setSelectedIds([]);
                   setPage(1);
                 }}>
@@ -867,16 +964,14 @@ export default function OrganizationManagement({ initialView }: { initialView: '
                   <option value="">ทุกแผนก</option>{optionData?.departments.map((department) => <option key={department} value={department}>{department}</option>)}
                 </select>
               </label>
-              <label className={`text-xs font-medium text-slate-600 ${data?.isSuperAdmin ? 'lg:col-span-2' : 'lg:col-span-3'}`}>Zone
-                <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15" value={zoneFilter} onChange={(event) => { setZoneFilter(event.target.value); setPage(1); }}>
-                  <option value="">ทุก Zone</option>{hierarchyOrderedZones.filter((zone) => !data?.isSuperAdmin || !branchFilter || zone.branchId === Number(branchFilter)).map((zone) => <option key={zone.id} value={zone.zoneId}>{zone.zoneId} · {getZoneDisplayName(zone)}</option>)}
-                </select>
-              </label>
-              <label className={`text-xs font-medium text-slate-600 ${data?.isSuperAdmin ? 'lg:col-span-3' : 'lg:col-span-2'}`}>สถานะโหนด
-                <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
-                  <option value="">ทุกสถานะ</option>
+              <label className={`text-xs font-medium text-slate-600 ${data?.isSuperAdmin ? 'lg:col-span-3' : 'lg:col-span-3'}`}>รับผิดชอบ
+                <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15" value={responsibilityFilter} onChange={(event) => { setResponsibilityFilter(event.target.value); setPage(1); }}>
+                  <option value="">ทุกความรับผิดชอบ</option>
+                  <option value="DELIVERY_HEAD">หัวหน้านำจ่าย</option>
+                  <option value="DELIVERY_ZONE">โซนนำจ่ายที่…</option>
+                  <option value="DELIVERY_SIDE">ด้านจ่ายที่…</option>
+                  <option value="CAR">นำจ่ายรถยนต์</option>
                   <option value="pending">รอกำหนด</option>
-                  <option value="node">มีโหนด</option>
                 </select>
               </label>
               </div>
@@ -897,12 +992,11 @@ export default function OrganizationManagement({ initialView }: { initialView: '
               <div className="flex w-full max-w-[1500px] flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white/95 px-3.5 py-2.5 shadow-[0_8px_32px_rgba(15,23,42,0.18)] backdrop-blur">
               <strong className="flex items-center gap-2 text-sm text-slate-800"><Users className="h-4 w-4 text-blue-700" />เลือกแล้ว {selectedIds.length} รายการ</strong>
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" className="h-8 rounded-md bg-blue-700 text-xs hover:bg-blue-800" onClick={() => openBulkEditor(false)}>
-                  แก้ไข
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 rounded-md text-xs" onClick={() => openBulkEditor(true)}>
-                  ล้าง Zone
-                </Button>
+                {selectedIds.length <= 100
+                  ? <Link href={`/settings/organization?placementEmployeeIds=${selectedIds.join(',')}`} className="inline-flex h-8 items-center rounded-md border border-slate-300 px-3 text-xs text-slate-700 hover:bg-slate-50">
+                    <GitBranch className="mr-1.5 h-3.5 w-3.5" />จัดการตำแหน่งในผัง Zone
+                  </Link>
+                  : <span className="px-2 text-xs text-amber-800">เลือกไม่เกิน 100 คนเพื่อจัดการตำแหน่ง</span>}
                 <Button size="sm" variant="destructive" className="h-8 rounded-md text-xs" onClick={() => setBulkDeleteDialog(true)}>
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />ลบ
                 </Button>
@@ -923,7 +1017,7 @@ export default function OrganizationManagement({ initialView }: { initialView: '
             <Card className="overflow-hidden rounded-xl border-slate-200 shadow-sm">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                     <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                       <tr>
                         <th className="w-10 px-3 py-2.5"><input
@@ -935,14 +1029,15 @@ export default function OrganizationManagement({ initialView }: { initialView: '
                         <SortHeader title="ชื่อพนักงาน" active={sort === 'name'} direction={direction} onClick={() => sortBy('name')} />
                         <SortHeader title="รหัสพนักงาน" active={sort === 'employeeId'} direction={direction} onClick={() => sortBy('employeeId')} />
                         <th className="px-3 py-2.5">แผนก</th>
+                        <th className="px-3 py-2.5" title="ตำแหน่งและความรับผิดชอบคำนวณจากประเภทโหนด">รับผิดชอบ</th>
+                        <th className="px-3 py-2.5" title="ผู้ควบคุมและหัวหน้า DB ที่คำนวณจาก Hierarchy">สาย Zone</th>
                         <th className="px-3 py-2.5">Zone ID</th>
-                        <th className="px-3 py-2.5">สถานะโหนด</th>
                         <th className="px-3 py-2.5 text-right">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? <tr><td colSpan={7} className="p-10 text-center text-slate-500"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />กำลังโหลดข้อมูลพนักงาน…</td></tr>
-                        : !data?.employees.length ? <tr><td colSpan={7} className="p-12 text-center text-slate-500">ไม่พบพนักงานที่ตรงกับตัวกรอง</td></tr>
+                      {loading ? <tr><td colSpan={8} className="p-10 text-center text-slate-500"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />กำลังโหลดข้อมูลพนักงาน…</td></tr>
+                        : !data?.employees.length ? <tr><td colSpan={8} className="p-12 text-center text-slate-500">ไม่พบพนักงานที่ตรงกับตัวกรอง</td></tr>
                           : data.employees.map((employee) => (
                             <tr key={employee.id} className={`border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80 ${selectedIds.includes(employee.id) ? 'bg-slate-50' : ''}`}>
                               <td className="px-3 py-2.5"><input type="checkbox" aria-label={`เลือก ${employee.name}`} checked={selectedIds.includes(employee.id)} onChange={() => toggleSelected(employee)} /></td>
@@ -953,20 +1048,17 @@ export default function OrganizationManagement({ initialView }: { initialView: '
                               <td className="px-3 py-2.5 text-slate-700">
                                 {employee.department || <span className="text-xs text-slate-400">ไม่ระบุแผนก</span>}
                               </td>
-                              <td className="px-3 py-2.5 font-medium text-slate-800">
-                                {employee.zone ? <span>{getEmployeeZoneLabel(employee.zone)}</span> : <span className="text-xs font-normal text-amber-700">ยังไม่ระบุ Zone</span>}
+                              <td className="px-3 py-2.5 text-xs text-slate-700">
+                                {employee.zone?.nodeKind
+                                  ? <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-800"><NodeKindIcon nodeKind={employee.zone.nodeKind} />{getZoneDisplayName(employee.zone)}</span>
+                                  : <span className="text-amber-700">{employee.zone ? 'ไม่ระบุประเภทโหนด' : 'รอกำหนด'}</span>}
                               </td>
-                              <td className="px-3 py-2.5">
-                                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${
-                                  employee.zone?.nodeKind
-                                    ? 'bg-blue-50 text-blue-800'
-                                    : 'bg-amber-50 text-amber-800'
-                                }`}>
-                                  {employee.zone?.nodeKind
-                                    ? <NodeKindIcon nodeKind={employee.zone.nodeKind} />
-                                    : <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                                  {employee.zone?.nodeKind ? getZoneDisplayName(employee.zone) : 'รอกำหนด'}
-                                </span>
+                              <td className="px-3 py-2.5 text-xs text-slate-700">
+                                <p><span className="font-medium text-slate-500">ผู้ควบคุม:</span> {getAuthorityDisplay(employee).chief}</p>
+                                <p><span className="font-medium text-slate-500">หัวหน้า DB:</span> {getAuthorityDisplay(employee).dbHead}</p>
+                              </td>
+                              <td className="px-3 py-2.5 font-medium text-slate-800">
+                                {employee.zone ? getEmployeeZoneLabel(employee.zone) : <span className="text-xs font-normal text-amber-700">รอกำหนด Zone</span>}
                               </td>
                               <td className="px-3 py-2.5 text-right"><div className="inline-flex items-center justify-end gap-1 whitespace-nowrap">
                                 <button className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" onClick={() => openEditor(employee)}>แก้ไข</button>
@@ -1002,18 +1094,32 @@ export default function OrganizationManagement({ initialView }: { initialView: '
 
       <Dialog open={Boolean(editEmployee)} onOpenChange={(open) => { if (!open && !saving) setEditEmployee(null); }}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit employee</DialogTitle><DialogDescription>แก้ชื่อ รหัสพนักงาน และ Zone ที่สังกัดได้ในครั้งเดียว โดยไม่เปลี่ยน Parent Zone</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>แก้ไขข้อมูลพนักงาน</DialogTitle><DialogDescription>แก้ไขข้อมูลประจำตัวพนักงาน ส่วนตำแหน่งและการสังกัดจัดการผ่านผัง Zone</DialogDescription></DialogHeader>
           {editEmployee && <div className="space-y-4 py-2">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-medium">Employee name<Input className="mt-1" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></label>
-              <label className="text-sm font-medium">Employee ID<Input className="mt-1" value={editForm.employeeId} onChange={(event) => setEditForm({ ...editForm, employeeId: event.target.value })} /></label>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+              <p className="font-semibold">ข้อมูลตำแหน่งและสายบังคับบัญชาคำนวณจากผัง Zone สามารถเปลี่ยนได้ที่หน้าจัดการผัง</p>
+              <p className="mt-1">ตำแหน่ง: {editEmployee.organizationalPosition
+                ? roleLabels[editEmployee.organizationalPosition]
+                : editEmployee.zone ? 'ไม่พบประเภทโหนด' : 'ยังไม่ได้กำหนด'}</p>
+              <p>Zone ปัจจุบัน: {editEmployee.zone ? `${editEmployee.zone.zoneId} · ${getZoneDisplayName(editEmployee.zone)}` : 'ยังไม่ได้กำหนด'}</p>
+              <p>ผู้ควบคุม: {getAuthorityDisplay(editEmployee).chief}</p>
+              <p>หัวหน้า DB: {getAuthorityDisplay(editEmployee).dbHead}</p>
+              <Link href={`/settings/organization?placementEmployeeIds=${editEmployee.id}`} className="mt-2 inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-white">
+                จัดการตำแหน่งในผัง Zone
+              </Link>
             </div>
-            <label className="block text-sm font-medium">Zone ที่สังกัด
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium">ชื่อพนักงาน<Input className="mt-1" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></label>
+              <label className="text-sm font-medium">รหัสพนักงาน<Input className="mt-1" value={editForm.employeeId} onChange={(event) => setEditForm({ ...editForm, employeeId: event.target.value })} /></label>
+            </div>
+            {editOperation === 'zone' && <label className="block text-sm font-medium">Zone assignment
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <Input aria-label="ค้นหา Zone ID หรือโหนด" value={editZoneSearch} onChange={(event) => setEditZoneSearch(event.target.value)} placeholder="พิมพ์ค้นหา Zone ID / โหนด" />
                 <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={editDepartmentFilter} onChange={(event) => setEditDepartmentFilter(event.target.value)}>
                   <option value="">ทุกแผนก</option>
-                  {Array.from(new Set(optionData?.zones.filter((zone) => zone.branchId === editEmployee.branchId).map((zone) => zone.department).filter((department): department is string => Boolean(department)) ?? []))
+                  {Array.from(new Set(optionData?.zones.filter((zone) => zone.branchId === editEmployee.branchId &&
+                    (zone.department ?? '').toLocaleUpperCase() === (editEmployee.department ?? '').toLocaleUpperCase())
+                    .map((zone) => zone.department).filter((department): department is string => Boolean(department)) ?? []))
                     .sort((left, right) => left.localeCompare(right)).map((department) => <option key={department} value={department}>{department}</option>)}
                 </select>
                 <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={editNodeKindFilter} onChange={(event) => setEditNodeKindFilter(event.target.value)}>
@@ -1023,35 +1129,158 @@ export default function OrganizationManagement({ initialView }: { initialView: '
               </div>
               <select className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" value={editForm.zoneId} onChange={(event) => setEditForm({ ...editForm, zoneId: event.target.value })}>
                 <option value="">ไม่กำหนด Zone</option>
-                {editZoneOptions.filter((zone) => zone.branchId === editEmployee.branchId)
+                {editZoneOptions.filter((zone) => zone.branchId === editEmployee.branchId &&
+                  (zone.department ?? '').toLocaleUpperCase() === (editEmployee.department ?? '').toLocaleUpperCase())
                   .map((zone) => <option key={zone.zoneId} value={zone.zoneId}>{zone.zoneId} · {getZoneDisplayName(zone)}</option>)}
               </select>
               <span className="mt-1 block text-xs font-normal text-slate-500">พิมพ์ค้นหาและกรองตามแผนกหรือประเภทโหนดได้</span>
-            </label>
+            </label>}
             {editOperation === 'role' && <label className="block text-sm font-medium">Current position: {roleLabels[editEmployee.role]}<span className="mx-2">→</span>New position
               <select className="mt-1 h-10 w-full rounded-md border px-3" value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value as Role })}>
                 {optionData?.roles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
               </select>
             </label>}
-            {editOperation === 'role' && <label className="block text-sm font-medium">Direct manager Zone ID for new position
+            {(editOperation === 'role' || editOperation === 'assignment' || editOperation === 'reporting') && <label className="block text-sm font-medium">Reporting manager (managerId)
+              <select className="mt-1 h-10 w-full rounded-md border px-3" value={editForm.managerId} onChange={(event) => setEditForm({ ...editForm, managerId: event.target.value })}>
+                <option value="">Unassigned</option>
+                {reportingManagers.map((manager) => <option key={manager.id} value={manager.id}>{manager.name} · {manager.employeeId} · {roleLabels[manager.role]}</option>)}
+              </select>
+              {editForm.managerId && !reportingManagers.some((manager) => String(manager.id) === editForm.managerId) && (
+                <span className="mt-1 block text-xs font-normal text-amber-800">Current manager is outside the proposed branch/department or role. Choose a valid manager or Unassigned.</span>
+              )}
+            </label>}
+            {(editOperation === 'role' || editOperation === 'assignment') && <label className="block text-sm font-medium">Legacy manager Zone reference (not a reporting line)
               <select className="mt-1 h-10 w-full rounded-md border px-3" value={editForm.managerZoneId} onChange={(event) => setEditForm({ ...editForm, managerZoneId: event.target.value })}>
                 <option value="">Unassigned</option>
-                {optionData?.zones.filter((zone) => zone.branchId === editEmployee.branchId &&
-                  (zone.department ?? '').toUpperCase() === (editEmployee.department ?? '').toUpperCase())
+                {optionData?.zones.filter((zone) => zone.branchId === Number(editForm.branchId) &&
+                  (zone.department ?? '').toUpperCase() === (editForm.department ?? '').toUpperCase())
                   .map((zone) => <option key={zone.zoneId} value={zone.zoneId}>{zone.zoneId} · {getZoneDisplayName(zone)}</option>)}
               </select>
             </label>}
             {editOperation === 'assignment' && <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-medium">Zone ที่สังกัด
+              <label className="text-sm font-medium">Branch
+                <select className="mt-1 h-10 w-full rounded-md border px-3" value={editForm.branchId} onChange={(event) => setEditForm({
+                  ...editForm, branchId: event.target.value, department: '', zoneId: '', managerZoneId: '', managerId: '',
+                })}>
+                  <option value="">Unassigned</option>
+                  {optionData?.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium">Department
+                <select className="mt-1 h-10 w-full rounded-md border px-3" value={editForm.department} onChange={(event) => setEditForm({
+                  ...editForm, department: event.target.value, zoneId: '', managerZoneId: '', managerId: '',
+                })}>
+                  <option value="">Unassigned</option>
+                  {(editBranchOptions?.departments ?? []).map((department) => <option key={department} value={department}>{department}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium">Zone assignment
                 <select className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" value={editForm.zoneId} onChange={(event) => setEditForm({ ...editForm, zoneId: event.target.value })}>
                   <option value="">ไม่กำหนด Zone</option>
-                  {optionData?.zones.filter((zone) => zone.branchId === editEmployee.branchId)
+                  {optionData?.zones.filter((zone) => zone.branchId === Number(editForm.branchId) &&
+                    (zone.department ?? '').toLocaleUpperCase() === (editForm.department ?? '').toLocaleUpperCase())
                     .map((zone) => <option key={zone.id} value={zone.zoneId}>{zone.zoneId} · {getZoneDisplayName(zone)}</option>)}
                 </select>
-                <span className="mt-1 block text-xs font-normal text-slate-500">เลือก Zone ID หรือเลือก “ไม่กำหนด Zone” เพื่อล้างการ assign</span>
+                <span className="mt-1 block text-xs font-normal text-slate-500">Ownership is independent from reporting and Zone parent relationships.</span>
               </label>
             </div>}
-            {editEmployee.subordinates.length > 0 && editOperation !== 'profile' && (
+            {chiefSubordinateActionsVisible && (
+              <fieldset className="rounded-md border border-amber-300 bg-amber-50 p-3">
+                <legend className="px-1 text-sm font-semibold text-amber-950">Manage {editEmployee.subordinates.length} direct reports</legend>
+                <p className="mb-2 text-xs text-amber-900">Choose how each employee will be handled. No report is moved automatically.</p>
+                <div className="space-y-2 text-sm">
+                  <label className="flex gap-2">
+                    <input type="radio" name="chiefTransferMode" checked={subordinateTransferMode === 'follow'} disabled={proposedEmployeeRole !== 'CHIEF'} onChange={() => setSubordinateTransferMode('follow')} />
+                    Move all reports with the Chief (same target branch/department)
+                  </label>
+                  <label className="flex gap-2">
+                    <input type="radio" name="chiefTransferMode" checked={subordinateTransferMode === 'retain'} onChange={() => setSubordinateTransferMode('retain')} />
+                    Keep all reports in place (only when each reporting line remains valid)
+                  </label>
+                  <label className="flex gap-2">
+                    <input type="radio" name="chiefTransferMode" checked={subordinateTransferMode === 'individual'} onChange={() => setSubordinateTransferMode('individual')} />
+                    Choose an action for each report
+                  </label>
+                </div>
+                {subordinateTransferMode === 'individual' && (
+                  <ul className="mt-3 space-y-3">
+                    {editEmployee.subordinates.map((report) => {
+                      const plan = individualSubordinatePlans[report.id] ?? {
+                        action: 'retain' as const,
+                        branchId: report.branchId ? String(report.branchId) : '',
+                        department: report.department ?? '',
+                        managerId: '',
+                      };
+                      const replacementManagers = (branchEmployeeOptions[plan.branchId]?.managers ?? []).filter((manager) =>
+                        manager.id !== editEmployee.id &&
+                        manager.id !== report.id &&
+                        manager.role === reportingManagerRole[report.role] &&
+                        manager.branchId === Number(plan.branchId) &&
+                        (manager.department ?? '').toLocaleUpperCase() === plan.department.toLocaleUpperCase()
+                      ) ?? [];
+                      return <li key={report.id} className="grid gap-2 rounded-md border border-amber-200 bg-white p-2 sm:grid-cols-2">
+                        <span className="self-center text-xs">{report.name} · {report.employeeId}</span>
+                        <select
+                          className="h-9 rounded-md border px-2 text-xs"
+                          aria-label={`Action for ${report.name}`}
+                          value={plan.action}
+                          onChange={(event) => setIndividualSubordinatePlans((current) => ({
+                            ...current,
+                            [report.id]: { ...plan, action: event.target.value as DirectReportPlan['action'] },
+                          }))}
+                        >
+                          <option value="retain">Keep current assignment</option>
+                          <option value="follow" disabled={proposedEmployeeRole !== 'CHIEF'}>Move with Chief</option>
+                          <option value="reassign">Choose another manager</option>
+                          <option value="unassign">Unassign manager</option>
+                        </select>
+                        {plan.action === 'reassign' && <>
+                          <select
+                            className="h-9 rounded-md border px-2 text-xs"
+                            aria-label={`Destination branch for ${report.name}`}
+                            value={plan.branchId}
+                            onChange={(event) => setIndividualSubordinatePlans((current) => ({
+                              ...current,
+                              [report.id]: { ...plan, branchId: event.target.value, department: '', managerId: '' },
+                            }))}
+                          >
+                            <option value="">Choose branch</option>
+                            {optionData?.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                          </select>
+                          <select
+                            className="h-9 rounded-md border px-2 text-xs"
+                            aria-label={`Destination department for ${report.name}`}
+                            value={plan.department}
+                            onChange={(event) => setIndividualSubordinatePlans((current) => ({
+                              ...current,
+                              [report.id]: { ...plan, department: event.target.value, managerId: '' },
+                            }))}
+                          >
+                            <option value="">Unassigned department</option>
+                            {(branchEmployeeOptions[plan.branchId]?.departments ?? []).map((department) =>
+                              <option key={department} value={department}>{department}</option>
+                            )}
+                          </select>
+                          <select
+                            className="h-9 rounded-md border px-2 text-xs"
+                            aria-label={`Replacement manager for ${report.name}`}
+                            value={plan.managerId}
+                            onChange={(event) => setIndividualSubordinatePlans((current) => ({
+                              ...current,
+                              [report.id]: { ...plan, managerId: event.target.value },
+                            }))}
+                          >
+                            <option value="">Choose manager</option>
+                            {replacementManagers.map((manager) => <option key={manager.id} value={manager.id}>{manager.name} · {manager.employeeId}</option>)}
+                          </select>
+                        </>}
+                      </li>;
+                    })}
+                  </ul>
+                )}
+              </fieldset>
+            )}
+            {editEmployee.subordinates.length > 0 && ['role', 'assignment'].includes(editOperation) && !chiefSubordinateActionsVisible && (
               <fieldset className="rounded-md border border-amber-300 bg-amber-50 p-3">
                 <legend className="px-1 text-sm font-semibold text-amber-950">Handle {editEmployee.subordinates.length} direct reports</legend>
                 <p className="mb-2 text-xs text-amber-900">No reporting relationships will change unless you choose an option below. Review the impact before saving.</p>
@@ -1069,17 +1298,37 @@ export default function OrganizationManagement({ initialView }: { initialView: '
             )}
             {editReview && editCurrentSummary && editProposedSummary && (
               <section className="rounded-md border border-blue-200 bg-blue-50 p-3" aria-label="Change preview">
-                <h3 className="font-semibold text-blue-950">Review before applying · {editOperation === 'role' ? 'Position change' : editOperation === 'assignment' ? 'Organizational transfer / assignment' : 'Employee information'}</h3>
+                <h3 className="font-semibold text-blue-950">Review employee profile changes</h3>
                 <div className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
                   <div><h4 className="mb-1 font-medium text-gray-700">Current values</h4>{Object.entries(editCurrentSummary).map(([key, value]) => <p key={key} className="text-gray-600"><span className="capitalize">{key}:</span> {value}</p>)}</div>
                   <div><h4 className="mb-1 font-medium text-blue-800">Proposed values</h4>{Object.entries(editProposedSummary).map(([key, value]) => <p key={key} className="text-blue-900"><span className="capitalize">{key}:</span> {value}</p>)}</div>
                 </div>
-                {editEmployee.subordinates.length > 0 && editOperation !== 'profile' && <p className="mt-2 text-sm font-medium text-amber-900">Direct report handling: {subordinateAction}{subordinateAction === 'reassign' ? ` to ${optionData?.managers.find((manager) => String(manager.id) === reassignManagerId)?.name || 'manager not selected'}` : ''}.</p>}
+                {chiefSubordinateActionsVisible
+                  ? <div className="mt-2 text-sm text-amber-900">
+                    <p className="font-medium">Direct report handling: {subordinateTransferMode || 'not selected'} · {editEmployee.subordinates.length} employee(s)</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {editEmployee.subordinates.map((report) => {
+                        const plan = individualSubordinatePlans[report.id];
+                        const action = subordinateTransferMode === 'individual' ? plan?.action : subordinateTransferMode;
+                        const replacementManager = action === 'reassign'
+                          ? branchEmployeeOptions[plan?.branchId ?? '']?.managers.find((manager) => String(manager.id) === plan?.managerId)?.name || 'manager not selected'
+                          : null;
+                        const destinationBranch = action === 'reassign'
+                          ? optionData?.branches.find((branch) => String(branch.id) === plan?.branchId)?.name || 'branch not selected'
+                          : null;
+                        const destinationDepartment = action === 'reassign' ? plan?.department || 'Unassigned department' : null;
+                        return <li key={report.id}>{report.name} ({report.employeeId}): {action === 'follow' ? 'move with Chief' : action === 'retain' ? 'keep current assignment' : action === 'unassign' ? 'unassign manager' : `reassign to ${destinationBranch} / ${destinationDepartment} under ${replacementManager}`}</li>;
+                      })}
+                    </ul>
+                  </div>
+                  : editEmployee.subordinates.length > 0 && ['role', 'assignment'].includes(editOperation)
+                    ? <p className="mt-2 text-sm font-medium text-amber-900">Direct report handling: {subordinateAction}{subordinateAction === 'reassign' ? ` to ${optionData?.managers.find((manager) => String(manager.id) === reassignManagerId)?.name || 'manager not selected'}` : ''}.</p>
+                    : null}
               </section>
             )}
             {dialogError && <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{dialogError}</div>}
           </div>}
-          <DialogFooter><Button variant="outline" disabled={saving} onClick={() => editReview ? setEditReview(false) : setEditEmployee(null)}>{editReview ? 'Back to edit' : 'Cancel'}</Button><Button disabled={saving || (editReview && editOperation === 'role' && editForm.role === editEmployee?.role)} onClick={() => editReview ? void saveEmployee() : setEditReview(true)}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editReview ? 'Confirm and apply' : 'Review changes'}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={saving} onClick={() => editReview ? setEditReview(false) : setEditEmployee(null)}>{editReview ? 'Back to edit' : 'Cancel'}</Button><Button disabled={saving || Boolean(chiefSubordinateActionsVisible && (!subordinateTransferMode || individualPlanIncomplete))} onClick={() => editReview ? void saveEmployee() : setEditReview(true)}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editReview ? 'Confirm and apply' : 'Review changes'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1088,14 +1337,20 @@ export default function OrganizationManagement({ initialView }: { initialView: '
           <DialogHeader><DialogTitle>Employee details</DialogTitle><DialogDescription>{detailEmployee?.name} · {detailEmployee?.employeeId}</DialogDescription></DialogHeader>
           {detailEmployee && <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm">
-              <div><span className="text-gray-500">Position</span><p className="font-medium">{roleLabels[detailEmployee.role]}</p></div>
+              <div><span className="text-gray-500">Position (from Node type)</span><p className="font-medium">{detailEmployee.organizationalPosition
+                ? roleLabels[detailEmployee.organizationalPosition]
+                : detailEmployee.zone ? 'Unmapped Node type' : 'Pending placement'}</p></div>
               <div><span className="text-gray-500">Branch</span><p className="font-medium">{detailEmployee.branch?.name || 'Unassigned'}</p></div>
               <div><span className="text-gray-500">Department</span><p className="font-medium">{detailEmployee.department || 'Unassigned'}</p></div>
               <div><span className="text-gray-500">Zone ID · โหนด</span><p className="font-medium">{detailEmployee.zone ? `${detailEmployee.zone.zoneId} · ${getZoneDisplayName(detailEmployee.zone)}` : 'Unassigned'}</p></div>
             </div>
-            <section><h3 className="mb-2 text-sm font-semibold">Direct reports ({detailEmployee.subordinates.length})</h3>
-              {detailEmployee.subordinates.length === 0 ? <p className="text-sm text-gray-500">No direct reports.</p>
-                : <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-3 text-sm">{detailEmployee.subordinates.map((report) => <li key={report.id}>{report.name} <span className="text-gray-500">· {report.employeeId} · {roleLabels[report.role]}</span></li>)}</ul>}
+            <section className="rounded-md border p-3 text-sm">
+              <h3 className="mb-2 font-semibold">Hierarchy-derived reporting path</h3>
+              {(() => {
+                const authority = getAuthorityDisplay(detailEmployee);
+                return <p>{authority.parent} → {authority.chief} → {authority.dbHead}</p>;
+              })()}
+              <p className="mt-2 text-xs text-slate-500">Reporting relationships are calculated from Zone Parent and ZoneID; they are not edited on this page.</p>
             </section>
             <p className="text-xs text-gray-500">Last updated {new Date(detailEmployee.updatedAt).toLocaleString()}</p>
           </div>}
@@ -1127,21 +1382,25 @@ export default function OrganizationManagement({ initialView }: { initialView: '
           </DialogHeader>
           <div className="space-y-3">
             {data?.isSuperAdmin && <label className="block text-sm font-medium">สาขา
-              <select className="mt-1 h-10 w-full rounded-md border px-3" value={newEmployeeBranchId} onChange={(event) => setNewEmployeeBranchId(event.target.value)}>
+              <select className="mt-1 h-10 w-full rounded-md border px-3" value={newEmployeeBranchId} onChange={(event) => {
+                setNewEmployeeBranchId(event.target.value);
+              }}>
                 <option value="">เลือกสาขา</option>
                 {data.options.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
               </select>
             </label>}
             <div className="space-y-2">
-              {newEmployeeForms.map((employee, index) => <div key={index} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_1.5fr_auto]">
+              {newEmployeeForms.map((employee, index) => {
+                return <div key={index} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-2">
                 <label className="text-sm font-medium">รหัสพนักงาน {index + 1}
                   <Input className="mt-1" maxLength={120} value={employee.employeeId} onChange={(event) => setNewEmployeeForms((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, employeeId: event.target.value } : row))} />
                 </label>
                 <label className="text-sm font-medium">ชื่อพนักงาน
                   <Input className="mt-1" maxLength={200} value={employee.name} onChange={(event) => setNewEmployeeForms((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, name: event.target.value } : row))} />
                 </label>
-                <Button type="button" variant="outline" className="self-end" disabled={newEmployeeForms.length === 1} aria-label={`ลบแถวที่ ${index + 1}`} onClick={() => setNewEmployeeForms((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 className="h-4 w-4" /></Button>
-              </div>)}
+                <Button type="button" variant="outline" className="self-end justify-self-end" disabled={newEmployeeForms.length === 1} aria-label={`ลบแถวที่ ${index + 1}`} onClick={() => setNewEmployeeForms((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 className="h-4 w-4" /></Button>
+              </div>;
+              })}
             </div>
             <Button type="button" variant="outline" disabled={newEmployeeForms.length >= 100} onClick={() => setNewEmployeeForms((rows) => [...rows, { employeeId: '', name: '' }])}>
               <Plus className="mr-1.5 h-4 w-4" />เพิ่มแถวพนักงาน

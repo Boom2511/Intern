@@ -10,11 +10,10 @@ import { format, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { lineService } from '@/lib/line';
-import { displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
-import { getTicketBranchScope } from '@/lib/branch-access';
+import { getReportBranchScope } from '@/lib/branch-access';
 import { getLineGroupForDepartment } from '@/lib/line-groups';
-import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportNodeKindLabel, getReportZoneInfo } from '@/lib/report-zone-employees';
 import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +23,7 @@ interface ReportFilters {
   reportType: 'daily' | 'monthly';
   startDate: string;
   endDate?: string;
+  branchId?: number;
   department?: string; // For filtering data
   sourceSystem?: 'ALL' | 'CEC' | 'SALESFORCE';
   lineGroupDepartment?: string; // Department to send LINE to (separate from filter)
@@ -34,11 +34,17 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    const branchScope = getTicketBranchScope(user);
-    if (!branchScope) return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
 
     const body = await request.json();
     const { reportType, startDate, endDate, department, sourceSystem, lineGroupDepartment, lineGroupId }: ReportFilters = body;
+    const branchScope = getReportBranchScope(user, body.branchId);
+    if (!branchScope) {
+      return NextResponse.json({
+        success: false,
+        error: user.isSuperAdmin ? 'Choose a valid branch' : 'Your account is not assigned to a branch',
+      }, { status: 403 });
+    }
+    const reportBranchId = user.isSuperAdmin ? Number(body.branchId) : user.branchId!;
 
     let reportDateRange;
     try {
@@ -86,7 +92,7 @@ export async function POST(request: NextRequest) {
       ? `รายงานประจำวัน - ${format(parseISO(startDate), 'dd MMMM yyyy', { locale: th })}`
       : `รายงานประจำเดือน - ${format(parseISO(startDate), 'dd MMM', { locale: th })} ถึง ${format(parseISO(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
 
-    worksheet.mergeCells('A1:M1');
+    worksheet.mergeCells('A1:R1');
     const titleCell = worksheet.getCell('A1');
     titleCell.value = reportTitle;
     titleCell.font = { bold: true, size: 14 };
@@ -97,7 +103,7 @@ export async function POST(request: NextRequest) {
     const headers = [
       'ลำดับ', 'ใบงานเลขที่', 'หมายเลข Salesforce', 'หมายเลขสิ่งของ',
       'ชื่อลูกค้า', 'เบอร์โทรลูกค้า', 'ที่อยู่ลูกค้า', 'ชื่อเจ้าหน้าที่',
-      'แผนก/DB', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการลูกค้า',
+      'รหัสพนักงาน', 'Zone ID', 'ประเภทโหนด', 'แผนก/DB', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการลูกค้า',
       'ผลการดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข',
     ];
 
@@ -123,13 +129,14 @@ export async function POST(request: NextRequest) {
     worksheet.columns = [
       { width: 8 }, { width: 20 }, { width: 20 }, { width: 20 },
       { width: 25 }, { width: 15 }, { width: 40 }, { width: 20 },
-      { width: 12 }, { width: 20 }, { width: 20 }, { width: 30 },
+      { width: 16 }, { width: 18 }, { width: 18 }, { width: 12 },
+      { width: 20 }, { width: 20 }, { width: 30 },
       { width: 30 }, { width: 30 }, { width: 30 },
     ];
 
     // Build zone map similar to generate endpoint
     const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
-    const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
+    const zoneMap = await getReportZoneInfo(zoneIds, reportBranchId);
 
     tickets.forEach((ticket, index) => {
       const zoneInfo = ticket.zoneId ? zoneMap.get(ticket.zoneId) : undefined;
@@ -141,8 +148,11 @@ export async function POST(request: NextRequest) {
         ticket.recipientName, // ใช้ recipientName จาก Ticket แทน customer.name
         ticket.recipientPhone, // ใช้ recipientPhone จาก Ticket - แสดงเป็น +66XXXXXXXXX (E.164)
         ticket.recipientAddress || '-',
-        zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-',
-        ticket.department || '-',
+        zoneInfo?.staffName || '-',
+        zoneInfo?.staffEmployeeId || '-',
+        zoneInfo?.zoneId || ticket.zoneId || '-',
+        getReportNodeKindLabel(zoneInfo?.nodeKind),
+        zoneInfo?.department || ticket.department || '-',
         zoneInfo?.chief || '-',
         zoneInfo?.dbHead || '-',
         ticket.description,
@@ -206,7 +216,7 @@ export async function POST(request: NextRequest) {
     if (!targetGroupId && lineGroupDepartment) {
       targetGroupId = await getLineGroupForDepartment(
         lineGroupDepartment,
-        user.isSuperAdmin ? undefined : user.branchId ?? undefined
+        reportBranchId
       );
     }
 

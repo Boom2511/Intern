@@ -14,6 +14,7 @@ export async function GET() {
         id: true,
         zoneId: true,
         zoneName: true,
+        nodeKind: true,
         source: true,
         _count: {
           select: { employees: true },
@@ -22,43 +23,37 @@ export async function GET() {
       orderBy: { zoneId: 'asc' },
     });
 
-    // Get ZNE zones specifically
-    const zneZones = allZones.filter(z => z.zoneId.startsWith('ZNE'));
+    const chiefNodes = allZones.filter((zone) => zone.nodeKind === 'DELIVERY_ZONE');
 
-    // Get zone employees with chief officer
+    // Get Zone placements without a separately assigned controller
     const zoneEmployees = await prisma.zoneEmployee.findMany({
       where: {
         zone: {
-          zoneId: {
-            startsWith: 'ZNE',
-          },
+          nodeKind: 'DELIVERY_ZONE',
         },
       },
       select: {
         id: true,
         zone: {
-          select: { zoneId: true, zoneName: true },
+          select: { zoneId: true, zoneName: true, nodeKind: true },
         },
         employee: {
           select: { employeeId: true, name: true, role: true, department: true },
-        },
-        chiefOfficer: {
-          select: { employeeId: true, name: true, department: true },
         },
       },
       take: 20,
     });
 
-    // Get employees with role CHIEF
+    // Get employees placed on Chief nodes.
     const chiefEmployees = await prisma.employee.findMany({
-      where: { role: 'CHIEF' },
+      where: { zones: { some: { zone: { nodeKind: 'DELIVERY_ZONE' } } } },
       select: {
         id: true,
         employeeId: true,
         name: true,
         department: true,
         zones: {
-          select: { zone: { select: { zoneId: true, zoneName: true } } },
+          select: { zone: { select: { zoneId: true, zoneName: true, nodeKind: true } } },
         },
       },
     });
@@ -66,13 +61,13 @@ export async function GET() {
     return NextResponse.json({
       summary: {
         totalZones: allZones.length,
-        zneZones: zneZones.length,
-        zneWithEmployees: zneZones.filter(z => z._count.employees > 0).length,
+        chiefNodes: chiefNodes.length,
+        chiefNodesWithEmployees: chiefNodes.filter((zone) => zone._count.employees > 0).length,
         chiefEmployees: chiefEmployees.length,
       },
       allZones: allZones.slice(0, 30),
-      zneZones,
-      zoneEmployeesWithChief: zoneEmployees,
+      chiefNodes,
+      zoneEmployees,
       chiefEmployees,
     });
   } catch (error: any) {

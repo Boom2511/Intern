@@ -12,19 +12,43 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { th } from 'date-fns/locale';
 import Link from 'next/link';
-import { displayThaiPhone } from '@/lib/utils';
 
 // --- Types & Constants ---
 type ReportType = 'daily' | 'monthly';
 interface OrganizationOptionsResponse {
   departments: Array<{ value: string; label: string }>;
+  isSuperAdmin: boolean;
+  branchId: number | null;
+  branch: { id: number; name: string; code: string | null } | null;
+  branches: Array<{ id: number; name: string; code: string | null }>;
+}
+interface ReportRow {
+  ticketId: string;
+  ticketNo: string;
+  salesforceId: string;
+  trackingNo: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  staffName: string;
+  staffEmployeeId: string;
+  department: string;
+  zoneId: string;
+  nodeKind: string;
+  chief: string;
+  dbHead: string;
+  description: string;
+  resolutionDetail: string;
+  cause: string;
+  solution: string;
+  channel: string;
 }
 
 // --- Sub-Component: Report Table ---
-const ReportTable = ({ data, showSalesforceId = true }: { data: any[], showSalesforceId?: boolean }) => {
+const ReportTable = ({ data, showSalesforceId = true }: { data: ReportRow[], showSalesforceId?: boolean }) => {
   const headers = ['ลำดับ', 'ใบงานเลขที่'];
   if (showSalesforceId) headers.push('Salesforce');
-  headers.push('หมายเลขสิ่งของ', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เจ้าหน้าที่', 'แผนก', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการ', 'ผลดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข');
+  headers.push('หมายเลขสิ่งของ', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เจ้าหน้าที่', 'รหัสพนักงาน', 'แผนก', 'Zone ID', 'ประเภทโหนด', 'ผู้ควบคุม', 'หัวหน้า DB', 'ความต้องการ', 'ผลดำเนินการ', 'สาเหตุ', 'แนวทางแก้ไข');
 
   return (
     <div className="overflow-x-auto border rounded-md shadow-sm">
@@ -51,9 +75,12 @@ const ReportTable = ({ data, showSalesforceId = true }: { data: any[], showSales
               <td className="px-2 py-1.5 whitespace-nowrap font-mono">{row.customerPhone}</td>
               <td className="px-2 py-1.5 max-w-[200px] truncate">{row.customerAddress}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">{row.staffName}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap font-mono">{row.staffEmployeeId}</td>
               <td className="px-2 py-1.5 text-center">
                 <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">{row.department}</span>
               </td>
+              <td className="px-2 py-1.5 whitespace-nowrap font-mono">{row.zoneId}</td>
+              <td className="px-2 py-1.5 whitespace-nowrap">{row.nodeKind}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">{row.chief}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">{row.dbHead}</td>
               <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
@@ -76,12 +103,16 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [monthYear, setMonthYear] = useState(format(new Date(), 'yyyy-MM'));
   const [lineGroupDepartment, setLineGroupDepartment] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
   
   const [status, setStatus] = useState({ generating: false, sending: false });
   const [dialogs, setDialogs] = useState({ send: false, preview: false });
   const [activeTab, setActiveTab] = useState<'CEC' | 'SALESFORCE'>('CEC');
+  const optionsKey = selectedBranchId
+    ? `/api/reports/options?branchId=${encodeURIComponent(selectedBranchId)}`
+    : '/api/reports/options';
   const { data: organizationOptions, error: organizationOptionsError } = useSWR<OrganizationOptionsResponse>(
-    '/api/organization/ticket-options',
+    optionsKey,
     async (url: string) => {
       const response = await fetch(url);
       const data = await response.json();
@@ -90,12 +121,25 @@ export default function ReportsPage() {
     }
   );
   const departments = useMemo(() => organizationOptions?.departments ?? [], [organizationOptions?.departments]);
+  const selectedBranchName = organizationOptions?.branches.find((branch) => String(branch.id) === selectedBranchId)?.name
+    ?? organizationOptions?.branch?.name
+    ?? '';
+
+  useEffect(() => {
+    if (!selectedBranchId && organizationOptions?.branchId) {
+      setSelectedBranchId(String(organizationOptions.branchId));
+    }
+  }, [organizationOptions?.branchId, selectedBranchId]);
 
   useEffect(() => {
     if (departments.length > 0 && !departments.some(({ value }) => value === lineGroupDepartment)) {
       setLineGroupDepartment(departments[0].value);
     }
   }, [departments, lineGroupDepartment]);
+
+  useEffect(() => {
+    setLineGroupDepartment('');
+  }, [selectedBranchId]);
 
   // Auto-calculate dates for monthly report
   useEffect(() => {
@@ -107,14 +151,17 @@ export default function ReportsPage() {
   }, [reportType, monthYear]);
 
   // Fetch Preview using SWR (manual refresh via mutate)
-  const previewKey = `/api/reports/preview?start=${startDate}&end=${endDate}&type=${reportType}`;
-  const { data: previewData, isLoading: loadingPreview, mutate: mutatePreview } = useSWR(
+  const previewKey = selectedBranchId && !organizationOptionsError
+    ? `/api/reports/preview?branchId=${selectedBranchId}&start=${startDate}&end=${endDate}&type=${reportType}`
+    : null;
+  const { data: previewData, error: previewError, isLoading: loadingPreview } = useSWR(
     previewKey,
     async () => {
       const res = await fetch('/api/reports/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+          branchId: Number(selectedBranchId),
           startDate, 
           endDate: reportType === 'monthly' ? endDate : undefined, 
           sourceSystem: 'ALL', 
@@ -122,8 +169,9 @@ export default function ReportsPage() {
           sampleLimit: 9999 
         }),
       });
-      if (!res.ok) throw new Error('Failed to fetch preview');
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch preview');
+      return data;
     },
     {
       refreshInterval: 0, // Disabled - use manual refresh via date changes
@@ -134,8 +182,8 @@ export default function ReportsPage() {
 
   const preview = useMemo(() => {
     if (!previewData) return { count: null, cec: null, salesforce: null };
-    const cecTickets = previewData.samples?.filter((t: any) => t.channel === 'CEC') || [];
-    const salesforceTickets = previewData.samples?.filter((t: any) => t.channel === 'SALESFORCE') || [];
+    const cecTickets = previewData.samples?.filter((t: ReportRow) => t.channel === 'CEC') || [];
+    const salesforceTickets = previewData.samples?.filter((t: ReportRow) => t.channel === 'SALESFORCE') || [];
     return { count: previewData.count, cec: cecTickets, salesforce: salesforceTickets };
   }, [previewData]);
 
@@ -150,10 +198,19 @@ export default function ReportsPage() {
 
     try {
       const endpoint = isDownload ? '/api/reports/generate' : '/api/reports/send-to-line';
-      const body = { reportType, startDate, endDate: reportType === 'monthly' ? endDate : undefined, ...(isDownload ? {} : { lineGroupDepartment }) };
+      const body = {
+        branchId: Number(selectedBranchId),
+        reportType,
+        startDate,
+        endDate: reportType === 'monthly' ? endDate : undefined,
+        ...(isDownload ? {} : { lineGroupDepartment }),
+      };
       
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error('Action failed');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'ดำเนินการสร้างรายงานไม่สำเร็จ');
+      }
 
       if (isDownload) {
         const blob = await res.blob();
@@ -164,7 +221,8 @@ export default function ReportsPage() {
         const date = parseISO(startDate);
         const thaiDateStr = format(date, 'd MMM yyyy', { locale: th });
         const reportTypeText = reportType === 'daily' ? 'ประจำวันที่' : 'ประจำเดือน';
-        a.download = `รายงาน${reportTypeText} ${thaiDateStr} เรื่องร้องเรียน ปณศ.บางนา.xlsx`;
+        const branchName = selectedBranchName ? ` ${selectedBranchName}` : '';
+        a.download = `รายงาน${reportTypeText} ${thaiDateStr}${branchName} เรื่องร้องเรียน.xlsx`;
         a.click();
         toast({ title: 'สำเร็จ', description: 'ดาวน์โหลดรายงานเรียบร้อย' });
       } else {
@@ -180,17 +238,39 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-      <h1 className="text-2xl font-bold">สร้างรายงานระบบ</h1>
+    <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8">
+      <header>
+        <h1 className="text-2xl font-bold text-slate-900">สร้างรายงานระบบ</h1>
+        <p className="mt-1 text-sm text-slate-600">เลือกสาขาและช่วงเวลาที่ต้องการดู แล้วตรวจสอบตัวอย่างก่อนดาวน์โหลดหรือส่งรายงาน</p>
+      </header>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">ตัวกรองรายงาน</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardHeader className="pb-3"><CardTitle className="text-lg">เงื่อนไขรายงาน</CardTitle></CardHeader>
+        <CardContent className="space-y-5">
+          <div className={`grid grid-cols-1 gap-4 ${organizationOptions?.isSuperAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+            {organizationOptions?.isSuperAdmin && (
+              <div className="space-y-1.5">
+                <Label htmlFor="report-branch">สาขา</Label>
+                <Select
+                  value={selectedBranchId}
+                  onValueChange={(value) => setSelectedBranchId(value)}
+                  disabled={!organizationOptions.branches.length}
+                >
+                  <SelectTrigger id="report-branch"><SelectValue placeholder="เลือกสาขา" /></SelectTrigger>
+                  <SelectContent>
+                    {organizationOptions.branches.map((branch) => (
+                      <SelectItem key={branch.id} value={String(branch.id)}>
+                        {branch.name}{branch.code ? ` (${branch.code})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label>ประเภท</Label>
+              <Label htmlFor="report-type">ประเภทรายงาน</Label>
               <Select value={reportType} onValueChange={(v: ReportType) => setReportType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="report-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="daily">รายวัน</SelectItem>
                   <SelectItem value="monthly">รายเดือน</SelectItem>
@@ -203,21 +283,30 @@ export default function ReportsPage() {
               <input
                 type={reportType === 'daily' ? 'date' : 'month'}
                 value={reportType === 'daily' ? startDate : monthYear}
-                aria-label='ประเภทรายงาน'
+                aria-label={reportType === 'daily' ? 'วันที่รายงาน' : 'เดือนที่รายงาน'}
                 onChange={(e) => reportType === 'daily' ? setStartDate(e.target.value) : setMonthYear(e.target.value)}
-                className="w-full px-3 py-1.5 border rounded-md text-sm shadow-sm"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
               />
             </div>
           </div>
 
-          {/* Preview Info Box */}
-          <div className={`p-4 rounded-lg border transition-all ${loadingPreview ? 'bg-gray-50 opacity-60' : 'bg-blue-50 border-blue-100'}`}>
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex gap-2 text-blue-900">
-                {loadingPreview ? <Loader2 className="h-5 w-5 animate-spin" /> : <Info className="h-5 w-5" />}
+          <div className={`rounded-xl border p-4 ${previewError ? 'border-red-200 bg-red-50' : 'border-blue-100 bg-blue-50/70'}`}>
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2 text-blue-950">
+                {loadingPreview ? <Loader2 className="mt-0.5 h-5 w-5 animate-spin" /> : <Info className="mt-0.5 h-5 w-5" />}
                 <div>
-                  <p className="font-semibold text-sm">สรุปรายการ: {preview.count ?? 0} รายการ (CEC: {preview.cec?.length ?? 0}, Salesforce: {preview.salesforce?.length ?? 0})</p>
-                  <p className="text-xs text-blue-700">{dateRangeText} | รายงานจะแยกเป็น 2 sheets (CEC, Salesforce)</p>
+                  <p className="text-sm font-semibold">
+                    {loadingPreview
+                      ? 'กำลังโหลดตัวอย่างรายงาน…'
+                      : previewError
+                        ? 'โหลดตัวอย่างรายงานไม่สำเร็จ'
+                        : previewData
+                          ? `พบ ${preview.count ?? 0} รายการ · CEC ${preview.cec?.length ?? 0} · Salesforce ${preview.salesforce?.length ?? 0}`
+                          : 'เลือกสาขาเพื่อดูตัวอย่างรายงาน'}
+                  </p>
+                  <p className="mt-1 text-xs text-blue-800">{dateRangeText} · ไฟล์จะแยกเป็น 2 ชีต: CEC และ Salesforce</p>
+                  {previewError && <p role="alert" className="mt-1 text-xs text-red-700">{previewError.message}</p>}
+                  {organizationOptionsError && <p role="alert" className="mt-1 text-xs text-red-700">โหลดข้อมูลสาขาไม่สำเร็จ: {organizationOptionsError.message}</p>}
                 </div>
               </div>
               {((preview.cec && preview.cec.length > 0) || (preview.salesforce && preview.salesforce.length > 0)) && (
@@ -227,7 +316,6 @@ export default function ReportsPage() {
               )}
             </div>
             
-            {/* Tabs for CEC and Salesforce */}
             {((preview.cec && preview.cec.length > 0) || (preview.salesforce && preview.salesforce.length > 0)) && (
               <div className="space-y-3">
                 <div className="flex gap-2 border-b">
@@ -265,15 +353,15 @@ export default function ReportsPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Button onClick={() => handleAction('download')} disabled={status.generating || status.sending} className="flex-1">
+          <div className="flex flex-col justify-end gap-3 border-t pt-4 sm:flex-row">
+            <Button onClick={() => handleAction('download')} disabled={!selectedBranchId || status.generating || status.sending} className="sm:min-w-48">
               {status.generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
               ดาวน์โหลด Excel
             </Button>
 
             <Dialog open={dialogs.send} onOpenChange={(o) => !status.sending && setDialogs(p => ({ ...p, send: o }))}>
               <DialogTrigger asChild>
-                <Button variant="outline" disabled={status.generating || status.sending} className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-50">
+                <Button variant="outline" disabled={!selectedBranchId || status.generating || status.sending} className="sm:min-w-48 border-blue-200 text-blue-700 hover:bg-blue-50">
                   {status.sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                   ส่งเข้า LINE Group
                 </Button>

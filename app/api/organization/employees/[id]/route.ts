@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, Role } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { validateReportingManager } from '@/lib/organization-hierarchy';
 
 type SubordinateAction = 'retain' | 'unassign' | 'reassign';
+type SubordinatePlan = {
+  employeeId: number;
+  action: 'follow' | 'retain' | 'reassign' | 'unassign';
+  managerId?: number | null;
+  branchId?: number | null;
+  department?: string | null;
+};
 
 interface UpdatePayload {
-  operation: 'profile' | 'role' | 'assignment' | 'zone';
+  operation: 'profile' | 'role' | 'assignment' | 'reporting' | 'zone';
   name?: string;
   employeeId?: string;
   role?: Role;
@@ -14,16 +22,22 @@ interface UpdatePayload {
   department?: string | null;
   zoneId?: string | null;
   managerZoneId?: string | null;
+  managerId?: number | null;
   expectedUpdatedAt?: string;
   requireUnassigned?: boolean;
   subordinateAction?: SubordinateAction;
   reassignManagerId?: number;
+  subordinatePlan?: SubordinatePlan[];
 }
 
 const roleForReport: Partial<Record<Role, Role>> = {
   STAFF: Role.CHIEF,
   CHIEF: Role.DB_HEAD,
 };
+
+function isHierarchyManagedOperation(operation: string) {
+  return operation !== 'profile';
+}
 
 export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -47,8 +61,19 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  if (!['profile', 'role', 'assignment', 'zone'].includes(body.operation)) {
+  if (!['profile', 'role', 'assignment', 'reporting', 'zone'].includes(body.operation)) {
     return NextResponse.json({ error: 'Choose a valid operation' }, { status: 400 });
+  }
+  if (isHierarchyManagedOperation(String(body.operation))) {
+    return NextResponse.json({
+      error: 'Organizational position, placement, and reporting relationships are managed in Zone Hierarchy',
+    }, { status: 409 });
+  }
+  if (['role', 'branchId', 'department', 'zoneId', 'managerZoneId', 'managerId', 'subordinateAction', 'subordinatePlan', 'reassignManagerId']
+    .some((field) => Object.prototype.hasOwnProperty.call(body, field))) {
+    return NextResponse.json({
+      error: 'Employee profile updates cannot change organizational position, placement, or reporting relationships',
+    }, { status: 400 });
   }
   if (body.requireUnassigned !== undefined && typeof body.requireUnassigned !== 'boolean') {
     return NextResponse.json({ error: 'Invalid assignment constraint' }, { status: 400 });
@@ -64,7 +89,19 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         branch: true,
         manager: { select: { id: true, employeeId: true, name: true } },
         managerZone: { select: { zoneId: true, zoneName: true, branchId: true, department: true } },
-        subordinates: { select: { id: true, name: true, employeeId: true, role: true, branchId: true } },
+        subordinates: {
+          select: {
+            id: true,
+            name: true,
+            employeeId: true,
+            role: true,
+            branchId: true,
+            department: true,
+            managerId: true,
+            updatedAt: true,
+            zones: { select: { zone: { select: { zoneId: true, branchId: true, department: true } } } },
+          },
+        },
         zones: { include: { zone: true } },
       },
     });
@@ -84,6 +121,10 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     if (body.managerZoneId !== undefined && body.managerZoneId !== null && typeof body.managerZoneId !== 'string') {
       return NextResponse.json({ error: 'Choose a valid direct manager Zone ID' }, { status: 400 });
     }
+    if (body.managerId !== undefined && body.managerId !== null &&
+        (!Number.isInteger(body.managerId) || body.managerId <= 0)) {
+      return NextResponse.json({ error: 'Choose a valid reporting manager' }, { status: 400 });
+    }
 
     const data: {
       name?: string;
@@ -92,6 +133,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       branchId?: number | null;
       department?: string | null;
       managerZoneId?: string | null;
+      managerId?: number | null;
     } = {};
     if (body.operation === 'profile') {
       if (body.name !== undefined && typeof body.name !== 'string') return NextResponse.json({ error: 'Employee name must be text' }, { status: 400 });
@@ -110,6 +152,13 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       }
       data.role = body.role;
       if (body.managerZoneId !== undefined) data.managerZoneId = body.managerZoneId?.trim().toUpperCase() || null;
+      if (body.managerId !== undefined) data.managerId = body.managerId;
+      else if (body.role === Role.DB_HEAD) data.managerId = null;
+    } else if (body.operation === 'reporting') {
+      if (body.managerId === undefined) {
+        return NextResponse.json({ error: 'Choose a reporting manager or explicitly select Unassigned' }, { status: 400 });
+      }
+      data.managerId = body.managerId;
     } else {
       if (body.branchId !== undefined) {
         if (body.branchId !== null && (!Number.isInteger(body.branchId) || body.branchId <= 0)) {
@@ -123,6 +172,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       if (body.department !== undefined) data.department = body.department?.trim() || null;
       if (body.department && body.department.length > 120) return NextResponse.json({ error: 'Department name is too long' }, { status: 400 });
       if (body.managerZoneId !== undefined) data.managerZoneId = body.managerZoneId?.trim().toUpperCase() || null;
+      if (body.managerId !== undefined) data.managerId = body.managerId;
     }
 
     if (data.managerZoneId !== undefined && data.managerZoneId !== null &&
@@ -136,17 +186,6 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     const departmentAfterChange = data.department !== undefined ? data.department : employee.department;
     if (!user.isSuperAdmin && branchAfterChange !== user.branchId) {
       return NextResponse.json({ error: 'You may only assign employees to your own branch' }, { status: 403 });
-    }
-    if (data.managerZoneId) {
-      const managerZone = await prisma.zone.findUnique({
-        where: { zoneId: data.managerZoneId },
-        select: { zoneId: true, branchId: true, department: true },
-      });
-      if (!managerZone) return NextResponse.json({ error: 'The selected manager Zone no longer exists' }, { status: 400 });
-      if (managerZone.branchId !== branchAfterChange ||
-          managerZone.department?.toUpperCase() !== departmentAfterChange?.toUpperCase()) {
-        return NextResponse.json({ error: 'Employee and direct manager Zone must belong to the same branch and department' }, { status: 400 });
-      }
     }
     if (branchAfterChange !== null && branchAfterChange !== undefined &&
         !await prisma.branch.findUnique({ where: { id: branchAfterChange }, select: { id: true } })) {
@@ -166,30 +205,130 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       if (targetZone.branchId !== branchAfterChange) {
         return NextResponse.json({ error: 'The selected zone belongs to a different branch' }, { status: 400 });
       }
+      if ((body.operation === 'assignment' || body.operation === 'zone' || body.operation === 'profile') &&
+          targetZone.department?.toLocaleUpperCase() !== departmentAfterChange?.toLocaleUpperCase()) {
+        return NextResponse.json({ error: 'The selected Zone and employee must belong to the same department' }, { status: 400 });
+      }
     } else if ((body.operation === 'assignment' || body.operation === 'zone' || (body.operation === 'profile' && body.zoneId !== undefined)) &&
         body.zoneId === null && employee.zones[0]?.zone.branchId &&
         branchAfterChange && employee.zones[0].zone.branchId !== branchAfterChange) {
       return NextResponse.json({ error: 'The selected branch differs from the employee’s current zone. Select a matching zone or unassign the zone.' }, { status: 400 });
     }
-    if (body.operation === 'profile' && body.zoneId !== undefined && targetZone) {
-      data.department = targetZone.department;
-      if (employee.managerZone && (
-        employee.managerZone.branchId !== targetZone.branchId ||
-        employee.managerZone.department?.toUpperCase() !== targetZone.department?.toUpperCase()
-      )) {
-        data.managerZoneId = null;
+    if (data.managerZoneId) {
+      const managerZone = await prisma.zone.findUnique({
+        where: { zoneId: data.managerZoneId },
+        select: { zoneId: true, branchId: true, department: true },
+      });
+      if (!managerZone) return NextResponse.json({ error: 'The selected manager Zone no longer exists' }, { status: 400 });
+      if (managerZone.branchId !== branchAfterChange ||
+          managerZone.department?.toLocaleUpperCase() !== departmentAfterChange?.toLocaleUpperCase()) {
+        return NextResponse.json({ error: 'Employee and direct manager Zone must belong to the same branch and department' }, { status: 400 });
       }
     }
 
-    const assignmentsChanged = body.operation === 'role' || body.operation === 'assignment';
+    const managerIdAfterChange = data.managerId !== undefined ? data.managerId : employee.managerId;
+    const shouldValidateReportingLine = data.managerId !== undefined || data.role !== undefined ||
+      branchAfterChange !== employee.branchId ||
+      departmentAfterChange?.toLocaleUpperCase() !== employee.department?.toLocaleUpperCase();
+    if (shouldValidateReportingLine) {
+      const reportingManagerError = await validateReportingManager(prisma, {
+        employeeId: employee.id,
+        managerId: managerIdAfterChange,
+        role: roleAfterChange,
+        branchId: branchAfterChange,
+        department: departmentAfterChange,
+      });
+      if (reportingManagerError) {
+        return NextResponse.json({ error: reportingManagerError }, { status: 400 });
+      }
+    }
+
+    const assignmentsChanged = body.operation === 'role' || body.operation === 'assignment' ||
+      (body.operation === 'reporting' && employee.role === Role.CHIEF);
     const hasSubordinates = employee.subordinates.length > 0;
     if (hasSubordinates && assignmentsChanged) {
-      if (!body.subordinateAction) {
+      if (!body.subordinateAction && !body.subordinatePlan) {
         return NextResponse.json({ error: 'Choose how to handle the employee’s direct reports before saving' }, { status: 400 });
       }
-      if (body.subordinateAction === 'retain') {
+      if (body.subordinatePlan) {
+        if (!Array.isArray(body.subordinatePlan) ||
+            body.subordinatePlan.some((plan) =>
+              !plan || !Number.isInteger(plan.employeeId) ||
+              !['follow', 'retain', 'reassign', 'unassign'].includes(plan.action)
+            )) {
+          return NextResponse.json({ error: 'Choose a valid action for every direct report' }, { status: 400 });
+        }
+        const planByEmployeeId = new Map(body.subordinatePlan.map((plan) => [plan.employeeId, plan]));
+        if (planByEmployeeId.size !== body.subordinatePlan.length ||
+            planByEmployeeId.size !== employee.subordinates.length ||
+            employee.subordinates.some((report) => !planByEmployeeId.has(report.id))) {
+          return NextResponse.json({ error: 'Choose an action for every direct report' }, { status: 400 });
+        }
+        for (const report of employee.subordinates) {
+          const plan = planByEmployeeId.get(report.id)!;
+          if (!['follow', 'retain', 'reassign', 'unassign'].includes(plan.action)) {
+            return NextResponse.json({ error: `Choose a valid action for ${report.name}` }, { status: 400 });
+          }
+          if (plan.action === 'follow') {
+            if (roleAfterChange !== Role.CHIEF) {
+              return NextResponse.json({ error: 'Direct reports can follow only a Chief' }, { status: 400 });
+            }
+            const conflictingZone = report.zones.find(({ zone }) =>
+              zone.branchId !== branchAfterChange ||
+              zone.department?.toLocaleUpperCase() !== departmentAfterChange?.toLocaleUpperCase()
+            );
+            if (conflictingZone) {
+              return NextResponse.json({
+                error: `${report.name} owns Zone ${conflictingZone.zone.zoneId} outside the destination department. Transfer or unassign that Zone before moving the Chief.`,
+              }, { status: 409 });
+            }
+          } else if (plan.action === 'retain') {
+            if (roleForReport[report.role] !== roleAfterChange ||
+                report.branchId !== branchAfterChange ||
+                report.department?.toLocaleUpperCase() !== departmentAfterChange?.toLocaleUpperCase()) {
+              return NextResponse.json({
+                error: `Keeping ${report.name} under this Chief would be invalid. Choose Follow, Reassign, or Unassign.`,
+              }, { status: 400 });
+            }
+          } else if (plan.action === 'reassign') {
+            if (!Number.isInteger(plan.managerId) || !plan.managerId ||
+                !Number.isInteger(plan.branchId) || !plan.branchId ||
+                (plan.department !== undefined && plan.department !== null && typeof plan.department !== 'string') ||
+                (typeof plan.department === 'string' && plan.department.length > 120)) {
+              return NextResponse.json({ error: `Choose a valid destination and replacement manager for ${report.name}` }, { status: 400 });
+            }
+            if (!user.isSuperAdmin && plan.branchId !== user.branchId) {
+              return NextResponse.json({ error: `You may only transfer ${report.name} within your own branch` }, { status: 403 });
+            }
+            if (!await prisma.branch.findUnique({ where: { id: plan.branchId }, select: { id: true } })) {
+              return NextResponse.json({ error: `The destination branch for ${report.name} no longer exists` }, { status: 400 });
+            }
+            const conflictingZone = report.zones.find(({ zone }) =>
+              zone.branchId !== plan.branchId ||
+              zone.department?.toLocaleUpperCase() !== plan.department?.toLocaleUpperCase()
+            );
+            if (conflictingZone) {
+              return NextResponse.json({
+                error: `${report.name} owns Zone ${conflictingZone.zone.zoneId} outside the selected destination. Transfer or unassign that Zone first.`,
+              }, { status: 409 });
+            }
+            const replacementError = await validateReportingManager(prisma, {
+              employeeId: report.id,
+              managerId: plan.managerId,
+              role: report.role,
+              branchId: plan.branchId,
+              department: plan.department ?? null,
+            });
+            if (replacementError) {
+              return NextResponse.json({ error: `${report.name}: ${replacementError}` }, { status: 400 });
+            }
+          }
+        }
+      } else if (body.subordinateAction === 'retain') {
         const invalidReports = employee.subordinates.filter((report) =>
-          roleForReport[report.role] !== roleAfterChange || report.branchId !== branchAfterChange
+          roleForReport[report.role] !== roleAfterChange ||
+          report.branchId !== branchAfterChange ||
+          report.department?.toLocaleUpperCase() !== departmentAfterChange?.toLocaleUpperCase()
         );
         if (invalidReports.length) {
           return NextResponse.json({
@@ -233,9 +372,51 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       zoneId: employee.zones[0]?.zone.zoneId ?? null,
       zone: employee.zones[0]?.zone.zoneName ?? employee.zones[0]?.zone.zoneId ?? null,
       managerZoneId: employee.managerZoneId,
+      managerId: employee.managerId,
     };
 
     const result = await prisma.$transaction(async (tx) => {
+      const currentEmployee = await tx.employee.findUnique({
+        where: { id: employee.id },
+        select: { updatedAt: true },
+      });
+      if (!currentEmployee || currentEmployee.updatedAt.getTime() !== employee.updatedAt.getTime()) {
+        return { error: 'This employee changed during the operation. Refresh and review the latest values.', status: 409 as const };
+      }
+      if (data.employeeId !== undefined) {
+        const duplicate = await tx.employee.findFirst({
+          where: {
+            id: { not: employee.id },
+            employeeId: { equals: data.employeeId, mode: 'insensitive' },
+          },
+          select: { id: true },
+        });
+        if (duplicate) return { error: 'That employee ID is already in use', status: 409 as const };
+      }
+      const currentReports = employee.subordinates.length
+        ? await tx.employee.findMany({
+          where: { id: { in: employee.subordinates.map((report) => report.id) } },
+          select: { id: true, managerId: true, updatedAt: true },
+        })
+        : [];
+      if (currentReports.length !== employee.subordinates.length ||
+          currentReports.some((report) => {
+            const expected = employee.subordinates.find((item) => item.id === report.id);
+            return !expected || report.managerId !== employee.id ||
+              report.updatedAt.getTime() !== expected.updatedAt.getTime();
+          })) {
+        return { error: 'One or more direct reports changed during the operation. Refresh and review the latest values.', status: 409 as const };
+      }
+      if (shouldValidateReportingLine) {
+        const managerError = await validateReportingManager(tx, {
+          employeeId: employee.id,
+          managerId: managerIdAfterChange,
+          role: roleAfterChange,
+          branchId: branchAfterChange,
+          department: departmentAfterChange,
+        });
+        if (managerError) return { error: managerError, status: 409 as const };
+      }
       if (targetZone) {
         const occupiedZone = await tx.zoneEmployee.findFirst({
           where: {
@@ -270,22 +451,24 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         }
       }
       const historyBefore = body.operation === 'assignment' || body.operation === 'zone' || body.operation === 'role' ||
+        body.operation === 'reporting' ||
         (body.operation === 'profile' && body.zoneId !== undefined)
-        ? await tx.employee.findUniqueOrThrow({
-          where: { id: employee.id },
+        ? await tx.employee.findMany({
+          where: { id: { in: [employee.id, ...employee.subordinates.map((report) => report.id)] } },
           select: {
             id: true,
             role: true,
             branchId: true,
             department: true,
             managerZoneId: true,
+            managerId: true,
             updatedAt: true,
-            zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
+            zones: { select: { zone: { select: { id: true, zoneId: true } } } },
             subordinates: { select: { id: true, managerId: true } },
           },
         })
         : null;
-      if (hasSubordinates && assignmentsChanged) {
+      if (hasSubordinates && assignmentsChanged && !body.subordinatePlan) {
         if (body.subordinateAction === 'unassign') {
           await tx.employee.updateMany({ where: { managerId: employee.id }, data: { managerId: null } });
         } else if (body.subordinateAction === 'reassign' && body.reassignManagerId) {
@@ -327,10 +510,93 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
           }
           : data,
       });
+      if (body.subordinatePlan) {
+        for (const plan of body.subordinatePlan) {
+          const report = employee.subordinates.find((item) => item.id === plan.employeeId);
+          if (!report) {
+            return { error: 'A direct report changed during the operation. Refresh and try again.', status: 409 as const };
+          }
+          const reportData: {
+            managerId?: number | null;
+            branchId?: number | null;
+            department?: string | null;
+          } = {};
+          if (plan.action === 'retain') {
+            const managerError = await validateReportingManager(tx, {
+              employeeId: report.id,
+              managerId: employee.id,
+              role: report.role,
+              branchId: report.branchId,
+              department: report.department,
+            });
+            if (managerError) {
+              return { error: `${report.name}: ${managerError}`, status: 409 as const };
+            }
+          }
+          if (plan.action === 'follow') {
+            reportData.branchId = branchAfterChange;
+            reportData.department = departmentAfterChange;
+            reportData.managerId = employee.id;
+          } else if (plan.action === 'reassign') {
+            reportData.managerId = plan.managerId!;
+            reportData.branchId = plan.branchId!;
+            reportData.department = plan.department ?? null;
+          } else if (plan.action === 'unassign') {
+            reportData.managerId = null;
+          }
+          if (reportData.managerId !== undefined && reportData.managerId !== null) {
+            const reportBranchId = Object.prototype.hasOwnProperty.call(reportData, 'branchId') ? reportData.branchId! : report.branchId;
+            const reportDepartment = Object.prototype.hasOwnProperty.call(reportData, 'department') ? reportData.department! : report.department;
+            if (reportBranchId !== null && !await tx.branch.findUnique({ where: { id: reportBranchId }, select: { id: true } })) {
+              return { error: `${report.name}: the destination branch no longer exists`, status: 409 as const };
+            }
+            const managerError = await validateReportingManager(tx, {
+              employeeId: report.id,
+              managerId: reportData.managerId,
+              role: report.role,
+              branchId: reportBranchId,
+              department: reportDepartment,
+            });
+            if (managerError) {
+              return { error: `${report.name}: ${managerError}`, status: 409 as const };
+            }
+          }
+          if (Object.keys(reportData).length) {
+            await tx.employee.update({
+              where: { id: report.id },
+              data: reportData,
+            });
+            await tx.employeeChangeHistory.create({
+              data: {
+                employeeId: report.id,
+                actorId: user.id,
+                actorName: user.name,
+                source: 'MANUAL',
+                operation: 'DIRECT_REPORT_TRANSFER',
+                oldValues: {
+                  managerId: report.managerId,
+                  branchId: report.branchId,
+                  department: report.department,
+                },
+                newValues: {
+                  managerId: Object.prototype.hasOwnProperty.call(reportData, 'managerId') ? reportData.managerId : report.managerId,
+                  branchId: Object.prototype.hasOwnProperty.call(reportData, 'branchId') ? reportData.branchId : report.branchId,
+                  department: Object.prototype.hasOwnProperty.call(reportData, 'department') ? reportData.department : report.department,
+                },
+              },
+            });
+          }
+        }
+      }
       if ((body.operation === 'assignment' || body.operation === 'zone' || (body.operation === 'profile' && body.zoneId !== undefined)) && body.zoneId !== undefined) {
         await tx.zoneEmployee.deleteMany({ where: { employeeId: employee.id } });
         if (targetZone) {
-          await tx.zoneEmployee.create({ data: { employeeId: employee.id, zoneId: targetZone.id } });
+          await tx.zoneEmployee.create({
+            data: {
+              employeeId: employee.id,
+              zoneId: targetZone.id,
+            },
+          });
         }
       }
       const refreshed = await tx.employee.findUniqueOrThrow({
@@ -351,6 +617,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         zoneId: refreshed.zones[0]?.zone.zoneId ?? null,
         zone: refreshed.zones[0]?.zone.zoneName ?? refreshed.zones[0]?.zone.zoneId ?? null,
         managerZoneId: refreshed.managerZoneId,
+        managerId: refreshed.managerId,
         subordinateAction: hasSubordinates && assignmentsChanged ? body.subordinateAction : null,
       };
       await tx.employeeChangeHistory.create({
@@ -365,30 +632,31 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         },
       });
       if (historyBefore) {
-        const historyAfter = await tx.employee.findUniqueOrThrow({
-          where: { id: employee.id },
+        const historyAfter = await tx.employee.findMany({
+          where: { id: { in: historyBefore.map((item) => item.id) } },
           select: {
             id: true,
           role: true,
             branchId: true,
             department: true,
             managerZoneId: true,
+            managerId: true,
             updatedAt: true,
-            zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
+            zones: { select: { zone: { select: { id: true, zoneId: true } } } },
             subordinates: { select: { id: true, managerId: true } },
           },
         });
-        const snapshot = (item: typeof historyBefore) => ({
+        const snapshot = (item: (typeof historyBefore)[number]) => ({
           id: item.id,
           role: item.role,
           branchId: item.branchId,
           department: item.department,
           managerZoneId: item.managerZoneId,
+          managerId: item.managerId,
           updatedAt: item.updatedAt.toISOString(),
           zones: item.zones.map((zone) => ({
             zoneId: zone.zone.zoneId,
             zoneRecordId: zone.zone.id,
-            chiefOfficerId: zone.chiefOfficerId,
           })),
           subordinates: item.subordinates,
         });
@@ -396,12 +664,14 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
           data: {
             actorId: user.id,
             actorName: user.name,
-            branchId: historyBefore.branchId,
+            branchId: employee.branchId,
             entityType: 'EMPLOYEE',
-            operation: 'EMPLOYEE_ASSIGNMENT',
-            description: `Updated Zone/department assignment for ${employee.name} (${employee.employeeId})`,
-            beforeValues: { employees: [snapshot(historyBefore)] } as Prisma.InputJsonValue,
-            afterValues: { employees: [snapshot(historyAfter)] } as Prisma.InputJsonValue,
+            operation: body.operation === 'reporting' ? 'EMPLOYEE_REPORTING' : 'EMPLOYEE_ASSIGNMENT',
+            description: body.operation === 'reporting'
+              ? `Changed reporting manager for ${employee.name} (${employee.employeeId})`
+              : `Updated Zone/department assignment for ${employee.name} (${employee.employeeId})`,
+            beforeValues: { employees: historyBefore.map(snapshot) } as Prisma.InputJsonValue,
+            afterValues: { employees: historyAfter.map(snapshot) } as Prisma.InputJsonValue,
           },
         });
       }
@@ -441,8 +711,7 @@ export async function DELETE(_request: NextRequest, context: { params: { id: str
       const employee = await tx.employee.findUnique({
         where: { id: employeeId },
         include: {
-          zones: { select: { zone: { select: { id: true, zoneId: true } }, chiefOfficerId: true } },
-          chiefOfZones: { select: { id: true, employeeId: true, zoneId: true, chiefOfficerId: true } },
+          zones: { select: { zone: { select: { id: true, zoneId: true } } } },
           subordinates: { select: { id: true, managerId: true } },
           history: {
             select: {
@@ -475,10 +744,9 @@ export async function DELETE(_request: NextRequest, context: { params: { id: str
         managerZoneId: employee.managerZoneId,
         createdAt: employee.createdAt.toISOString(),
         updatedAt: employee.updatedAt.toISOString(),
-        zones: employee.zones.map(({ zone, chiefOfficerId }) => ({
-          zoneId: zone.zoneId, zoneRecordId: zone.id, chiefOfficerId,
+        zones: employee.zones.map(({ zone }) => ({
+          zoneId: zone.zoneId, zoneRecordId: zone.id,
         })),
-        chiefOfZones: employee.chiefOfZones,
         subordinates: employee.subordinates,
         history: employee.history,
       };
@@ -496,12 +764,6 @@ export async function DELETE(_request: NextRequest, context: { params: { id: str
             employees: [{
               id: employee.id,
               subordinates: employee.subordinates.map(({ id }) => ({ id, managerId: null })),
-              chiefOfZones: employee.chiefOfZones.map((assignment) => ({
-                id: assignment.id,
-                employeeId: assignment.employeeId,
-                zoneId: assignment.zoneId,
-                chiefOfficerId: null,
-              })),
             }],
           },
         },

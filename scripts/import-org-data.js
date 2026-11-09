@@ -59,6 +59,16 @@ async function upsertSimple(model, rows) {
 
 async function main() {
   const data = loadExport();
+  const zoneEmployeeRows = (data.ZoneEmployee || []).map((row) => ({
+    id: row.id,
+    zoneId: row.zoneId,
+    employeeId: row.employeeId,
+  }));
+  const duplicateZone = new Set(zoneEmployeeRows.map((row) => row.zoneId)).size !== zoneEmployeeRows.length;
+  const duplicateEmployee = new Set(zoneEmployeeRows.map((row) => row.employeeId)).size !== zoneEmployeeRows.length;
+  if (duplicateZone || duplicateEmployee) {
+    throw new Error('Export contains duplicate Zone owners or employees assigned to multiple Zones; resolve the assignments before importing.');
+  }
   console.log('Importing org data exported at', data.exportedAt);
 
   console.log('Branch...');
@@ -105,18 +115,16 @@ async function main() {
   console.log('  Employee done (' + imported.size + '/' + employees.length + ')');
 
   console.log('ZoneEmployee...');
-  for (const row of data.ZoneEmployee || []) {
-    try {
-      await prisma.zoneEmployee.upsert({
-        where: { zoneId_employeeId: { zoneId: row.zoneId, employeeId: row.employeeId } },
-        update: { chiefOfficerId: row.chiefOfficerId },
+  await prisma.$transaction(async (transaction) => {
+    for (const row of zoneEmployeeRows) {
+      await transaction.zoneEmployee.upsert({
+        where: { zoneId: row.zoneId },
+        update: { employeeId: row.employeeId },
         create: row,
       });
-    } catch (e) {
-      console.error('  ZoneEmployee failed:', row.id, e.message);
     }
-  }
-  console.log('  ZoneEmployee done');
+  });
+  console.log('  ZoneEmployee done (' + zoneEmployeeRows.length + ')');
 
   console.log('ZoneDepartmentRoot...');
   await upsertSimple('zoneDepartmentRoot', data.ZoneDepartmentRoot || []);

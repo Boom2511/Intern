@@ -9,10 +9,9 @@ import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
 import { format, parseISO } from 'date-fns';
 import { th } from 'date-fns/locale';
-import { getStatusLabel, displayThaiPhone } from '@/lib/utils';
 import { getCurrentUser } from '@/lib/auth';
-import { getTicketBranchScope } from '@/lib/branch-access';
-import { getReportZoneInfo } from '@/lib/report-zone-employees';
+import { getReportBranchScope } from '@/lib/branch-access';
+import { getReportNodeKindLabel, getReportZoneInfo } from '@/lib/report-zone-employees';
 import { getReportDateRange } from '@/lib/report-date-range';
 
 export const dynamic = 'force-dynamic';
@@ -21,17 +20,24 @@ interface ReportFilters {
   reportType: 'daily' | 'monthly';
   startDate: string;
   endDate?: string;
+  branchId?: number;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    const branchScope = getTicketBranchScope(user);
-    if (!branchScope) return NextResponse.json({ success: false, error: 'Your account is not assigned to a branch' }, { status: 403 });
 
     const body = await request.json();
     const { reportType, startDate, endDate }: ReportFilters = body;
+    const branchScope = getReportBranchScope(user, body.branchId);
+    if (!branchScope) {
+      return NextResponse.json({
+        success: false,
+        error: user.isSuperAdmin ? 'Choose a valid branch' : 'Your account is not assigned to a branch',
+      }, { status: 403 });
+    }
+    const reportBranchId = user.isSuperAdmin ? Number(body.branchId) : user.branchId!;
 
     let reportDateRange;
     try {
@@ -69,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // Build a zone map to fill ชื่อเจ้าหน้าที่/ผู้ควบคุม/หัวหน้า DB from zoneId
     const zoneIds = Array.from(new Set(tickets.map((ticket) => ticket.zoneId).filter((zoneId): zoneId is string => Boolean(zoneId))));
-    const zoneMap = await getReportZoneInfo(zoneIds, user.isSuperAdmin ? undefined : user.branchId);
+    const zoneMap = await getReportZoneInfo(zoneIds, reportBranchId);
 
     // Helper function to create a worksheet with data
     const createWorksheet = (workbook: ExcelJS.Workbook, sheetName: string, ticketsData: any[], includeSalesforceId: boolean = true) => {
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest) {
         ? `รายงานประจำวัน - ${format(parseISO(startDate), 'dd MMMM yyyy', { locale: th })}`
         : `รายงานประจำเดือน - ${format(parseISO(startDate), 'dd MMM', { locale: th })} ถึง ${format(parseISO(endDate || startDate), 'dd MMM yyyy', { locale: th })}`;
 
-      const totalColumns = includeSalesforceId ? 'O' : 'N';
+      const totalColumns = includeSalesforceId ? 'R' : 'Q';
       worksheet.mergeCells(`A1:${totalColumns}1`);
       const titleCell = worksheet.getCell('A1');
       titleCell.value = reportTitle;
@@ -99,6 +105,9 @@ export async function POST(request: NextRequest) {
         'เบอร์โทรลูกค้า',
         'ที่อยู่ลูกค้า',
         'ชื่อเจ้าหน้าที่',
+        'รหัสพนักงาน',
+        'Zone ID',
+        'ประเภทโหนด',
         'แผนก/DB',
         'ผู้ควบคุม',
         'หัวหน้า DB',
@@ -139,6 +148,9 @@ export async function POST(request: NextRequest) {
         { width: 15 }, // เบอร์โทร
         { width: 40 }, // ที่อยู่
         { width: 20 }, // ชื่อเจ้าหน้าที่
+        { width: 16 }, // รหัสพนักงาน
+        { width: 18 }, // Zone ID
+        { width: 18 }, // ประเภทโหนด
         { width: 12 }, // แผนก
         { width: 20 }, // ผู้ควบคุม
         { width: 20 }, // หัวหน้า DB
@@ -172,8 +184,11 @@ export async function POST(request: NextRequest) {
           ticket.recipientName, // ชื่อผู้รับจาก Ticket (แก้ไขได้)
           ticket.recipientPhone, // เบอร์ผู้รับจาก Ticket (แก้ไขได้) - แสดงเป็น +66XXXXXXXXX (E.164)
           ticket.recipientAddress || '-',
-          zoneInfo?.staffName || ticket.assignedTo || ticket.createdBy || '-', // ชื่อเจ้าหน้าที่ from zoneId
-          ticket.department || '-',
+          zoneInfo?.staffName || '-',
+          zoneInfo?.staffEmployeeId || '-',
+          zoneInfo?.zoneId || ticket.zoneId || '-',
+          getReportNodeKindLabel(zoneInfo?.nodeKind),
+          zoneInfo?.department || ticket.department || '-',
           zoneInfo?.chief || '-', // ผู้ควบคุม
           zoneInfo?.dbHead || '-', // หัวหน้า DB
           ticket.description, // ความต้องการลูกค้า

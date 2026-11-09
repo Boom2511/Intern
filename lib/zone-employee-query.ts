@@ -1,5 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { Role, Employee } from "@prisma/client";
+import { Role } from "@prisma/client";
+import {
+  getReportZoneAuthority,
+  getReportZoneInfo,
+} from '@/lib/report-zone-employees';
+import {
+  getPositionFromNodeKind,
+  type OrganizationPerson,
+  type OrganizationReportingPath,
+  type ZonePathValue,
+} from '@/lib/organization-position';
 
 /**
  * Zone Employee Query Utilities
@@ -10,82 +20,14 @@ export function getEmpName(emp: any): string {
   return emp?.name || emp?.displayName || (emp as any)?.username || (emp as any)?.lineName || '-';
 }
 
-async function findDbHeadViaManagers(
-  start: Employee | null
-): Promise<(Employee & { manager: Employee | null }) | null> {
-  if (!start) return null;
-
-  const emp = await prisma.employee.findUnique({
-    where: { id: start.id },
-    include: { manager: true },
-  });
-
-  if (!emp) return null;
-
-  if (emp.role === Role.DB_HEAD) {
-    return emp;
-  }
-
-  if (!emp.manager) return null;
-
-  return findDbHeadViaManagers(emp.manager);
-}
-
 export async function getZoneLeads(zoneId: string): Promise<{ chief?: string; dbHead?: string }> {
   const zones = await resolveZoneLeadsForZones([zoneId]);
   return zones.get(zoneId) || {};
 }
 
 export async function resolveZoneLeadsForZones(zoneIds: string[]): Promise<Map<string, { chief?: string; dbHead?: string }>> {
-  const map = new Map<string, { chief?: string; dbHead?: string }>();
-  if (zoneIds.length === 0) return map;
-
-  const zones = await prisma.zone.findMany({
-    where: { zoneId: { in: zoneIds } },
-    include: {
-      employees: {
-        include: {
-          employee: {
-            include: {
-              manager: true,
-            },
-          },
-          chiefOfficer: {
-            include: {
-              manager: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  for (const zone of zones) {
-    const employees = zone.employees.map((ze) => ze.employee);
-    const chiefOfficerByLink = zone.employees.find((ze) => !!ze.chiefOfficer)?.chiefOfficer || null;
-    const chiefByRole = employees.find((e) => e.role === Role.CHIEF) || null;
-    const dbHeadDirect = employees.find((e) => e.role === Role.DB_HEAD) || null;
-
-    // Chief resolution priority: chiefOfficer link > CHIEF role
-    const chiefResolved = chiefOfficerByLink || chiefByRole || null;
-
-    // DB Head resolution: direct > via chief manager chain > via first staff manager chain
-    let dbHeadResolved = dbHeadDirect || null;
-    if (!dbHeadResolved && chiefResolved) {
-      dbHeadResolved = await findDbHeadViaManagers(chiefResolved);
-    }
-    if (!dbHeadResolved) {
-      const staff = employees.find((e) => e.role === Role.STAFF) || null;
-      if (staff) dbHeadResolved = await findDbHeadViaManagers(staff);
-    }
-
-    map.set(zone.zoneId, {
-      chief: chiefResolved ? getEmpName(chiefResolved) : undefined,
-      dbHead: dbHeadResolved ? getEmpName(dbHeadResolved) : undefined,
-    });
-  }
-
-  return map;
+  const reportInfo = await getReportZoneInfo(zoneIds);
+  return new Map(Array.from(reportInfo, ([id, info]) => [id, { chief: info.chief, dbHead: info.dbHead }]));
 }
 
 /**
@@ -98,12 +40,7 @@ export async function getZoneEmployees(zoneId: string) {
     include: {
       employees: {
         include: {
-          employee: {
-            include: {
-              manager: true,
-              subordinates: true,
-            },
-          },
+          employee: true,
         },
       },
     },
@@ -113,6 +50,11 @@ export async function getZoneEmployees(zoneId: string) {
     return null;
   }
 
+  const authority = (await getReportZoneAuthority([zoneId])).get(zoneId);
+  const chief = authority?.path?.chief;
+  const manager = chief && chief !== 'Missing' && 'employeeId' in chief
+    ? { id: chief.id, employeeId: chief.employeeId, name: chief.name }
+    : null;
   return {
     zone: {
       id: zone.id,
@@ -123,15 +65,9 @@ export async function getZoneEmployees(zoneId: string) {
       id: ze.employee.id,
       employeeId: ze.employee.employeeId,
       name: ze.employee.name,
-      role: ze.employee.role,
+      role: getPositionFromNodeKind(zone.nodeKind),
       department: ze.employee.department,
-      manager: ze.employee.manager
-        ? {
-            id: ze.employee.manager.id,
-            employeeId: ze.employee.manager.employeeId,
-            name: ze.employee.manager.name,
-          }
-        : null,
+      manager,
     })),
   };
 }
@@ -141,43 +77,21 @@ export async function getZoneEmployees(zoneId: string) {
  * @param zoneId - The zone ID
  */
 export async function getZoneChief(zoneId: string) {
-  const zone = await prisma.zone.findUnique({
-    where: { zoneId },
-    include: {
-      employees: {
-        where: {
-          employee: {
-            role: Role.CHIEF,
-          },
-        },
-        include: {
-          employee: {
-            include: {
-              manager: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!zone || zone.employees.length === 0) {
+  const authority = (await getReportZoneAuthority([zoneId])).get(zoneId);
+  if (!authority || authority.position === Role.DB_HEAD || !authority.path) {
     return null;
   }
-
-  const chief = zone.employees[0].employee;
+  const chief = authority.path.chief;
+  if (!chief || chief === 'Missing' || !('employeeId' in chief)) return null;
+  const dbHead = authority.path.dbHead;
   return {
     id: chief.id,
     employeeId: chief.employeeId,
     name: chief.name,
-    role: chief.role,
-    department: chief.department,
-    manager: chief.manager
-      ? {
-          id: chief.manager.id,
-          employeeId: chief.manager.employeeId,
-          name: chief.manager.name,
-        }
+    role: Role.CHIEF,
+    department: chief.department ?? null,
+    manager: dbHead && dbHead !== 'Missing' && 'employeeId' in dbHead
+      ? { id: dbHead.id, employeeId: dbHead.employeeId, name: dbHead.name }
       : null,
   };
 }
@@ -187,34 +101,57 @@ export async function getZoneChief(zoneId: string) {
  * @param zoneId - The zone ID
  */
 export async function getZoneDBHead(zoneId: string) {
-  const zone = await prisma.zone.findUnique({
-    where: { zoneId },
-    include: {
-      employees: {
-        where: {
-          employee: {
-            role: Role.DB_HEAD,
-          },
-        },
-        include: {
-          employee: true,
-        },
-      },
-    },
-  });
-
-  if (!zone || zone.employees.length === 0) {
-    return null;
-  }
-
-  const dbHead = zone.employees[0].employee;
+  const authority = (await getReportZoneAuthority([zoneId])).get(zoneId);
+  const dbHead = authority?.path?.dbHead;
+  if (!dbHead || dbHead === 'Missing' || !('employeeId' in dbHead)) return null;
   return {
     id: dbHead.id,
     employeeId: dbHead.employeeId,
     name: dbHead.name,
-    role: dbHead.role,
-    department: dbHead.department,
+    role: Role.DB_HEAD,
+    department: dbHead.department ?? null,
   };
+}
+
+type DerivedAssignment = {
+  employee: OrganizationPerson;
+  zoneId: string;
+  position: Role;
+  path: OrganizationReportingPath;
+};
+
+function getPathPerson(value: ZonePathValue | undefined): OrganizationPerson | null {
+  return value && value !== 'Missing' && 'employeeId' in value ? value : null;
+}
+
+function getDirectController(assignment: DerivedAssignment): OrganizationPerson | null {
+  if (assignment.position === Role.STAFF) return getPathPerson(assignment.path.chief);
+  if (assignment.position === Role.CHIEF) return getPathPerson(assignment.path.dbHead);
+  return null;
+}
+
+async function getBranchAssignments(branchId: number | null): Promise<DerivedAssignment[]> {
+  const zones = await prisma.zone.findMany({
+    where: { branchId },
+    select: {
+      zoneId: true,
+      nodeKind: true,
+      employees: {
+        select: {
+          employee: {
+            select: { id: true, employeeId: true, name: true, role: true, department: true },
+          },
+        },
+      },
+    },
+  });
+  const authorities = await getReportZoneAuthority(zones.map((zone) => zone.zoneId), branchId);
+  return zones.flatMap((zone) => {
+    const position = getPositionFromNodeKind(zone.nodeKind);
+    const owner = zone.employees.length === 1 ? zone.employees[0].employee : null;
+    const path = authorities.get(zone.zoneId)?.path;
+    return position && owner && path ? [{ employee: owner, zoneId: zone.zoneId, position, path }] : [];
+  });
 }
 
 /**
@@ -230,8 +167,6 @@ export async function getEmployeeZones(employeeId: string) {
           zone: true,
         },
       },
-      manager: true,
-      subordinates: true,
     },
   });
 
@@ -239,20 +174,17 @@ export async function getEmployeeZones(employeeId: string) {
     return null;
   }
 
+  const assignments = await getBranchAssignments(employee.branchId);
+  const currentAssignment = assignments.find((assignment) => assignment.employee.id === employee.id);
+  const subordinates = assignments.filter((assignment) => getDirectController(assignment)?.id === employee.id);
   return {
     employee: {
       id: employee.id,
       employeeId: employee.employeeId,
       name: employee.name,
-      role: employee.role,
+      role: currentAssignment?.position ?? null,
       department: employee.department,
-      manager: employee.manager
-        ? {
-            id: employee.manager.id,
-            employeeId: employee.manager.employeeId,
-            name: employee.manager.name,
-          }
-        : null,
+      manager: currentAssignment ? getDirectController(currentAssignment) : null,
     },
     zones: employee.zones.map((ze) => ({
       id: ze.zone.id,
@@ -260,11 +192,11 @@ export async function getEmployeeZones(employeeId: string) {
       zoneName: ze.zone.zoneName,
       source: ze.zone.source,
     })),
-    subordinates: employee.subordinates.map((sub) => ({
-      id: sub.id,
-      employeeId: sub.employeeId,
-      name: sub.name,
-      role: sub.role,
+    subordinates: subordinates.map(({ employee: subordinate, position }) => ({
+      id: subordinate.id,
+      employeeId: subordinate.employeeId,
+      name: subordinate.name,
+      role: position,
     })),
   };
 }
@@ -277,40 +209,31 @@ export async function getEmployeeZones(employeeId: string) {
 export async function getEmployeeHierarchyUp(employeeId: string) {
   const employee = await prisma.employee.findUnique({
     where: { employeeId },
+    include: { zones: { include: { zone: true } } },
   });
 
   if (!employee) {
     return null;
   }
 
-  const hierarchy = [
+  const assignments = await getBranchAssignments(employee.branchId);
+  const assignment = assignments.find((candidate) => candidate.employee.id === employee.id);
+  const path = assignment?.path;
+  const pathValue = (value: ZonePathValue | null | undefined) => value ?? 'Unassigned';
+  return [
     {
-      id: employee.id,
-      employeeId: employee.employeeId,
-      name: employee.name,
-      role: employee.role,
+      level: 'employee',
+      value: {
+        id: employee.id,
+        employeeId: employee.employeeId,
+        name: employee.name,
+        role: assignment?.position ?? null,
+      },
     },
+    { level: 'parent', value: pathValue(path?.parent) },
+    { level: 'chief', value: pathValue(path?.chief) },
+    { level: 'dbHead', value: pathValue(path?.dbHead) },
   ];
-
-  let current = employee;
-  while (current.managerId) {
-    const manager = await prisma.employee.findUnique({
-      where: { id: current.managerId },
-    });
-
-    if (!manager) break;
-
-    hierarchy.push({
-      id: manager.id,
-      employeeId: manager.employeeId,
-      name: manager.name,
-      role: manager.role,
-    });
-
-    current = manager;
-  }
-
-  return hierarchy;
 }
 
 /**
@@ -326,40 +249,42 @@ export async function getEmployeeSubordinates(employeeId: string) {
     return null;
   }
 
-  const getAllSubordinates = async (
-    id: number
-  ): Promise<
-    Array<{
-      id: number;
-      employeeId: string;
-      name: string;
-      role: Role;
-      subordinates: any[];
-    }>
-  > => {
-    const subs = await prisma.employee.findMany({
-      where: { managerId: id },
-    });
-
-    return Promise.all(
-      subs.map(async (sub) => ({
-        id: sub.id,
-        employeeId: sub.employeeId,
-        name: sub.name,
-        role: sub.role,
-        subordinates: await getAllSubordinates(sub.id),
-      }))
-    );
+  const assignments = await getBranchAssignments(employee.branchId);
+  const directReports = new Map<number, DerivedAssignment[]>();
+  for (const assignment of assignments) {
+    const manager = getDirectController(assignment);
+    if (!manager) continue;
+    directReports.set(manager.id, [...(directReports.get(manager.id) ?? []), assignment]);
+  }
+  type Subordinate = {
+    id: number;
+    employeeId: string;
+    name: string;
+    role: Role;
+    subordinates: Subordinate[];
   };
-
-  const subordinates = await getAllSubordinates(employee.id);
+  const visited = new Set<number>([employee.id]);
+  const getAllSubordinates = (id: number): Subordinate[] =>
+    (directReports.get(id) ?? []).flatMap((assignment) => {
+      if (visited.has(assignment.employee.id)) return [];
+      visited.add(assignment.employee.id);
+      return [{
+        id: assignment.employee.id,
+        employeeId: assignment.employee.employeeId,
+        name: assignment.employee.name,
+        role: assignment.position,
+        subordinates: getAllSubordinates(assignment.employee.id),
+      }];
+    });
+  const subordinates = getAllSubordinates(employee.id);
+  const currentAssignment = assignments.find((assignment) => assignment.employee.id === employee.id);
 
   return {
     employee: {
       id: employee.id,
       employeeId: employee.employeeId,
       name: employee.name,
-      role: employee.role,
+      role: currentAssignment?.position ?? null,
     },
     subordinates,
   };
@@ -375,11 +300,7 @@ export async function getZoneInfo(zoneId: string) {
     include: {
       employees: {
         include: {
-          employee: {
-            include: {
-              manager: true,
-            },
-          },
+          employee: true,
         },
       },
     },
@@ -389,18 +310,21 @@ export async function getZoneInfo(zoneId: string) {
     return null;
   }
 
-  // Group employees by role
-  const employeesByRole = {
-    [Role.DB_HEAD]: zone.employees
-      .filter((ze) => ze.employee.role === Role.DB_HEAD)
-      .map((ze) => ze.employee),
-    [Role.CHIEF]: zone.employees
-      .filter((ze) => ze.employee.role === Role.CHIEF)
-      .map((ze) => ze.employee),
-    [Role.STAFF]: zone.employees
-      .filter((ze) => ze.employee.role === Role.STAFF)
-      .map((ze) => ze.employee),
-  };
+  const authority = (await getReportZoneAuthority([zoneId])).get(zoneId);
+  const path = authority?.path;
+  const person = (value: ZonePathValue | undefined) =>
+    value && value !== 'Missing' && 'employeeId' in value
+      ? {
+          id: value.id,
+          employeeId: value.employeeId,
+          name: value.name,
+          department: value.department ?? null,
+        }
+      : null;
+  const owner = zone.employees.length === 1 ? zone.employees[0].employee : null;
+  const position = getPositionFromNodeKind(zone.nodeKind);
+  const dbHead = person(path?.dbHead);
+  const chief = position === Role.DB_HEAD ? null : person(path?.chief);
 
   return {
     zone: {
@@ -411,45 +335,17 @@ export async function getZoneInfo(zoneId: string) {
       isMapped: zone.isMapped,
       createdAt: zone.createdAt,
     },
-    dbHead: employeesByRole[Role.DB_HEAD][0]
-      ? {
-          id: employeesByRole[Role.DB_HEAD][0].id,
-          employeeId: employeesByRole[Role.DB_HEAD][0].employeeId,
-          name: employeesByRole[Role.DB_HEAD][0].name,
-          department: employeesByRole[Role.DB_HEAD][0].department,
-        }
-      : null,
-    chief: employeesByRole[Role.CHIEF][0]
-      ? {
-          id: employeesByRole[Role.CHIEF][0].id,
-          employeeId: employeesByRole[Role.CHIEF][0].employeeId,
-          name: employeesByRole[Role.CHIEF][0].name,
-          department: employeesByRole[Role.CHIEF][0].department,
-          manager:
-            employeesByRole[Role.CHIEF][0].manager &&
-            employeesByRole[Role.CHIEF][0].manager
-              ? {
-                  id: employeesByRole[Role.CHIEF][0].manager!.id,
-                  employeeId:
-                    employeesByRole[Role.CHIEF][0].manager!.employeeId,
-                  name: employeesByRole[Role.CHIEF][0].manager!.name,
-                }
-              : null,
-        }
-      : null,
-    staffMembers: employeesByRole[Role.STAFF].map((emp) => ({
-      id: emp.id,
-      employeeId: emp.employeeId,
-      name: emp.name,
-      department: emp.department,
-      manager: emp.manager
-        ? {
-            id: emp.manager.id,
-            employeeId: emp.manager.employeeId,
-            name: emp.manager.name,
-          }
-        : null,
-    })),
+    dbHead,
+    chief: chief ? { ...chief, manager: dbHead } : null,
+    staffMembers: position === Role.STAFF && owner
+      ? [{
+          id: owner.id,
+          employeeId: owner.employeeId,
+          name: owner.name,
+          department: owner.department,
+          manager: chief,
+        }]
+      : [],
   };
 }
 
@@ -480,7 +376,6 @@ export async function searchZones(criteria: {
               id: true,
               employeeId: true,
               name: true,
-              role: true,
               department: true,
             },
           },
@@ -490,25 +385,25 @@ export async function searchZones(criteria: {
     take: criteria.limit || 20,
   });
 
+  const authorities = await getReportZoneAuthority(zones.map((zone) => zone.zoneId));
   return zones.map((zone) => {
-    const chief = zone.employees.find(
-      (ze) => ze.employee.role === Role.CHIEF
-    )?.employee;
-    const dbHead = zone.employees.find(
-      (ze) => ze.employee.role === Role.DB_HEAD
-    )?.employee;
+    const authority = authorities.get(zone.zoneId);
+    const chief = authority?.position === Role.DB_HEAD
+      ? null
+      : authority?.path?.chief;
+    const dbHead = authority?.path?.dbHead;
+    const toPerson = (value: typeof chief) =>
+      value && value !== 'Missing' && 'employeeId' in value
+        ? { id: value.id, employeeId: value.employeeId, name: value.name }
+        : null;
 
     return {
       id: zone.id,
       zoneId: zone.zoneId,
       zoneName: zone.zoneName,
       source: zone.source,
-      chief: chief
-        ? { id: chief.id, employeeId: chief.employeeId, name: chief.name }
-        : null,
-      dbHead: dbHead
-        ? { id: dbHead.id, employeeId: dbHead.employeeId, name: dbHead.name }
-        : null,
+      chief: toPerson(chief),
+      dbHead: toPerson(dbHead),
       totalEmployees: zone.employees.length,
     };
   });
@@ -519,51 +414,52 @@ export async function searchZones(criteria: {
  * @param department - The department name
  */
 export async function getDepartmentStructure(department: string) {
-  const employees = await prisma.employee.findMany({
+  const zones = await prisma.zone.findMany({
     where: { department },
     include: {
-      zones: {
-        include: {
-          zone: true,
-        },
-      },
-      subordinates: true,
+      employees: { include: { employee: true } },
     },
   });
-
-  // Find the DB Head (should only be one per department)
-  const dbHead = employees.find((e) => e.role === Role.DB_HEAD);
-
-  // Find all chiefs
-  const chiefs = employees.filter((e) => e.role === Role.CHIEF);
-
-  // Find all staff
-  const staff = employees.filter((e) => e.role === Role.STAFF);
+  const authorities = await getReportZoneAuthority(zones.map((zone) => zone.zoneId));
+  const dbHeadZones = zones.filter((zone) => getPositionFromNodeKind(zone.nodeKind) === Role.DB_HEAD);
+  const chiefZones = zones.filter((zone) => getPositionFromNodeKind(zone.nodeKind) === Role.CHIEF);
+  const staffZones = zones.filter((zone) => getPositionFromNodeKind(zone.nodeKind) === Role.STAFF);
+  const dbHeadOwner = dbHeadZones
+    .map((zone) => zone.employees.length === 1 ? zone.employees[0].employee : null)
+    .find((owner) => owner !== null);
+  const staffCounts = new Map<number, number>();
+  for (const zone of staffZones) {
+    const path = authorities.get(zone.zoneId)?.path;
+    const chief = path?.chief;
+    if (chief && chief !== 'Missing' && 'employeeId' in chief) {
+      staffCounts.set(chief.id, (staffCounts.get(chief.id) ?? 0) + zone.employees.length);
+    }
+  }
 
   return {
     department,
-    totalEmployees: employees.length,
-    dbHead: dbHead
+    totalEmployees: zones.reduce((count, zone) => count + zone.employees.length, 0),
+    dbHead: dbHeadOwner
       ? {
-          id: dbHead.id,
-          employeeId: dbHead.employeeId,
-          name: dbHead.name,
-          zones: dbHead.zones.map((z) => ({
-            zoneId: z.zone.zoneId,
-            zoneName: z.zone.zoneName,
+          id: dbHeadOwner.id,
+          employeeId: dbHeadOwner.employeeId,
+          name: dbHeadOwner.name,
+          zones: dbHeadZones.filter((zone) => zone.employees.some((assignment) => assignment.employee.id === dbHeadOwner.id)).map((zone) => ({
+            zoneId: zone.zoneId,
+            zoneName: zone.zoneName,
           })),
         }
       : null,
-    chiefs: chiefs.map((chief) => ({
-      id: chief.id,
-      employeeId: chief.employeeId,
-      name: chief.name,
-      zones: chief.zones.map((z) => ({
-        zoneId: z.zone.zoneId,
-        zoneName: z.zone.zoneName,
-      })),
-      staffCount: chief.subordinates.length,
-    })),
-    staffCount: staff.length,
+    chiefs: chiefZones.flatMap((zone) => zone.employees.length === 1 ? [{
+      id: zone.employees[0].employee.id,
+      employeeId: zone.employees[0].employee.employeeId,
+      name: zone.employees[0].employee.name,
+      zones: [{
+        zoneId: zone.zoneId,
+        zoneName: zone.zoneName,
+      }],
+      staffCount: staffCounts.get(zone.employees[0].employee.id) ?? 0,
+    }] : []),
+    staffCount: staffZones.reduce((count, zone) => count + zone.employees.length, 0),
   };
 }

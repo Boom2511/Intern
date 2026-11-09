@@ -5,9 +5,6 @@ export interface ImportRow {
   branchName?: string;
   employeeName: string;
   employeeId: string;
-  role?: 'DB_HEAD' | 'CHIEF' | 'STAFF';
-  chiefOfficerId?: string;
-  dbHeadId?: string;
 }
 
 export interface ValidationResult {

@@ -1,96 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Role } from '@prisma/client';
+import {
+  deriveOrganizationReportingPath,
+  type OrganizationZone,
+} from '@/lib/organization-position';
 
 export const dynamic = 'force-dynamic';
-
-function getEmpName(emp: any): string {
-  return emp?.name || emp?.displayName || emp?.username || emp?.lineName || '-';
-}
-
-function findDbHeadViaManagers(start: any): any | null {
-  let current = start?.manager || null;
-  const visited = new Set<number>();
-  while (current && !visited.has(current.id)) {
-    visited.add(current.id);
-    if (current.role === 'DB_HEAD') return current;
-    current = current.manager || null;
-  }
-  return null;
-}
 
 export async function GET(_req: NextRequest) {
   try {
     const zones = await prisma.zone.findMany({
-      include: {
+      select: {
+        zoneId: true,
+        zoneName: true,
+        nodeKind: true,
+        department: true,
+        parentZoneId: true,
         employees: {
-          include: {
-            employee: {
-              include: {
-                manager: {
-                  include: {
-                    manager: true,
-                  },
-                },
-              },
-            },
-            chiefOfficer: {
-              include: {
-                manager: {
-                  include: {
-                    manager: true,
-                  },
-                },
-                zones: {
-                  include: {
-                    zone: true,
-                  },
-                },
-              },
-            },
+          select: {
+            employee: { select: { id: true, employeeId: true, name: true, role: true } },
           },
         },
       },
       orderBy: { zoneId: 'asc' },
       take: 2000,
     });
+    const hierarchy: OrganizationZone[] = zones.map((zone) => ({
+      zoneId: zone.zoneId,
+      zoneName: zone.zoneName,
+      nodeKind: zone.nodeKind,
+      department: zone.department,
+      parentZoneId: zone.parentZoneId,
+      owners: zone.employees.map(({ employee }) => employee),
+    }));
 
     const results = zones.map((zone) => {
-      const employees = zone.employees.map((ze) => ze.employee);
-      const chiefFromMapping = zone.employees.find((ze) => ze.chiefOfficer)?.chiefOfficer || null;
-      const chief = (chiefFromMapping as any) || employees.find((e) => e.role === Role.CHIEF) || null;
-      const dbHeadDirect = employees.find((e) => e.role === Role.DB_HEAD) || null;
-
-      // Resolve DB Head via chain
-      let dbHeadResolved = dbHeadDirect;
-      if (!dbHeadResolved && chief) {
-        dbHeadResolved = findDbHeadViaManagers(chief) as any;
-      }
-      if (!dbHeadResolved) {
-        const staff = employees.find((e) => e.role === Role.STAFF);
-        if (staff) dbHeadResolved = findDbHeadViaManagers(staff) as any;
-      }
-      if (!dbHeadResolved && chiefFromMapping) {
-        dbHeadResolved = findDbHeadViaManagers(chiefFromMapping) as any;
-      }
-
+      const owner = zone.employees.length === 1 ? zone.employees[0].employee : null;
+      const path = owner ? deriveOrganizationReportingPath(owner, zone.zoneId, hierarchy) : null;
+      const chief = path?.chief && path.chief !== 'Missing' && 'employeeId' in path.chief ? path.chief : null;
+      const dbHead = path?.dbHead && path.dbHead !== 'Missing' && 'employeeId' in path.dbHead ? path.dbHead : null;
       const issues: string[] = [];
-      const hasEmployees = employees.length > 0;
-      if (!hasEmployees) issues.push('Zone has no employees');
-      if (!chief) issues.push('Chief not found in zone_employees');
-      if (!dbHeadResolved) issues.push('DB Head not resolvable from zone or manager chain');
+      if (!owner) issues.push('Zone has no unique owner');
+      if (!chief) issues.push('Chief controller is unassigned or hierarchy is incomplete');
+      if (!dbHead) issues.push('DB Head controller is unassigned or hierarchy is incomplete');
 
-      const missingNames: string[] = [];
-      employees.forEach((e) => {
-        if (!getEmpName(e) || getEmpName(e) === '-') missingNames.push(e.employeeId || String(e.id));
-      });
+      const missingNames = zone.employees
+        .filter(({ employee }) => !employee.name.trim())
+        .map(({ employee }) => employee.employeeId || String(employee.id));
 
       return {
         zoneId: zone.zoneId,
         zoneName: zone.zoneName,
-        employeeCount: employees.length,
-        chief: chief ? getEmpName(chief) : '-',
-        dbHead: dbHeadResolved ? getEmpName(dbHeadResolved) : '-',
+        organizationalPosition: path?.position ?? null,
+        employeeCount: zone.employees.length,
+        chief: chief?.name ?? '-',
+        dbHead: dbHead?.name ?? '-',
         issues,
         missingNames,
       };
@@ -98,15 +62,18 @@ export async function GET(_req: NextRequest) {
 
     const summary = {
       totalZones: results.length,
-      zonesWithIssues: results.filter((r) => r.issues.length > 0).length,
-      zonesMissingChief: results.filter((r) => r.issues.includes('Chief not found in zone_employees')).length,
-      zonesMissingDbHead: results.filter((r) => r.issues.includes('DB Head not resolvable from zone or manager chain')).length,
-      zonesNoEmployees: results.filter((r) => r.issues.includes('Zone has no employees')).length,
+      zonesWithIssues: results.filter((result) => result.issues.length > 0).length,
+      zonesMissingChief: results.filter((result) => result.issues.some((issue) => issue.startsWith('Chief'))).length,
+      zonesMissingDbHead: results.filter((result) => result.issues.some((issue) => issue.startsWith('DB Head'))).length,
+      zonesNoEmployees: results.filter((result) => result.employeeCount === 0).length,
     };
 
     return NextResponse.json({ success: true, summary, results });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Diagnostics] Failed to analyze zones:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Failed to analyze zones' }, { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to analyze zones',
+    }, { status: 500 });
   }
 }

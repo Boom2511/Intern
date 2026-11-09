@@ -3,6 +3,11 @@ import type { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { departmentsMatch, getBranchDepartments, resolveBranchDepartment } from '@/lib/branch-organization';
+import {
+  deriveOrganizationReportingPath,
+  getPositionFromNodeKind,
+  type OrganizationZone,
+} from '@/lib/organization-position';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +84,8 @@ export async function GET(request: NextRequest) {
       id: true,
       zoneId: true,
       zoneName: true,
+      nodeKind: true,
+      parentZoneId: true,
       department: true,
       branchId: true,
       employees: {
@@ -92,38 +99,6 @@ export async function GET(request: NextRequest) {
               name: true,
               role: true,
               department: true,
-              manager: {
-                select: {
-                  employeeId: true,
-                  name: true,
-                  role: true,
-                  department: true,
-                  manager: {
-                    select: {
-                      employeeId: true,
-                      name: true,
-                      role: true,
-                      department: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          chiefOfficer: {
-            select: {
-              employeeId: true,
-              name: true,
-              role: true,
-              department: true,
-              manager: {
-                select: {
-                  employeeId: true,
-                  name: true,
-                  role: true,
-                  department: true,
-                },
-              },
             },
           },
         },
@@ -153,6 +128,65 @@ export async function GET(request: NextRequest) {
     const zones = exactZone
       ? [exactZone, ...matchingZones.filter((zone) => zone.id !== exactZone.id).slice(0, requestedDepartment ? 199 : 14)]
       : matchingZones;
+    const hierarchyRows = includeEmployees && zones.length
+      ? await prisma.zone.findMany({
+        where: { branchId: { in: branchIds } },
+        select: {
+          zoneId: true,
+          zoneName: true,
+          nodeKind: true,
+          department: true,
+          parentZoneId: true,
+          employees: {
+            where: { employee: { branchId: { in: branchIds } } },
+            select: { employee: { select: { id: true, employeeId: true, name: true, role: true } } },
+          },
+        },
+      })
+      : [];
+    const hierarchy: OrganizationZone[] = hierarchyRows.map((zone) => ({
+      zoneId: zone.zoneId,
+      zoneName: zone.zoneName,
+      nodeKind: zone.nodeKind,
+      department: zone.department,
+      parentZoneId: zone.parentZoneId,
+      owners: zone.employees.map(({ employee }) => employee),
+    }));
+    const resolveLeadsForZone = (zoneId: string) => {
+      const ownerZone = hierarchyRows.find((candidate) => candidate.zoneId === zoneId);
+      if (ownerZone?.employees.length !== 1) {
+        return {
+          responsible: null,
+          dbHead: null,
+          organizationalPosition: getPositionFromNodeKind(ownerZone?.nodeKind),
+        };
+      }
+      const owner = ownerZone.employees[0].employee;
+      const path = deriveOrganizationReportingPath(owner, zoneId, hierarchy);
+      const toRecord = (value: typeof path.chief) => {
+        if (!value || value === 'Missing' || !('employeeId' in value)) return null;
+        const sourceZone = hierarchyRows.find((candidate) =>
+          candidate.employees.some(({ employee }) => employee.id === value.id)
+        );
+        return {
+          ...value,
+          role: getPositionFromNodeKind(sourceZone?.nodeKind),
+          department: sourceZone?.department ?? null,
+          zone: sourceZone ? {
+            zoneId: sourceZone.zoneId,
+            zoneName: sourceZone.zoneName,
+            nodeKind: sourceZone.nodeKind,
+            department: sourceZone.department,
+          } : null,
+          manager: null,
+        };
+      };
+      return {
+        responsible: toRecord(path.chief) ?? toRecord(path.dbHead),
+        dbHead: toRecord(path.dbHead),
+        organizationalPosition: path.position,
+      };
+    };
 
     return NextResponse.json({
       branch,
@@ -164,12 +198,27 @@ export async function GET(request: NextRequest) {
         id: zone.id,
         zoneId: zone.zoneId,
         zoneName: zone.zoneName,
+        nodeKind: zone.nodeKind,
         department: zone.department,
         ...(includeEmployees
           ? {
-              employees: zone.employees.map(({ employee }) => employee),
-              owner: zone.employees[0]?.employee ?? null,
-              chiefOfficer: zone.employees[0]?.chiefOfficer ?? null,
+              employees: zone.employees.map(({ employee }) => ({
+                ...employee,
+                role: getPositionFromNodeKind(zone.nodeKind),
+              })),
+              owner: zone.employees.length === 1
+                ? {
+                    ...zone.employees[0].employee,
+                    role: getPositionFromNodeKind(zone.nodeKind),
+                    zone: {
+                      zoneId: zone.zoneId,
+                      zoneName: zone.zoneName,
+                      nodeKind: zone.nodeKind,
+                      department: zone.department,
+                    },
+                  }
+                : null,
+              ...resolveLeadsForZone(zone.zoneId),
             }
           : {}),
       })),

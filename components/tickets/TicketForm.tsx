@@ -24,7 +24,6 @@ import Link from 'next/link';
 import { invalidateTicketsList, invalidateDashboardStats } from '@/lib/swr-utils';
 import { normalizePhoneToE164 } from '@/lib/validations';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
-import { resolveEmployeeReportingLine } from '@/lib/employee-reporting-line';
 import {
   validatePhone,
   validateSalesforceId,
@@ -67,35 +66,38 @@ interface ZoneEmployeeRecord {
   id: number;
   name: string;
   employeeId: string;
-  role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
+  role: 'STAFF' | 'CHIEF' | 'DB_HEAD' | null;
   department: string | null;
-  manager?: ZoneManagerRecord | null;
+  zone: ZoneDisplayData | null;
 }
 
-interface ZoneManagerRecord {
-  name: string;
-  employeeId: string;
-  role: 'STAFF' | 'CHIEF' | 'DB_HEAD';
+type ZoneNodeKind = 'DELIVERY_HEAD' | 'DELIVERY_ZONE' | 'DELIVERY_SIDE' | 'CAR';
+type ZoneDisplayData = {
+  zoneId: string;
+  zoneName: string | null;
+  nodeKind: ZoneNodeKind | null;
   department: string | null;
-  manager: ZoneManagerRecord | null;
-}
+};
 
 interface ZoneEmployeeInfo {
+  zoneId: string;
   zoneName: string | null;
+  nodeKind: ZoneNodeKind | null;
   department: string | null;
   owner: ZoneEmployeeRecord | null;
-  chiefOfficer: ZoneManagerRecord | null;
-  employees: ZoneEmployeeRecord[];
+  responsible: ZoneEmployeeRecord | null;
+  dbHead: ZoneEmployeeRecord | null;
 }
 
 interface OrganizationZoneOption {
   id: number;
   zoneId: string;
   zoneName: string | null;
+  nodeKind: ZoneNodeKind | null;
   department: string | null;
-  employees?: ZoneEmployeeInfo['employees'];
   owner?: ZoneEmployeeInfo['owner'];
-  chiefOfficer?: ZoneEmployeeInfo['chiefOfficer'];
+  responsible?: ZoneEmployeeInfo['responsible'];
+  dbHead?: ZoneEmployeeInfo['dbHead'];
 }
 
 /** Convert a Zone returned by `/api/organization/ticket-options` into a select option. */
@@ -103,48 +105,36 @@ const toZoneOption = (zone: {
   id?: number;
   zoneId: string;
   zoneName?: string | null;
+  nodeKind?: ZoneNodeKind | null;
   department?: string | null;
-  employees?: ZoneEmployeeInfo['employees'];
   owner?: ZoneEmployeeInfo['owner'];
-  chiefOfficer?: ZoneEmployeeInfo['chiefOfficer'];
+  responsible?: ZoneEmployeeInfo['responsible'];
+  dbHead?: ZoneEmployeeInfo['dbHead'];
 }): OrganizationZoneOption => ({
   id: zone.id ?? 0,
   zoneId: zone.zoneId,
   zoneName: zone.zoneName ?? null,
+  nodeKind: zone.nodeKind ?? null,
   department: zone.department ?? null,
-  employees: zone.employees,
   owner: zone.owner,
-  chiefOfficer: zone.chiefOfficer,
+  responsible: zone.responsible,
+  dbHead: zone.dbHead,
 });
 
-function getZoneReportingLine(
-  owner: ZoneEmployeeRecord | null,
-  linkedChief: ZoneManagerRecord | null,
-) {
-  if (!owner) return null;
-
-  const ancestors: ZoneManagerRecord[] = [];
-  let manager = owner.manager;
-  while (manager) {
-    ancestors.push(manager);
-    manager = manager.manager ?? null;
+function getZoneDisplayName(zone: ZoneDisplayData | null) {
+  if (!zone) return 'ไม่ระบุโหนด';
+  if (!zone.nodeKind) return zone.zoneName || zone.zoneId;
+  if (zone.nodeKind === 'DELIVERY_HEAD' || zone.nodeKind === 'CAR') {
+    const labels = { DELIVERY_HEAD: 'หัวหน้านำจ่าย', CAR: 'นำจ่ายรถยนต์' };
+    return `${labels[zone.nodeKind]} ${zone.department || ''}`.trim();
   }
+  const number = zone.zoneName?.match(/(\d+)\s*$/)?.[1] ?? zone.zoneId.match(/(\d+)\s*$/)?.[1];
+  const label = zone.nodeKind === 'DELIVERY_ZONE' ? 'โซนนำจ่ายที่' : 'ด้านจ่ายที่';
+  return number ? `${label} ${number}` : label;
+}
 
-  const chiefCandidate = owner.role === 'CHIEF' || owner.role === 'DB_HEAD'
-    ? owner
-    : linkedChief?.role === 'CHIEF'
-      ? linkedChief
-      : ancestors.find((employee) => employee.role === 'CHIEF');
-  const chiefManagers: ZoneManagerRecord[] = [];
-  manager = chiefCandidate && chiefCandidate.employeeId !== owner.employeeId
-    ? chiefCandidate.manager
-    : owner.manager;
-  while (manager) {
-    chiefManagers.push(manager);
-    manager = manager.manager ?? null;
-  }
-
-  return resolveEmployeeReportingLine(owner, ancestors, linkedChief, chiefManagers);
+function employeeLabel(employee: ZoneEmployeeRecord | null) {
+  return employee ? `${employee.name} (${employee.employeeId})` : 'ยังไม่ได้กำหนด';
 }
 
 export default function TicketForm({ mode = 'create' }: TicketFormProps) {
@@ -324,10 +314,12 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
           : null;
         if (zone) {
           const zoneData: ZoneEmployeeInfo = {
+            zoneId: zone.zoneId,
             zoneName: zone.zoneName ?? null,
-            owner: zone.owner ?? zone.employees?.[0] ?? null,
-            chiefOfficer: zone.chiefOfficer ?? null,
-            employees: zone.employees ?? [],
+            nodeKind: zone.nodeKind ?? null,
+            owner: zone.owner ?? null,
+            responsible: zone.responsible ?? null,
+            dbHead: zone.dbHead ?? null,
             department: zone.department ?? zone.owner?.department ?? null,
           };
           setZoneEmployees(zoneData);
@@ -891,6 +883,7 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
                       <span className="font-medium">{zone.zoneId}</span>
                       {zone.zoneName && <span className="ml-2 text-gray-600">{zone.zoneName}</span>}
                       {zone.department && <span className="ml-2 text-gray-500">แผนก {zone.department}</span>}
+                      {zone.nodeKind && <span className="ml-2 text-gray-500">{getZoneDisplayName(zone)}</span>}
                     </button>
                   ))}
                 </div>
@@ -920,23 +913,27 @@ export default function TicketForm({ mode = 'create' }: TicketFormProps) {
 
               {/* Zone reporting line */}
               {!loadingZone && zoneEmployees && (
-                (() => {
-                  const reportingLine = getZoneReportingLine(zoneEmployees.owner, zoneEmployees.chiefOfficer);
-                  const nodeName = zoneEmployees.zoneName || formData.zoneId;
-
-                  return (
-                    <div className="mt-2 rounded-md border px-3 py-2 text-sm text-gray-700">
-                      {reportingLine ? (
-                        <>
-                          <span className="text-gray-500">{nodeName}{zoneEmployees.department ? ` · ${zoneEmployees.department}` : ''}: </span>
-                          {reportingLine.owner.name} → {reportingLine.chief?.name || '-'} → {reportingLine.dbHead?.name || '-'}
-                        </>
-                      ) : (
-                        <span className="text-gray-500">ไม่พบพนักงานที่สังกัด Zone ID นี้</span>
-                      )}
-                    </div>
-                  );
-                })()
+                <div className="mt-2 rounded-md border px-3 py-2 text-sm text-gray-700">
+                  <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                    <div><dt className="inline text-gray-500">แผนก: </dt><dd className="inline">{zoneEmployees.department || 'ไม่ระบุ'}</dd></div>
+                    <div><dt className="inline text-gray-500">รับผิดชอบ: </dt><dd className="inline">{getZoneDisplayName(zoneEmployees)}</dd></div>
+                    <div><dt className="inline text-gray-500">พนักงาน: </dt><dd className="inline">{employeeLabel(zoneEmployees.owner)}</dd></div>
+                    {zoneEmployees.nodeKind !== 'DELIVERY_ZONE' && zoneEmployees.nodeKind !== 'DELIVERY_HEAD' && (
+                      <div className="sm:col-span-2 rounded-md bg-slate-50 px-3 py-2">
+                        <dt className="text-xs font-medium text-slate-500">ผู้รับผิดชอบ</dt>
+                        <dd className="mt-0.5 font-medium text-slate-800">{employeeLabel(zoneEmployees.responsible)}</dd>
+                        {zoneEmployees.responsible && <dd className="text-xs text-slate-500">{getZoneDisplayName(zoneEmployees.responsible.zone)}</dd>}
+                      </div>
+                    )}
+                    {zoneEmployees.nodeKind !== 'DELIVERY_HEAD' && (
+                      <div className="sm:col-span-2 rounded-md bg-blue-50 px-3 py-2">
+                        <dt className="text-xs font-medium text-blue-700">DB Head</dt>
+                        <dd className="mt-0.5 font-medium text-slate-800">{employeeLabel(zoneEmployees.dbHead)}</dd>
+                        {zoneEmployees.dbHead && <dd className="text-xs text-slate-500">{getZoneDisplayName(zoneEmployees.dbHead.zone)}</dd>}
+                      </div>
+                    )}
+                  </dl>
+                </div>
               )}
             </div>
           </div>
